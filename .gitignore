@@ -1,34 +1,87 @@
-# Gradle files
-.gradle/
-build/
+## ---------- Visual Studio / .NET ----------
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ll]og/
+[Ll]ogs/
 
-# Local configuration file (sdk path, etc)
-local.properties
+# VS user-specific
+.vs/
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+*.userprefs
+*.swp
+*.DS_Store
+Thumbs.db
 
-# Log/OS Files
+# Build results
+*.dll
+*.exe
+*.pdb
+*.cache
+*.tlog
 *.log
 
-# Android Studio generated files and folders
-captures/
-.externalNativeBuild/
-.cxx/
+# ReSharper / Rider
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+.idea/
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+!packages/build/
+*.nuget.props
+*.nuget.targets
+
+# Roslyn / Test
+TestResults/
+*.coverage
+*.coveragexml
+BenchmarkDotNet.Artifacts/
+
+## ---------- .NET MAUI specific ----------
+# Generated MAUI assets (icons, splash, etc.)
+**/Resources/raw/.GeneratedFiles/
+**/Resources/values/colors.xml
 *.aab
 *.apk
-output-metadata.json
+*.ipa
+*.app/
 
-# IntelliJ
-*.iml
-.idea/
-misc.xml
-deploymentTargetDropDown.xml
-render.experimental.xml
-
-# Keystore files
-*.jks
+# Android specific
 *.keystore
-
-# Google Services (e.g. APIs or Firebase)
+*.jks
 google-services.json
 
-# Android Profiling
-*.hprof
+# iOS / Mac Catalyst (future-proof)
+*.mobileprovision
+*.p12
+Pods/
+
+## ---------- Secrets ----------
+# Google Sheets service account key — never commit
+Resources/Raw/service-account.json
+**/service-account*.json
+appsettings.*.json
+secrets.json
+.env
+
+## ---------- Tooling ----------
+.vscode/
+*.iml
+
+## ---------- OS junk ----------
+.DS_Store
+Thumbs.db

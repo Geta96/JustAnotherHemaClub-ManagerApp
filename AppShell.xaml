@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+       xmlns:views="clr-namespace:JustAnotherHemaClub.Views"
+       x:Class="JustAnotherHemaClub.AppShell"
+       FlyoutBehavior="Flyout"
+       Title="JAHC Manager">
+
+    <Shell.FlyoutHeader>
+        <Grid BackgroundColor="#5D1312" HeightRequest="120">
+            <VerticalStackLayout VerticalOptions="Center" Padding="16" Spacing="2">
+                <Label Text="JAHC Manager" FontSize="22" FontAttributes="Bold" TextColor="#EEE7D5" />
+                <Label x:Name="UserLabel" Text="" TextColor="#EEE7D5" FontSize="14" />
+            </VerticalStackLayout>
+        </Grid>
+    </Shell.FlyoutHeader>
+
+    <FlyoutItem Title="Sessions" Route="sessions">
+        <ShellContent ContentTemplate="{DataTemplate views:SessionsPage}" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Finance" Route="finance">
+        <ShellContent ContentTemplate="{DataTemplate views:FinancePage}" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Statistics" Route="statistics">
+        <ShellContent ContentTemplate="{DataTemplate views:StatisticsPage}" />
+    </FlyoutItem>
+
+    <MenuItem Text="Logout" Clicked="OnLogoutClicked" />
+</Shell>

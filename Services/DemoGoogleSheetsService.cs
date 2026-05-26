@@ -1,0 +1,154 @@
+using JustAnotherHemaClub.Models;
+
+namespace JustAnotherHemaClub.Services;
+
+/// <summary>
+/// In-memory <see cref="IGoogleSheetsService"/> used in Guest mode.
+/// Data is seeded with a handful of demo rows and persists for the app session only.
+/// </summary>
+public class DemoGoogleSheetsService : IGoogleSheetsService
+{
+    private readonly List<Fencer> _fencers;
+    private readonly List<TrainingSession> _sessions = new();
+    private readonly List<Payment> _payments = new();
+    private readonly List<Expense> _expenses = new();
+    private readonly List<Instructor> _instructors;
+
+    public DemoGoogleSheetsService()
+    {
+        _fencers = new()
+        {
+            new Fencer { Id = "f1", Name = "Alice Sword",   Email = "alice@example.com", Active = true },
+            new Fencer { Id = "f2", Name = "Bob Longsword", Email = "bob@example.com",   Active = true },
+            new Fencer { Id = "f3", Name = "Cara Rapier",   Email = "cara@example.com",  Active = true },
+            new Fencer { Id = "f4", Name = "Dan Messer",    Email = "dan@example.com",   Active = false },
+        };
+
+        // Seed three months: current, previous, two-months-ago
+        var today = DateTime.Today;
+        var thisMonth = new DateTime(today.Year, today.Month, 1);
+        SeedMonth(thisMonth,                 attendance: new() { ["f1"] = 8, ["f2"] = 5, ["f3"] = 2 }, expensesFor: false);
+        SeedMonth(thisMonth.AddMonths(-1),   attendance: new() { ["f1"] = 7, ["f2"] = 4, ["f3"] = 6 }, expensesFor: true,  paid: new() { "f1", "f2" });
+        SeedMonth(thisMonth.AddMonths(-2),   attendance: new() { ["f1"] = 8, ["f2"] = 8, ["f3"] = 3 }, expensesFor: true,  paid: new() { "f1", "f2", "f3" });
+
+        _instructors = new()
+        {
+            new Instructor { Username = "guest", PasswordHash = "", DisplayName = "Guest" }
+        };
+    }
+
+    private void SeedMonth(DateTime firstOfMonth,
+                           Dictionary<string, int> attendance,
+                           bool expensesFor,
+                           List<string>? paid = null)
+    {
+        var last = firstOfMonth.AddMonths(1).AddDays(-1);
+        var dates = Enumerable
+            .Range(0, (last - firstOfMonth).Days + 1)
+            .Select(o => firstOfMonth.AddDays(o))
+            .Where(d => d.DayOfWeek is DayOfWeek.Tuesday or DayOfWeek.Friday)
+            .Take(8)
+            .ToList();
+
+        for (int i = 0; i < dates.Count; i++)
+        {
+            var attendees = attendance
+                .Where(kvp => i < kvp.Value)
+                .Select(kvp => kvp.Key)
+                .ToList();
+
+            _sessions.Add(new TrainingSession
+            {
+                Id = $"s_{firstOfMonth:yyyyMM}_{i + 1}",
+                Date = dates[i],
+                Topic = (i % 2 == 0) ? "Longsword drills" : "Sparring",
+                AttendeeFencerIds = attendees
+            });
+        }
+
+        if (expensesFor)
+        {
+            _expenses.Add(new Expense
+            {
+                Id = $"e_{firstOfMonth:yyyyMM}_rent",
+                Date = firstOfMonth.AddDays(4),
+                Category = "Venue",
+                Description = "Hall rental",
+                Amount = 40000m
+            });
+            _expenses.Add(new Expense
+            {
+                Id = $"e_{firstOfMonth:yyyyMM}_gear",
+                Date = firstOfMonth.AddDays(12),
+                Category = "Gear",
+                Description = "Replacement gloves",
+                Amount = 8500m
+            });
+        }
+
+        if (paid is not null)
+        {
+            foreach (var fencerId in paid)
+            {
+                if (!attendance.TryGetValue(fencerId, out var count) || count == 0) continue;
+                _payments.Add(new Payment
+                {
+                    FencerId = fencerId,
+                    Year = firstOfMonth.Year,
+                    Month = firstOfMonth.Month,
+                    Amount = DuesCalculator.Calculate(count),
+                    PaidOn = firstOfMonth.AddDays(20)
+                });
+            }
+        }
+    }
+
+    // --- Fencers ---
+    public Task<List<Fencer>> GetFencersAsync() => Task.FromResult(_fencers.ToList());
+
+    public Task AddFencerAsync(Fencer fencer)
+    {
+        if (string.IsNullOrEmpty(fencer.Id))
+            fencer.Id = Guid.NewGuid().ToString("N");
+        _fencers.Add(fencer);
+        return Task.CompletedTask;
+    }
+
+    // --- Sessions ---
+    public Task<List<TrainingSession>> GetSessionsAsync() => Task.FromResult(_sessions.ToList());
+
+    public Task UpsertSessionAsync(TrainingSession session)
+    {
+        if (string.IsNullOrEmpty(session.Id))
+            session.Id = Guid.NewGuid().ToString("N");
+        var existing = _sessions.FirstOrDefault(s => s.Id == session.Id);
+        if (existing is not null) _sessions.Remove(existing);
+        _sessions.Add(session);
+        return Task.CompletedTask;
+    }
+
+    // --- Payments ---
+    public Task<List<Payment>> GetPaymentsAsync(int year, int month) =>
+        Task.FromResult(_payments.Where(p => p.Year == year && p.Month == month).ToList());
+
+    public Task MarkPaidAsync(Payment payment)
+    {
+        _payments.Add(payment);
+        return Task.CompletedTask;
+    }
+
+    // --- Expenses ---
+    public Task<List<Expense>> GetExpensesAsync(DateTime from, DateTime to) =>
+        Task.FromResult(_expenses.Where(e => e.Date >= from && e.Date <= to).ToList());
+
+    public Task AddExpenseAsync(Expense expense)
+    {
+        if (string.IsNullOrEmpty(expense.Id))
+            expense.Id = Guid.NewGuid().ToString("N");
+        _expenses.Add(expense);
+        return Task.CompletedTask;
+    }
+
+    // --- Instructors ---
+    public Task<List<Instructor>> GetInstructorsAsync() => Task.FromResult(_instructors.ToList());
+}

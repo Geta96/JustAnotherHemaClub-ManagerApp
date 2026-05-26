@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+
+    <!-- Brand palette -->
+    <Color x:Key="Wine">#5D1312</Color>
+    <Color x:Key="WineDark">#3F0B0A</Color>
+    <Color x:Key="Cream">#EEE7D5</Color>
+    <Color x:Key="CreamSoft">#F6F1E2</Color>
+    <Color x:Key="Slate">#4A78B5</Color>
+    <Color x:Key="Ink">#2B0707</Color>
+    <Color x:Key="Muted">#8C5A59</Color>
+    <Color x:Key="DangerRed">#B23A3A</Color>
+
+    <!-- Semantic aliases -->
+    <Color x:Key="Primary">#5D1312</Color>
+    <Color x:Key="OnPrimary">#EEE7D5</Color>
+    <Color x:Key="Background">#EEE7D5</Color>
+    <Color x:Key="Surface">#F6F1E2</Color>
+    <Color x:Key="OnSurface">#2B0707</Color>
+    <Color x:Key="Accent">#4A78B5</Color>
+
+</ResourceDictionary>

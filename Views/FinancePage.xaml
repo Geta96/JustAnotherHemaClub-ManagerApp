@@ -1,0 +1,105 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels"
+             xmlns:m="clr-namespace:JustAnotherHemaClub.Models"
+             x:Class="JustAnotherHemaClub.Views.FinancePage"
+             x:DataType="vm:FinanceViewModel"
+             Title="Finance">
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="14">
+
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Grid.Column="0" Text="Finance by month" Style="{StaticResource H1}" />
+                <Button Grid.Column="1" Text="Reload" Command="{Binding LoadCommand}"
+                        Style="{StaticResource SecondaryButton}" />
+            </Grid>
+            <Label Text="Pricing: 1 session 3 500 · 4 sessions 9 000 · 8 sessions 12 000"
+                   Style="{StaticResource Caption}" />
+
+            <CollectionView ItemsSource="{Binding Months}">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:MonthFinanceVm">
+                        <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+                            <VerticalStackLayout Spacing="12">
+
+                                <!-- Month header -->
+                                <VerticalStackLayout>
+                                    <Label Text="{Binding Title}" Style="{StaticResource H2}" />
+                                    <Label Text="{Binding Summary}" Style="{StaticResource Caption}" />
+                                </VerticalStackLayout>
+
+                                <!-- Dues -->
+                                <Label Text="Dues" FontAttributes="Bold" TextColor="{StaticResource Wine}" />
+                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Dues}" Spacing="6">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:FencerDueRow">
+                                            <Border Style="{StaticResource Card}">
+                                                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12">
+                                                    <Label Grid.Row="0" Grid.Column="0"
+                                                           Text="{Binding Fencer.Name}" FontAttributes="Bold"
+                                                           TextColor="{StaticResource Wine}" />
+                                                    <Label Grid.Row="1" Grid.Column="0"
+                                                           Text="{Binding Summary}"
+                                                           Style="{StaticResource Caption}" />
+
+                                                    <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                                                            Text="Mark Paid"
+                                                            IsVisible="{Binding IsNotPaid}"
+                                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceViewModel}}, Path=MarkPaidCommand}"
+                                                            CommandParameter="{Binding .}"
+                                                            VerticalOptions="Center" />
+
+                                                    <Label Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                                                           Text="✓ Paid"
+                                                           IsVisible="{Binding IsPaid}"
+                                                           TextColor="#1F8A2E" FontAttributes="Bold" FontSize="18"
+                                                           VerticalOptions="Center" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
+
+                                <!-- Expenses -->
+                                <Label Text="Expenses" FontAttributes="Bold" TextColor="{StaticResource Wine}" />
+                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Expenses}" Spacing="6">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="m:Expense">
+                                            <Border Style="{StaticResource Card}">
+                                                <VerticalStackLayout>
+                                                    <Label Text="{Binding Date, StringFormat='{0:yyyy-MM-dd}'}"
+                                                           FontAttributes="Bold" TextColor="{StaticResource Wine}" />
+                                                    <Label Text="{Binding Category}" />
+                                                    <Label Text="{Binding Description}" />
+                                                    <Label Text="{Binding Amount, StringFormat='{0:N0}'}"
+                                                           TextColor="{StaticResource Slate}" />
+                                                </VerticalStackLayout>
+                                            </Border>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
+
+                                <!-- Add expense for this month -->
+                                <Border Style="{StaticResource Card}">
+                                    <VerticalStackLayout Spacing="8">
+                                        <Label Text="Add expense" FontAttributes="Bold"
+                                               TextColor="{StaticResource Wine}" />
+                                        <Entry Placeholder="Category" Text="{Binding NewExpenseCategory}" />
+                                        <Entry Placeholder="Description" Text="{Binding NewExpenseDescription}" />
+                                        <Entry Placeholder="Amount" Keyboard="Numeric" Text="{Binding NewExpenseAmount}" />
+                                        <Button Text="Add Expense"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceViewModel}}, Path=AddExpenseCommand}"
+                                                CommandParameter="{Binding .}" />
+                                    </VerticalStackLayout>
+                                </Border>
+
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
