@@ -9,10 +9,11 @@ namespace JustAnotherHemaClub.Services;
 public class DemoGoogleSheetsService : IGoogleSheetsService
 {
     private readonly List<Fencer> _fencers;
-    private readonly List<TrainingSession> _sessions = new();
+    private readonly List<TrainingSession> _trainings = new();
     private readonly List<Payment> _payments = new();
     private readonly List<Expense> _expenses = new();
     private readonly List<Instructor> _instructors;
+    private readonly List<MonthNote> _monthNotes = new();
 
     public DemoGoogleSheetsService()
     {
@@ -27,9 +28,16 @@ public class DemoGoogleSheetsService : IGoogleSheetsService
         // Seed three months: current, previous, two-months-ago
         var today = DateTime.Today;
         var thisMonth = new DateTime(today.Year, today.Month, 1);
-        SeedMonth(thisMonth,                 attendance: new() { ["f1"] = 8, ["f2"] = 5, ["f3"] = 2 }, expensesFor: false);
-        SeedMonth(thisMonth.AddMonths(-1),   attendance: new() { ["f1"] = 7, ["f2"] = 4, ["f3"] = 6 }, expensesFor: true,  paid: new() { "f1", "f2" });
-        SeedMonth(thisMonth.AddMonths(-2),   attendance: new() { ["f1"] = 8, ["f2"] = 8, ["f3"] = 3 }, expensesFor: true,  paid: new() { "f1", "f2", "f3" });
+        SeedMonth(thisMonth,               attendance: new() { ["f1"] = 8, ["f2"] = 5, ["f3"] = 2 }, expensesFor: false);
+        SeedMonth(thisMonth.AddMonths(-1), attendance: new() { ["f1"] = 7, ["f2"] = 4, ["f3"] = 6 }, expensesFor: true,  paid: new() { "f1", "f2" });
+        SeedMonth(thisMonth.AddMonths(-2), attendance: new() { ["f1"] = 8, ["f2"] = 8, ["f3"] = 3 }, expensesFor: true,  paid: new() { "f1", "f2", "f3" });
+
+        _monthNotes.Add(new MonthNote
+        {
+            Year = thisMonth.AddMonths(-1).Year,
+            Month = thisMonth.AddMonths(-1).Month,
+            Note = "Focus month: longsword fundamentals."
+        });
 
         _instructors = new()
         {
@@ -57,9 +65,9 @@ public class DemoGoogleSheetsService : IGoogleSheetsService
                 .Select(kvp => kvp.Key)
                 .ToList();
 
-            _sessions.Add(new TrainingSession
+            _trainings.Add(new TrainingSession
             {
-                Id = $"s_{firstOfMonth:yyyyMM}_{i + 1}",
+                Id = $"t_{firstOfMonth:yyyyMM}_{i + 1}",
                 Date = dates[i],
                 Topic = (i % 2 == 0) ? "Longsword drills" : "Sparring",
                 AttendeeFencerIds = attendees
@@ -68,22 +76,8 @@ public class DemoGoogleSheetsService : IGoogleSheetsService
 
         if (expensesFor)
         {
-            _expenses.Add(new Expense
-            {
-                Id = $"e_{firstOfMonth:yyyyMM}_rent",
-                Date = firstOfMonth.AddDays(4),
-                Category = "Venue",
-                Description = "Hall rental",
-                Amount = 40000m
-            });
-            _expenses.Add(new Expense
-            {
-                Id = $"e_{firstOfMonth:yyyyMM}_gear",
-                Date = firstOfMonth.AddDays(12),
-                Category = "Gear",
-                Description = "Replacement gloves",
-                Amount = 8500m
-            });
+            _expenses.Add(new Expense { Id = $"e_{firstOfMonth:yyyyMM}_rent", Date = firstOfMonth.AddDays(4),  Category = "Venue", Description = "Hall rental",        Amount = 40000m });
+            _expenses.Add(new Expense { Id = $"e_{firstOfMonth:yyyyMM}_gear", Date = firstOfMonth.AddDays(12), Category = "Gear",  Description = "Replacement gloves", Amount = 8500m });
         }
 
         if (paid is not null)
@@ -108,22 +102,20 @@ public class DemoGoogleSheetsService : IGoogleSheetsService
 
     public Task AddFencerAsync(Fencer fencer)
     {
-        if (string.IsNullOrEmpty(fencer.Id))
-            fencer.Id = Guid.NewGuid().ToString("N");
+        if (string.IsNullOrEmpty(fencer.Id)) fencer.Id = Guid.NewGuid().ToString("N");
         _fencers.Add(fencer);
         return Task.CompletedTask;
     }
 
-    // --- Sessions ---
-    public Task<List<TrainingSession>> GetSessionsAsync() => Task.FromResult(_sessions.ToList());
+    // --- Trainings ---
+    public Task<List<TrainingSession>> GetTrainingsAsync() => Task.FromResult(_trainings.ToList());
 
-    public Task UpsertSessionAsync(TrainingSession session)
+    public Task UpsertTrainingAsync(TrainingSession training)
     {
-        if (string.IsNullOrEmpty(session.Id))
-            session.Id = Guid.NewGuid().ToString("N");
-        var existing = _sessions.FirstOrDefault(s => s.Id == session.Id);
-        if (existing is not null) _sessions.Remove(existing);
-        _sessions.Add(session);
+        if (string.IsNullOrEmpty(training.Id)) training.Id = Guid.NewGuid().ToString("N");
+        var existing = _trainings.FirstOrDefault(s => s.Id == training.Id);
+        if (existing is not null) _trainings.Remove(existing);
+        _trainings.Add(training);
         return Task.CompletedTask;
     }
 
@@ -131,11 +123,7 @@ public class DemoGoogleSheetsService : IGoogleSheetsService
     public Task<List<Payment>> GetPaymentsAsync(int year, int month) =>
         Task.FromResult(_payments.Where(p => p.Year == year && p.Month == month).ToList());
 
-    public Task MarkPaidAsync(Payment payment)
-    {
-        _payments.Add(payment);
-        return Task.CompletedTask;
-    }
+    public Task MarkPaidAsync(Payment payment) { _payments.Add(payment); return Task.CompletedTask; }
 
     // --- Expenses ---
     public Task<List<Expense>> GetExpensesAsync(DateTime from, DateTime to) =>
@@ -143,12 +131,22 @@ public class DemoGoogleSheetsService : IGoogleSheetsService
 
     public Task AddExpenseAsync(Expense expense)
     {
-        if (string.IsNullOrEmpty(expense.Id))
-            expense.Id = Guid.NewGuid().ToString("N");
+        if (string.IsNullOrEmpty(expense.Id)) expense.Id = Guid.NewGuid().ToString("N");
         _expenses.Add(expense);
         return Task.CompletedTask;
     }
 
     // --- Instructors ---
     public Task<List<Instructor>> GetInstructorsAsync() => Task.FromResult(_instructors.ToList());
+
+    // --- Month notes ---
+    public Task<List<MonthNote>> GetMonthNotesAsync() => Task.FromResult(_monthNotes.ToList());
+
+    public Task UpsertMonthNoteAsync(MonthNote note)
+    {
+        var existing = _monthNotes.FirstOrDefault(n => n.Year == note.Year && n.Month == note.Month);
+        if (existing is not null) _monthNotes.Remove(existing);
+        _monthNotes.Add(note);
+        return Task.CompletedTask;
+    }
 }

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels"
+             x:Class="JustAnotherHemaClub.Views.ProfilePage"
+             x:DataType="vm:ProfileViewModel"
+             Title="My Profile">
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="14">
+
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="My profile" Style="{StaticResource H2}" />
+
+                    <Label Text="Name" Style="{StaticResource Caption}" />
+                    <Entry Placeholder="Full name" Text="{Binding Name}" />
+
+                    <Label Text="Nickname" Style="{StaticResource Caption}" />
+                    <Entry Placeholder="Nickname" Text="{Binding Nickname}" />
+
+                    <Label Text="Email (read-only)" Style="{StaticResource Caption}" />
+                    <Entry Text="{Binding Email}" IsReadOnly="True" />
+
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Padding="0,8,0,0">
+                        <CheckBox Grid.Column="0" IsChecked="{Binding GdprAccepted}" />
+                        <Label   Grid.Column="1" VerticalOptions="Center"
+                                 Text="I agree to the GDPR data processing policy." />
+                    </Grid>
+
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                        <CheckBox Grid.Column="0" IsChecked="{Binding LiabilityAccepted}" />
+                        <Label   Grid.Column="1" VerticalOptions="Center"
+                                 Text="I accept the liability statement for participating in trainings." />
+                    </Grid>
+
+                    <Button Text="Save" Command="{Binding SaveCommand}" />
+                    <Label Text="{Binding StatusMessage}" Style="{StaticResource Caption}" />
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

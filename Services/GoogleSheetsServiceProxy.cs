@@ -24,8 +24,8 @@ public class GoogleSheetsServiceProxy : IGoogleSheetsService
     public Task<List<Fencer>> GetFencersAsync() => Active.GetFencersAsync();
     public Task AddFencerAsync(Fencer fencer) => Active.AddFencerAsync(fencer);
 
-    public Task<List<TrainingSession>> GetSessionsAsync() => Active.GetSessionsAsync();
-    public Task UpsertSessionAsync(TrainingSession session) => Active.UpsertSessionAsync(session);
+    public Task<List<TrainingSession>> GetTrainingsAsync() => Active.GetTrainingsAsync();
+    public Task UpsertTrainingAsync(TrainingSession training) => Active.UpsertTrainingAsync(training);
 
     public Task<List<Payment>> GetPaymentsAsync(int year, int month) => Active.GetPaymentsAsync(year, month);
     public Task MarkPaidAsync(Payment payment) => Active.MarkPaidAsync(payment);
@@ -34,4 +34,7 @@ public class GoogleSheetsServiceProxy : IGoogleSheetsService
     public Task AddExpenseAsync(Expense expense) => Active.AddExpenseAsync(expense);
 
     public Task<List<Instructor>> GetInstructorsAsync() => Active.GetInstructorsAsync();
+
+    public Task<List<MonthNote>> GetMonthNotesAsync() => Active.GetMonthNotesAsync();
+    public Task UpsertMonthNoteAsync(MonthNote note) => Active.UpsertMonthNoteAsync(note);
 }

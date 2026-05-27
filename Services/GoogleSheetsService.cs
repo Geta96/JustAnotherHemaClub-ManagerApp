@@ -65,10 +65,10 @@ public class GoogleSheetsService : IGoogleSheetsService
     public Task AddFencerAsync(Fencer f) =>
         AppendAsync("Fencers!A:D", new List<object> { f.Id, f.Name, f.Email ?? "", f.Active });
 
-    // --- Sessions ---
-    public async Task<List<TrainingSession>> GetSessionsAsync()
+    // --- Trainings ---
+    public async Task<List<TrainingSession>> GetTrainingsAsync()
     {
-        var rows = await ReadAsync("Sessions!A2:D");
+        var rows = await ReadAsync("Trainings!A2:D");
         return rows.Select(r => new TrainingSession
         {
             Id = S(r, 0),
@@ -78,13 +78,13 @@ public class GoogleSheetsService : IGoogleSheetsService
         }).ToList();
     }
 
-    public Task UpsertSessionAsync(TrainingSession s) =>
-        AppendAsync("Sessions!A:D", new List<object>
+    public Task UpsertTrainingAsync(TrainingSession t) =>
+        AppendAsync("Trainings!A:D", new List<object>
         {
-            s.Id,
-            s.Date.ToString("o", CultureInfo.InvariantCulture),
-            s.Topic,
-            string.Join(",", s.AttendeeFencerIds)
+            t.Id,
+            t.Date.ToString("o", CultureInfo.InvariantCulture),
+            t.Topic,
+            string.Join(",", t.AttendeeFencerIds)
         });
 
     // --- Payments ---
@@ -143,6 +143,22 @@ public class GoogleSheetsService : IGoogleSheetsService
             DisplayName = S(r, 2)
         }).ToList();
     }
+
+    // --- Month notes ---
+    public async Task<List<MonthNote>> GetMonthNotesAsync()
+    {
+        var rows = await ReadAsync("MonthNotes!A2:C");
+        return rows.Select(r => new MonthNote
+        {
+            Year = int.TryParse(S(r, 0), out var y) ? y : 0,
+            Month = int.TryParse(S(r, 1), out var m) ? m : 0,
+            Note = S(r, 2)
+        }).ToList();
+    }
+
+    // Append-only; the latest row wins when read via GetMonthNotesAsync filtering by (Year, Month).
+    public Task UpsertMonthNoteAsync(MonthNote note) =>
+        AppendAsync("MonthNotes!A:C", new List<object> { note.Year, note.Month, note.Note });
 
     private static string S(IList<object> row, int i) =>
         i < row.Count ? row[i]?.ToString() ?? "" : "";

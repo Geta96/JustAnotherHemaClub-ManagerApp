@@ -7,8 +7,8 @@ public interface IGoogleSheetsService
     Task<List<Fencer>> GetFencersAsync();
     Task AddFencerAsync(Fencer fencer);
 
-    Task<List<TrainingSession>> GetSessionsAsync();
-    Task UpsertSessionAsync(TrainingSession session);
+    Task<List<TrainingSession>> GetTrainingsAsync();
+    Task UpsertTrainingAsync(TrainingSession training);
 
     Task<List<Payment>> GetPaymentsAsync(int year, int month);
     Task MarkPaidAsync(Payment payment);
@@ -17,4 +17,7 @@ public interface IGoogleSheetsService
     Task AddExpenseAsync(Expense expense);
 
     Task<List<Instructor>> GetInstructorsAsync();
+
+    Task<List<MonthNote>> GetMonthNotesAsync();
+    Task UpsertMonthNoteAsync(MonthNote note);
 }

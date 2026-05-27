@@ -1,5 +1,6 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using JustAnotherHemaClub.Models;
 
 namespace JustAnotherHemaClub.ViewModels;
@@ -17,6 +18,9 @@ public partial class MonthFinanceVm : ObservableObject
     [ObservableProperty] private string newExpenseDescription = "";
     [ObservableProperty] private decimal newExpenseAmount;
 
+    [ObservableProperty] private bool isExpanded;
+    public string ExpandGlyph => IsExpanded ? "▾" : "▸";
+
     public MonthFinanceVm(int year, int month)
     {
         Year = year;
@@ -31,7 +35,7 @@ public partial class MonthFinanceVm : ObservableObject
     public decimal Balance => TotalPaid - TotalExpenses;
 
     public string Summary =>
-        $"Dues {TotalDue:N0} � Paid {TotalPaid:N0} � Expenses {TotalExpenses:N0} � Balance {Balance:N0}";
+        $"Dues {TotalDue:N0} · Paid {TotalPaid:N0} · Expenses {TotalExpenses:N0} · Balance {Balance:N0}";
 
     public void RaiseTotals()
     {
@@ -41,4 +45,9 @@ public partial class MonthFinanceVm : ObservableObject
         OnPropertyChanged(nameof(Balance));
         OnPropertyChanged(nameof(Summary));
     }
+
+    partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(ExpandGlyph));
+
+    [RelayCommand]
+    private void ToggleExpanded() => IsExpanded = !IsExpanded;
 }

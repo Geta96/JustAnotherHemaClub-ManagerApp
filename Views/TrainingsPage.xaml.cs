@@ -2,11 +2,11 @@ using JustAnotherHemaClub.ViewModels;
 
 namespace JustAnotherHemaClub.Views;
 
-public partial class SessionsPage : ContentPage
+public partial class TrainingsPage : ContentPage
 {
-    private readonly SessionsViewModel _vm;
+    private readonly TrainingsViewModel _vm;
 
-    public SessionsPage(SessionsViewModel vm)
+    public TrainingsPage(TrainingsViewModel vm)
     {
         InitializeComponent();
         BindingContext = _vm = vm;

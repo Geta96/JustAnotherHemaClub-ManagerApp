@@ -20,7 +20,8 @@ public partial class FinanceViewModel : ObservableObject
         Months.Clear();
 
         var fencers = await _sheets.GetFencersAsync();
-        var sessions = await _sheets.GetSessionsAsync();
+
+        var trainings = await _sheets.GetTrainingsAsync();
 
         // 6-month window from today, plus any older months that have data
         var today = DateTime.Today;
@@ -33,7 +34,7 @@ public partial class FinanceViewModel : ObservableObject
         var monthsSet = new HashSet<(int Y, int M)>();
         for (var d = windowStart; d <= windowEnd; d = d.AddMonths(1))
             monthsSet.Add((d.Year, d.Month));
-        foreach (var s in sessions) monthsSet.Add((s.Date.Year, s.Date.Month));
+        foreach (var s in trainings) monthsSet.Add((s.Date.Year, s.Date.Month));
         foreach (var e in expensesAll) monthsSet.Add((e.Date.Year, e.Date.Month));
 
         var ordered = monthsSet.OrderByDescending(t => t.Y).ThenByDescending(t => t.M);
@@ -43,7 +44,7 @@ public partial class FinanceViewModel : ObservableObject
             var monthVm = new MonthFinanceVm(y, m);
 
             // Attendance per fencer for the month
-            var monthSessions = sessions.Where(s => s.Date.Year == y && s.Date.Month == m).ToList();
+            var monthSessions = trainings.Where(s => s.Date.Year == y && s.Date.Month == m).ToList();
             var attendance = monthSessions
                 .SelectMany(s => s.AttendeeFencerIds)
                 .GroupBy(id => id)

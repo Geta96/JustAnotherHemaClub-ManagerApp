@@ -36,11 +36,11 @@ public partial class StatisticsViewModel : ObservableObject
         Months.Clear();
 
         var fencers = await _sheets.GetFencersAsync();
-        var sessions = await _sheets.GetSessionsAsync();
+        var trainings = await _sheets.GetTrainingsAsync();
         var expenses = await _sheets.GetExpensesAsync(DateTime.MinValue.AddYears(1), DateTime.MaxValue.AddYears(-1));
 
         // Distinct months from data
-        var months = sessions.Select(s => (s.Date.Year, s.Date.Month))
+        var months = trainings.Select(s => (s.Date.Year, s.Date.Month))
             .Concat(expenses.Select(e => (e.Date.Year, e.Date.Month)))
             .Distinct()
             .OrderByDescending(t => t.Year).ThenByDescending(t => t.Month)
@@ -65,10 +65,10 @@ public partial class StatisticsViewModel : ObservableObject
             var to = from.AddMonths(1).AddDays(-1);
             var monthExpenses = expenses.Where(e => e.Date >= from && e.Date <= to).Sum(e => e.Amount);
 
-            var monthSessions = sessions.Where(s => s.Date.Year == y && s.Date.Month == m).ToList();
-            var avg = monthSessions.Count == 0
+            var monthTrainings = trainings.Where(s => s.Date.Year == y && s.Date.Month == m).ToList();
+            var avg = monthTrainings.Count == 0
                 ? 0
-                : monthSessions.Average(s => s.AttendeeFencerIds.Count);
+                : monthTrainings.Average(s => s.AttendeeFencerIds.Count);
 
             Months.Add(new MonthStatRow
             {
@@ -76,28 +76,28 @@ public partial class StatisticsViewModel : ObservableObject
                 Month = m,
                 Income = monthIncome,
                 Expenses = monthExpenses,
-                Sessions = monthSessions.Count,
+                Sessions = monthTrainings.Count,
                 AvgAttendance = avg
             });
 
             totalIncome += monthIncome;
             totalExpenses += monthExpenses;
-            totalSessions += monthSessions.Count;
-            if (monthSessions.Count > 0)
+            totalSessions += monthTrainings.Count;
+            if (monthTrainings.Count > 0)
             {
-                weightedAttendanceSum += avg * monthSessions.Count;
-                weightedAttendanceCount += monthSessions.Count;
+                weightedAttendanceSum += avg * monthTrainings.Count;
+                weightedAttendanceCount += monthTrainings.Count;
             }
 
             if (y == Year)
             {
                 yIncome += monthIncome;
                 yExpenses += monthExpenses;
-                ySessions += monthSessions.Count;
-                if (monthSessions.Count > 0)
+                ySessions += monthTrainings.Count;
+                if (monthTrainings.Count > 0)
                 {
-                    yWeightedAttSum += avg * monthSessions.Count;
-                    yWeightedAttCount += monthSessions.Count;
+                    yWeightedAttSum += avg * monthTrainings.Count;
+                    yWeightedAttCount += monthTrainings.Count;
                 }
             }
         }

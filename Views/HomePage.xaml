@@ -1,0 +1,88 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels"
+             x:Class="JustAnotherHemaClub.Views.HomePage"
+             x:DataType="vm:HomeViewModel"
+             Title="Home">
+    <ScrollView>
+        <VerticalStackLayout Spacing="0">
+
+            <!-- Hero -->
+            <Grid BackgroundColor="{StaticResource Wine}" Padding="20,28,20,24">
+                <VerticalStackLayout Spacing="6" HorizontalOptions="Center">
+                    <Image Source="jahclogo.jpg"
+                           HeightRequest="180"
+                           Aspect="AspectFit"
+                           HorizontalOptions="Center" />
+                    <Label Text="Just Another HEMA Club"
+                           FontSize="22" FontAttributes="Bold"
+                           TextColor="{StaticResource Cream}"
+                           HorizontalOptions="Center" />
+                    <BoxView HeightRequest="2" WidthRequest="60" Color="{StaticResource Slate}"
+                             HorizontalOptions="Center" />
+                    <Label Text="Historical European Martial Arts in Budapest"
+                           TextColor="{StaticResource Cream}" Opacity="0.85"
+                           HorizontalOptions="Center" />
+                </VerticalStackLayout>
+            </Grid>
+
+            <VerticalStackLayout Padding="16" Spacing="14">
+
+                <!-- About -->
+                <Border Style="{StaticResource Card}">
+                    <VerticalStackLayout Spacing="8">
+                        <Label Text="About us" Style="{StaticResource H2}" />
+                        <Label Text="We're a friendly HEMA (Historical European Martial Arts) club focused on longsword, footwork drills and free sparring. Beginners are welcome — come watch a session or jump straight in."
+                               LineHeight="1.3" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Weekly training -->
+                <Border Style="{StaticResource Card}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="Weekly trainings" Style="{StaticResource H2}" />
+
+                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="2">
+                            <Label Grid.Row="0" Grid.Column="0" Text="Tue" FontAttributes="Bold"
+                                   TextColor="{StaticResource Wine}" />
+                            <Label Grid.Row="0" Grid.Column="1" Text="18:00 - 20:00" FontAttributes="Bold" />
+                            <Label Grid.Row="1" Grid.Column="1" Text="Nagymező utca"
+                                   Style="{StaticResource Caption}" />
+                        </Grid>
+
+                        <BoxView HeightRequest="1" Color="{StaticResource Muted}" Opacity="0.4" />
+
+                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="2">
+                            <Label Grid.Row="0" Grid.Column="0" Text="Fri" FontAttributes="Bold"
+                                   TextColor="{StaticResource Wine}" />
+                            <Label Grid.Row="0" Grid.Column="1" Text="19:30 - 21:00" FontAttributes="Bold" />
+                            <Label Grid.Row="1" Grid.Column="1" Text="Dobos C. József szak. isk."
+                                   Style="{StaticResource Caption}" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Social -->
+                <Border Style="{StaticResource Card}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="Follow us" Style="{StaticResource H2}" />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <Button Grid.Column="0" Text="Instagram"
+                                    BackgroundColor="#C13584" TextColor="{StaticResource Cream}"
+                                    Command="{Binding OpenInstagramCommand}" />
+                            <Button Grid.Column="1" Text="Facebook"
+                                    BackgroundColor="#1877F2" TextColor="{StaticResource Cream}"
+                                    Command="{Binding OpenFacebookCommand}" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+
+                <Label Text="More info coming soon."
+                       Style="{StaticResource Caption}"
+                       HorizontalOptions="Center" />
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

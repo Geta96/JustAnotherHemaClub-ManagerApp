@@ -1,4 +1,4 @@
-using JustAnotherHemaClub.Services;
+﻿using JustAnotherHemaClub.Services;
 using JustAnotherHemaClub.ViewModels;
 using JustAnotherHemaClub.Views;
 using Microsoft.Extensions.Logging;
@@ -7,7 +7,6 @@ namespace JustAnotherHemaClub;
 
 public static class MauiProgram
 {
-    // TODO: replace with your spreadsheet ID
     private const string SpreadsheetId = "PUT_YOUR_SPREADSHEET_ID_HERE";
 
     public static MauiApp CreateMauiApp()
@@ -20,27 +19,32 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
             });
 
-        // Concrete backends
+        // Backends
         builder.Services.AddSingleton(_ => new GoogleSheetsService(SpreadsheetId));
         builder.Services.AddSingleton<DemoGoogleSheetsService>();
 
-        // Auth picks between them via the proxy below
+        // Auth + proxy
         builder.Services.AddSingleton<AuthService>();
-
-        // Proxy is what consumers see
         builder.Services.AddSingleton<IGoogleSheetsService, GoogleSheetsServiceProxy>();
+        builder.Services.AddSingleton<IProfileService, PreferencesProfileService>();
 
+        // ViewModels
         builder.Services.AddTransient<LoginViewModel>();
-        builder.Services.AddTransient<SessionsViewModel>();
+        builder.Services.AddTransient<HomeViewModel>();
+        builder.Services.AddTransient<TrainingsViewModel>();
         builder.Services.AddTransient<FinanceViewModel>();
         builder.Services.AddTransient<StatisticsViewModel>();
+        builder.Services.AddTransient<ProfileViewModel>();
 
+        // Pages
         builder.Services.AddTransient<LoginPage>();
-        builder.Services.AddTransient<SessionsPage>();
+        builder.Services.AddTransient<HomePage>();
+        builder.Services.AddTransient<TrainingsPage>();
         builder.Services.AddTransient<FinancePage>();
         builder.Services.AddTransient<StatisticsPage>();
+        builder.Services.AddTransient<ProfilePage>();
 
-        // Shell host (resolved fresh on each login)
+        // Shell
         builder.Services.AddTransient<AppShell>();
 
 #if DEBUG

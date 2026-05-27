@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels"
+             xmlns:m="clr-namespace:JustAnotherHemaClub.Models"
+             x:Class="JustAnotherHemaClub.Views.TrainingsPage"
+             x:DataType="vm:TrainingsViewModel"
+             Title="Trainings">
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="14">
+
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="New training" Style="{StaticResource H2}" />
+                    <DatePicker Date="{Binding TrainingDate}" />
+                    <Entry Placeholder="Topic" Text="{Binding Topic}" />
+
+                    <Label Text="Attendees" Style="{StaticResource Caption}" />
+                    <CollectionView ItemsSource="{Binding AllFencers}" SelectionMode="Multiple" HeightRequest="240">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="m:Fencer">
+                                <Label Text="{Binding Name}" Padding="6" />
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+
+                    <Button Text="Save Training" Command="{Binding SaveTrainingCommand}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Label Text="Past trainings by month" Style="{StaticResource H1}" />
+
+            <CollectionView ItemsSource="{Binding Months}">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PastMonthVm">
+                        <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                            <VerticalStackLayout Spacing="10">
+
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                    <Grid.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding ToggleExpandedCommand}" />
+                                    </Grid.GestureRecognizers>
+                                    <Label Grid.Column="0" Text="{Binding ExpandGlyph}"
+                                           FontSize="20" TextColor="{StaticResource Wine}"
+                                           VerticalOptions="Center" />
+                                    <Label Grid.Column="1" Text="{Binding Title}" Style="{StaticResource H2}"
+                                           VerticalOptions="Center" />
+                                </Grid>
+
+                                <VerticalStackLayout IsVisible="{Binding IsExpanded}" Spacing="10">
+                                    <Editor Placeholder="Optional month description / note"
+                                            AutoSize="TextChanges"
+                                            Text="{Binding Note}" />
+                                    <Button Text="Save note"
+                                            Style="{StaticResource SecondaryButton}"
+                                            IsVisible="{Binding IsNoteDirty}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=SaveMonthNoteCommand}"
+                                            CommandParameter="{Binding .}" />
+
+                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Trainings}" Spacing="8">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:EditableTrainingRow">
+                                                <Border Style="{StaticResource Card}">
+                                                    <VerticalStackLayout Spacing="8">
+                                                        <Label Text="{Binding Training.Date, StringFormat='{0:yyyy-MM-dd (ddd)}'}"
+                                                               FontAttributes="Bold"
+                                                               TextColor="{StaticResource Wine}" />
+                                                        <Entry Placeholder="Description" Text="{Binding Topic}" />
+
+                                                        <Label Text="Attendees" Style="{StaticResource Caption}" />
+                                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Fencers}">
+                                                            <BindableLayout.ItemTemplate>
+                                                                <DataTemplate x:DataType="vm:FencerToggle">
+                                                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Padding="0,2">
+                                                                        <CheckBox Grid.Column="0" IsChecked="{Binding IsAttending}" />
+                                                                        <Label   Grid.Column="1" Text="{Binding Fencer.Name}"
+                                                                                 VerticalOptions="Center" />
+                                                                    </Grid>
+                                                                </DataTemplate>
+                                                            </BindableLayout.ItemTemplate>
+                                                        </VerticalStackLayout>
+
+                                                        <Button Text="Save changes"
+                                                                IsVisible="{Binding IsDirty}"
+                                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=SaveTrainingEditCommand}"
+                                                                CommandParameter="{Binding .}" />
+                                                    </VerticalStackLayout>
+                                                </Border>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </VerticalStackLayout>
+                                </VerticalStackLayout>
+
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
