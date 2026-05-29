@@ -9,9 +9,16 @@
         <VerticalStackLayout Spacing="0">
 
             <!-- Hero -->
-            <Grid BackgroundColor="{StaticResource Wine}" Padding="20,28,20,24">
-                <VerticalStackLayout Spacing="6" HorizontalOptions="Center">
-                    <Image Source="jahclogo.jpg"
+            <Grid Padding="0" HeightRequest="320">
+                <!-- Background image -->
+                <Image Source="home_bg.jpg" HeightRequest="120" />
+                <!-- Wine tint for legibility -->
+                <BoxView Color="{StaticResource Wine}" Opacity="0.55"
+                         HorizontalOptions="Fill" VerticalOptions="Fill" />
+                <!-- Foreground content -->
+                <VerticalStackLayout Spacing="6" Padding="20,28,20,24"
+                                     HorizontalOptions="Center" VerticalOptions="Center">
+                    <Image Source="jahclogo.png"
                            HeightRequest="180"
                            Aspect="AspectFit"
                            HorizontalOptions="Center" />
@@ -22,7 +29,7 @@
                     <BoxView HeightRequest="2" WidthRequest="60" Color="{StaticResource Slate}"
                              HorizontalOptions="Center" />
                     <Label Text="Historical European Martial Arts in Budapest"
-                           TextColor="{StaticResource Cream}" Opacity="0.85"
+                           TextColor="{StaticResource Cream}" Opacity="0.9"
                            HorizontalOptions="Center" />
                 </VerticalStackLayout>
             </Grid>
@@ -33,7 +40,7 @@
                 <Border Style="{StaticResource Card}">
                     <VerticalStackLayout Spacing="8">
                         <Label Text="About us" Style="{StaticResource H2}" />
-                        <Label Text="We're a friendly HEMA (Historical European Martial Arts) club focused on longsword, footwork drills and free sparring. Beginners are welcome — come watch a session or jump straight in."
+                        <Label Text="We're a HEMA (Historical European Martial Arts) club located in Budapest focused on longsword, footwork drills and free sparring. Beginners are welcome — come watch a session or jump straight in."
                                LineHeight="1.3" />
                     </VerticalStackLayout>
                 </Border>
@@ -47,7 +54,7 @@
                             <Label Grid.Row="0" Grid.Column="0" Text="Tue" FontAttributes="Bold"
                                    TextColor="{StaticResource Wine}" />
                             <Label Grid.Row="0" Grid.Column="1" Text="18:00 - 20:00" FontAttributes="Bold" />
-                            <Label Grid.Row="1" Grid.Column="1" Text="Nagymező utca"
+                            <Label Grid.Row="1" Grid.Column="1" Text="Nagymező utca 68."
                                    Style="{StaticResource Caption}" />
                         </Grid>
 
@@ -66,7 +73,7 @@
                 <!-- Social -->
                 <Border Style="{StaticResource Card}">
                     <VerticalStackLayout Spacing="10">
-                        <Label Text="Follow us" Style="{StaticResource H2}" />
+                        <Label Text="Follow or Contact us" Style="{StaticResource H2}" />
                         <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
                             <Button Grid.Column="0" Text="Instagram"
                                     BackgroundColor="#C13584" TextColor="{StaticResource Cream}"
@@ -75,6 +82,9 @@
                                     BackgroundColor="#1877F2" TextColor="{StaticResource Cream}"
                                     Command="{Binding OpenFacebookCommand}" />
                         </Grid>
+                        <Button Text="Join the conversation on Telegram"
+                                BackgroundColor="#229ED9" TextColor="{StaticResource Cream}"
+                                Command="{Binding OpenTelegramCommand}" />
                     </VerticalStackLayout>
                 </Border>
 

@@ -12,6 +12,7 @@ public partial class ProfileViewModel : ObservableObject
     [ObservableProperty] private string name = "";
     [ObservableProperty] private string nickname = "";
     [ObservableProperty] private string email = "";
+    [ObservableProperty] private bool isStudent;
     [ObservableProperty] private bool gdprAccepted;
     [ObservableProperty] private bool liabilityAccepted;
     [ObservableProperty] private string? statusMessage;
@@ -25,6 +26,7 @@ public partial class ProfileViewModel : ObservableObject
         Name = p.Name;
         Nickname = p.Nickname;
         Email = p.Email;
+        IsStudent = p.IsStudent;
         GdprAccepted = p.GdprAccepted;
         LiabilityAccepted = p.LiabilityAccepted;
         StatusMessage = null;
@@ -38,6 +40,7 @@ public partial class ProfileViewModel : ObservableObject
             Name = Name,
             Nickname = Nickname,
             Email = Email,
+            IsStudent = IsStudent,
             GdprAccepted = GdprAccepted,
             LiabilityAccepted = LiabilityAccepted
         });

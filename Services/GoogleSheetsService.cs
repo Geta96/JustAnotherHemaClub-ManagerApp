@@ -52,18 +52,26 @@ public class GoogleSheetsService : IGoogleSheetsService
     // --- Fencers ---
     public async Task<List<Fencer>> GetFencersAsync()
     {
-        var rows = await ReadAsync("Fencers!A2:D");
+        var rows = await ReadAsync("Fencers!A2:H");
         return rows.Select(r => new Fencer
         {
             Id = S(r, 0),
             Name = S(r, 1),
-            Email = S(r, 2),
-            Active = bool.TryParse(S(r, 3), out var a) && a
+            Nickname = S(r, 2),
+            Email = S(r, 3),
+            Active = bool.TryParse(S(r, 4), out var a) && a,
+            IsStudent = bool.TryParse(S(r, 5), out var st) && st,
+            GdprAccepted = bool.TryParse(S(r, 6), out var g) && g,
+            LiabilityAccepted = bool.TryParse(S(r, 7), out var l) && l
         }).ToList();
     }
 
     public Task AddFencerAsync(Fencer f) =>
-        AppendAsync("Fencers!A:D", new List<object> { f.Id, f.Name, f.Email ?? "", f.Active });
+        AppendAsync("Fencers!A:H", new List<object>
+        {
+            f.Id, f.Name, f.Nickname ?? "", f.Email ?? "",
+            f.Active, f.IsStudent, f.GdprAccepted, f.LiabilityAccepted
+        });
 
     // --- Trainings ---
     public async Task<List<TrainingSession>> GetTrainingsAsync()

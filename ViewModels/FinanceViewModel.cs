@@ -55,7 +55,7 @@ public partial class FinanceViewModel : ObservableObject
             foreach (var f in fencers.Where(f => f.Active))
             {
                 attendance.TryGetValue(f.Id, out var count);
-                var amount = DuesCalculator.Calculate(count);
+                var amount = DuesCalculator.Calculate(count, f.IsStudent);
                 var paid = payments.Any(p => p.FencerId == f.Id);
                 if (count == 0 && !paid) continue;
 

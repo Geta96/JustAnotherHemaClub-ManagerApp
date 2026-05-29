@@ -2,14 +2,12 @@ using JustAnotherHemaClub.Models;
 
 namespace JustAnotherHemaClub.Services;
 
-/// <summary>
-/// Stores the profile in <see cref="Preferences"/> so it persists across launches.
-/// </summary>
 public class PreferencesProfileService : IProfileService
 {
     private const string KName = "profile.name";
     private const string KNickname = "profile.nickname";
     private const string KEmail = "profile.email";
+    private const string KStudent = "profile.student";
     private const string KGdpr = "profile.gdpr";
     private const string KLiability = "profile.liability";
 
@@ -28,6 +26,7 @@ public class PreferencesProfileService : IProfileService
             Name = Preferences.Get(KName, ""),
             Nickname = Preferences.Get(KNickname, ""),
             Email = Preferences.Get(KEmail, defaultEmail),
+            IsStudent = Preferences.Get(KStudent, false),
             GdprAccepted = Preferences.Get(KGdpr, false),
             LiabilityAccepted = Preferences.Get(KLiability, false),
         };
@@ -41,6 +40,7 @@ public class PreferencesProfileService : IProfileService
         // Email is not editable from the UI; preserve whatever we have stored or auth-derived.
         if (!string.IsNullOrWhiteSpace(profile.Email))
             Preferences.Set(KEmail, profile.Email);
+        Preferences.Set(KStudent, profile.IsStudent);
         Preferences.Set(KGdpr, profile.GdprAccepted);
         Preferences.Set(KLiability, profile.LiabilityAccepted);
         return Task.CompletedTask;

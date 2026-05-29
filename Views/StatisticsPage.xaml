@@ -8,11 +8,7 @@
     <ScrollView>
         <VerticalStackLayout Padding="16" Spacing="14">
 
-            <Grid ColumnDefinitions="*,Auto">
-                <Label Grid.Column="0" Text="Statistics" Style="{StaticResource H1}" />
-                <Button Grid.Column="1" Text="Reload" Command="{Binding LoadCommand}"
-                        Style="{StaticResource SecondaryButton}" />
-            </Grid>
+            <Label Text="Statistics" Style="{StaticResource H1}" />
 
             <!-- All-time -->
             <Border Style="{StaticResource Card}">

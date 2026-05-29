@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using JustAnotherHemaClub.Models;
+using JustAnotherHemaClub.Services;
 
 namespace JustAnotherHemaClub.ViewModels;
 
@@ -10,13 +11,18 @@ public partial class FencerDueRow : ObservableObject
     public decimal AmountDue { get; }
 
     [ObservableProperty] private bool isPaid;
-
     public bool IsNotPaid => !IsPaid;
 
-    public string Summary =>
-        SessionsAttended == 0
-            ? "No sessions"
-            : $"{SessionsAttended} session{(SessionsAttended == 1 ? "" : "s")} · {AmountDue:N0} Ft";
+    public string Summary
+    {
+        get
+        {
+            if (SessionsAttended == 0) return "No sessions";
+            var tier = DuesCalculator.TierLabel(SessionsAttended);
+            var student = Fencer.IsStudent ? " · student" : "";
+            return $"{SessionsAttended} session{(SessionsAttended == 1 ? "" : "s")} · {tier} · {AmountDue:N0} Ft{student}";
+        }
+    }
 
     public FencerDueRow(Fencer fencer, int sessionsAttended, decimal amountDue, bool isPaid)
     {

@@ -14,11 +14,13 @@
     <Shell.FlyoutHeader>
         <Grid BackgroundColor="{StaticResource Wine}" HeightRequest="170" Padding="16">
             <VerticalStackLayout VerticalOptions="Center" Spacing="6">
-                <Image Source="jahclogo.jpg"
+                <Image Source="jahclogo.png"
                        HeightRequest="90"
                        Aspect="AspectFit"
                        HorizontalOptions="Start" />
-                <Label Text="JAHC Manager" FontSize="20" FontAttributes="Bold"
+                <Label Text="Just Another" FontSize="18" FontAttributes="Bold"
+                       TextColor="{StaticResource Cream}" />
+                <Label Text="HEMA Club" FontSize="20" FontAttributes="Bold"
                        TextColor="{StaticResource Cream}" />
                 <Label x:Name="UserLabel" Text="" TextColor="{StaticResource Cream}" Opacity="0.8" FontSize="13" />
             </VerticalStackLayout>
@@ -76,6 +78,10 @@
 
     <FlyoutItem Title="Trainings" Route="trainings">
         <ShellContent ContentTemplate="{DataTemplate views:TrainingsPage}" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Fencers" Route="fencers">
+        <ShellContent ContentTemplate="{DataTemplate views:FencersPage}" />
     </FlyoutItem>
 
     <FlyoutItem Title="Finance" Route="finance">

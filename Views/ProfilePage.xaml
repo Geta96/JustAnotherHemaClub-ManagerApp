@@ -22,6 +22,12 @@
                     <Entry Text="{Binding Email}" IsReadOnly="True" />
 
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Padding="0,8,0,0">
+                        <CheckBox Grid.Column="0" IsChecked="{Binding IsStudent}" />
+                        <Label   Grid.Column="1" VerticalOptions="Center"
+                                 Text="I am a student (pays 60% of every fee)." />
+                    </Grid>
+
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
                         <CheckBox Grid.Column="0" IsChecked="{Binding GdprAccepted}" />
                         <Label   Grid.Column="1" VerticalOptions="Center"
                                  Text="I agree to the GDPR data processing policy." />

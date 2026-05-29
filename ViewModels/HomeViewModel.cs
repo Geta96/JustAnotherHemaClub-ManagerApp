@@ -12,6 +12,9 @@ public partial class HomeViewModel : ObservableObject
     public const string FacebookUrl =
         "https://www.facebook.com/share/18VtVUQPW5/";
 
+    public const string TelegramUrl =
+        "https://t.me/+6EUfQu6kXPY4NWM8";
+
     [RelayCommand]
     private Task OpenInstagramAsync() =>
         Launcher.Default.OpenAsync(InstagramUrl);
@@ -19,4 +22,8 @@ public partial class HomeViewModel : ObservableObject
     [RelayCommand]
     private Task OpenFacebookAsync() =>
         Launcher.Default.OpenAsync(FacebookUrl);
+
+    [RelayCommand]
+    private Task OpenTelegramAsync() =>
+        Launcher.Default.OpenAsync(TelegramUrl);
 }

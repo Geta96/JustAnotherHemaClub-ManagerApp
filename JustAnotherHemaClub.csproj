@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>net8.0-android</TargetFrameworks>
@@ -54,11 +54,14 @@
     <MauiXaml Update="Views\TrainingsPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </MauiXaml>
+    <MauiXaml Update="Views\FencersPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </MauiXaml>
   </ItemGroup>
 
   <ItemGroup>
     <!-- App Icon -->
-    <MauiIcon Include="Resources\AppIcon\jahcappicon_s.svg" ForegroundFile="Resources\AppIcon\jahclogo.jpg" Color="#5D1312" />
+    <MauiIcon Include="Resources\AppIcon\jahcappicon_s.svg" ForegroundFile="Resources\AppIcon\jahclogo.png" Color="#5D1312" />
 
     <!-- Splash Screen -->
     <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#5D1312" BaseSize="128,128" />

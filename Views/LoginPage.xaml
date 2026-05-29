@@ -12,7 +12,7 @@
         <!-- Crest area -->
         <VerticalStackLayout Grid.Row="0" VerticalOptions="Center" HorizontalOptions="Center"
                              Spacing="8" Padding="24">
-            <Image Source="jahclogo.jpg"
+            <Image Source="jahclogo.png"
                    HeightRequest="200"
                    Aspect="AspectFit"
                    HorizontalOptions="Center" />

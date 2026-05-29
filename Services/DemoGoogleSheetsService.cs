@@ -19,10 +19,10 @@ public class DemoGoogleSheetsService : IGoogleSheetsService
     {
         _fencers = new()
         {
-            new Fencer { Id = "f1", Name = "Alice Sword",   Email = "alice@example.com", Active = true },
-            new Fencer { Id = "f2", Name = "Bob Longsword", Email = "bob@example.com",   Active = true },
-            new Fencer { Id = "f3", Name = "Cara Rapier",   Email = "cara@example.com",  Active = true },
-            new Fencer { Id = "f4", Name = "Dan Messer",    Email = "dan@example.com",   Active = false },
+            new Fencer { Id = "f1", Name = "Alice Sword",   Nickname = "Ali",   Email = "alice@example.com", Active = true,  IsStudent = false, GdprAccepted = true,  LiabilityAccepted = true  },
+            new Fencer { Id = "f2", Name = "Bob Longsword", Nickname = "Bobby", Email = "bob@example.com",   Active = true,  IsStudent = true,  GdprAccepted = true,  LiabilityAccepted = true  },
+            new Fencer { Id = "f3", Name = "Cara Rapier",   Nickname = "Cas",   Email = "cara@example.com",  Active = true,  IsStudent = false, GdprAccepted = true,  LiabilityAccepted = false },
+            new Fencer { Id = "f4", Name = "Dan Messer",    Nickname = "Danny", Email = "dan@example.com",   Active = false, IsStudent = false, GdprAccepted = false, LiabilityAccepted = false },
         };
 
         // Seed three months: current, previous, two-months-ago

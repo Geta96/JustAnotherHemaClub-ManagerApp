@@ -9,11 +9,7 @@
     <ScrollView>
         <VerticalStackLayout Padding="16" Spacing="14">
 
-            <Grid ColumnDefinitions="*,Auto">
-                <Label Grid.Column="0" Text="Finance by month" Style="{StaticResource H1}" />
-                <Button Grid.Column="1" Text="Reload" Command="{Binding LoadCommand}"
-                        Style="{StaticResource SecondaryButton}" />
-            </Grid>
+            <Label Text="Finance by month" Style="{StaticResource H1}" />
             <Label Text="Pricing: 1 session 3 500 · 4 sessions 9 000 · 8 sessions 12 000"
                    Style="{StaticResource Caption}" />
 
