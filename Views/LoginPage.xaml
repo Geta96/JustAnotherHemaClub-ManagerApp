@@ -10,20 +10,14 @@
     <Grid RowDefinitions="*,Auto">
 
         <!-- Crest area -->
-        <VerticalStackLayout Grid.Row="0" VerticalOptions="Center" HorizontalOptions="Center"
-                             Spacing="8" Padding="24">
-            <Image Source="jahclogo.png"
-                   HeightRequest="200"
-                   Aspect="AspectFit"
-                   HorizontalOptions="Center" />
-            <Label Text="Just Another HEMA Club"
-                   FontSize="22" FontAttributes="Bold"
-                   TextColor="{StaticResource Cream}"
-                   HorizontalOptions="Center" />
-            <BoxView HeightRequest="2" WidthRequest="60" Color="{StaticResource Slate}"
-                     HorizontalOptions="Center" />
+        <VerticalStackLayout Grid.Row="0" VerticalOptions="Center" HorizontalOptions="Fill"
+                             Spacing="8" Padding="0">
+            <Image Source="monochrome_logo.jpg"
+                   HeightRequest="320"
+                   Aspect="AspectFill"
+                   HorizontalOptions="Fill" />
             <Label Text="Manager"
-                   FontSize="14" TextColor="{StaticResource Cream}" Opacity="0.7"
+                   FontSize="18" TextColor="{StaticResource Cream}" Opacity="0.7"
                    HorizontalOptions="Center" />
         </VerticalStackLayout>
 
