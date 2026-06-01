@@ -9,10 +9,23 @@ namespace JustAnotherHemaClub.ViewModels;
 public partial class FinanceViewModel : ObservableObject
 {
     private readonly IGoogleSheetsService _sheets;
+    private readonly AuthService _auth;
 
     public ObservableCollection<MonthFinanceVm> Months { get; } = new();
 
-    public FinanceViewModel(IGoogleSheetsService sheets) => _sheets = sheets;
+    public bool IsLoggedInInstructor => _auth.IsLoggedInInstructor;
+
+    public bool ShowPersonalSummary => !_auth.IsLoggedInInstructor && _auth.CurrentFencer is not null;
+
+    [ObservableProperty] private decimal personalTotalDue;
+    [ObservableProperty] private bool personalAllPaid;
+    [ObservableProperty] private string personalSummary = "";
+
+    public FinanceViewModel(IGoogleSheetsService sheets, AuthService auth)
+    {
+        _sheets = sheets;
+        _auth = auth;
+    }
 
     [RelayCommand]
     public async Task LoadAsync()
@@ -35,6 +48,9 @@ public partial class FinanceViewModel : ObservableObject
 
         var ordered = monthsSet.OrderByDescending(t => t.Y).ThenByDescending(t => t.M);
 
+        var isInstructor = _auth.IsLoggedInInstructor;
+        var currentFencerId = _auth.CurrentFencer?.Id;
+
         foreach (var (y, m) in ordered)
         {
             var monthVm = new MonthFinanceVm(y, m);
@@ -48,7 +64,11 @@ public partial class FinanceViewModel : ObservableObject
 
             var payments = await _sheets.GetPaymentsAsync(y, m);
 
-            foreach (var f in fencers.Where(f => f.Active))
+            var fencersForMonth = isInstructor
+                ? fencers.Where(f => f.Active)
+                : fencers.Where(f => f.Active && f.Id == currentFencerId);
+
+            foreach (var f in fencersForMonth)
             {
                 attendance.TryGetValue(f.Id, out var count);
                 var amount = DuesCalculator.Calculate(count, f.IsStudent);
@@ -58,14 +78,43 @@ public partial class FinanceViewModel : ObservableObject
                 monthVm.Dues.Add(new FencerDueRow(f, count, amount, paid));
             }
 
-            var from = new DateTime(y, m, 1);
-            var to = from.AddMonths(1).AddDays(-1);
-            foreach (var e in expensesAll.Where(e => e.Date >= from && e.Date <= to))
-                monthVm.Expenses.Add(e);
+            if (isInstructor)
+            {
+                var from = new DateTime(y, m, 1);
+                var to = from.AddMonths(1).AddDays(-1);
+                foreach (var e in expensesAll.Where(e => e.Date >= from && e.Date <= to))
+                    monthVm.Expenses.Add(e);
+            }
 
             monthVm.RaiseTotals();
             Months.Add(monthVm);
         }
+
+        RecomputePersonalSummary();
+        OnPropertyChanged(nameof(ShowPersonalSummary));
+    }
+
+    private void RecomputePersonalSummary()
+    {
+        if (_auth.IsLoggedInInstructor || _auth.CurrentFencer is null)
+        {
+            PersonalTotalDue = 0;
+            PersonalAllPaid = true;
+            PersonalSummary = "";
+            return;
+        }
+
+        var myId = _auth.CurrentFencer.Id;
+        var total = Months
+            .SelectMany(mv => mv.Dues)
+            .Where(d => d.Fencer.Id == myId && !d.IsPaid)
+            .Sum(d => d.AmountDue);
+
+        PersonalTotalDue = total;
+        PersonalAllPaid = total <= 0;
+        PersonalSummary = PersonalAllPaid
+            ? "All payed up. Thank you!"
+            : $"{total:N0} Ft is due.";
     }
 
     [RelayCommand]
@@ -86,6 +135,7 @@ public partial class FinanceViewModel : ObservableObject
         await _sheets.MarkPaidAsync(p);
         row.IsPaid = true;
         month.RaiseTotals();
+        RecomputePersonalSummary();
     }
 
     [RelayCommand]

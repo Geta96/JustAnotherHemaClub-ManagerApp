@@ -13,6 +13,40 @@
             <Label Text="Pricing: 1 session 3 500 · 4 sessions 9 000 · 8 sessions 12 000"
                    Style="{StaticResource Caption}" />
 
+            <Border Style="{StaticResource Card}"
+                    IsVisible="{Binding ShowPersonalSummary}">
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="My payments" Style="{StaticResource H2}" />
+
+                    <HorizontalStackLayout Spacing="8" VerticalOptions="Center"
+                                           IsVisible="{Binding PersonalAllPaid}">
+                        <Label Text="✓" FontSize="22" FontAttributes="Bold"
+                               TextColor="#1F8A2E" VerticalOptions="Center" />
+                        <Label Text="All payed up. Thank you!"
+                               FontAttributes="Bold"
+                               TextColor="#1F8A2E"
+                               VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+
+                    <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
+                        <HorizontalStackLayout.Triggers>
+                            <DataTrigger TargetType="HorizontalStackLayout"
+                                         Binding="{Binding PersonalAllPaid}"
+                                         Value="True">
+                                <Setter Property="IsVisible" Value="False" />
+                            </DataTrigger>
+                        </HorizontalStackLayout.Triggers>
+                        <Label Text="✗" FontSize="22" FontAttributes="Bold"
+                               TextColor="{StaticResource DangerRed}"
+                               VerticalOptions="Center" />
+                        <Label Text="{Binding PersonalTotalDue, StringFormat='{0:N0} Ft is due'}"
+                               FontAttributes="Bold"
+                               TextColor="{StaticResource DangerRed}"
+                               VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
             <CollectionView ItemsSource="{Binding Months}">
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="vm:MonthFinanceVm">
@@ -50,10 +84,39 @@
 
                                                         <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
                                                                 Text="Mark Paid"
-                                                                IsVisible="{Binding IsNotPaid}"
+                                                                IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceViewModel}}, Path=IsLoggedInInstructor}"
                                                                 Command="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceViewModel}}, Path=MarkPaidCommand}"
                                                                 CommandParameter="{Binding .}"
-                                                                VerticalOptions="Center" />
+                                                                VerticalOptions="Center">
+                                                            <Button.Triggers>
+                                                                <DataTrigger TargetType="Button"
+                                                                             Binding="{Binding IsPaid}"
+                                                                             Value="True">
+                                                                    <Setter Property="IsVisible" Value="False" />
+                                                                </DataTrigger>
+                                                            </Button.Triggers>
+                                                        </Button>
+
+                                                        <HorizontalStackLayout Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                                                                               Spacing="6"
+                                                                               VerticalOptions="Center"
+                                                                               IsVisible="{Binding IsNotPaid}">
+                                                            <HorizontalStackLayout.Triggers>
+                                                                <DataTrigger TargetType="HorizontalStackLayout"
+                                                                             Binding="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceViewModel}}, Path=IsLoggedInInstructor}"
+                                                                             Value="True">
+                                                                    <Setter Property="IsVisible" Value="False" />
+                                                                </DataTrigger>
+                                                            </HorizontalStackLayout.Triggers>
+                                                            <Label Text="Not payed yet"
+                                                                   TextColor="{StaticResource DangerRed}"
+                                                                   FontAttributes="Bold"
+                                                                   VerticalOptions="Center" />
+                                                            <Label Text="✗"
+                                                                   FontSize="20" FontAttributes="Bold"
+                                                                   TextColor="{StaticResource DangerRed}"
+                                                                   VerticalOptions="Center" />
+                                                        </HorizontalStackLayout>
 
                                                         <Label Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
                                                                Text="✓ Paid"
@@ -66,8 +129,10 @@
                                         </BindableLayout.ItemTemplate>
                                     </VerticalStackLayout>
 
-                                    <Label Text="Expenses" FontAttributes="Bold" TextColor="{StaticResource Wine}" />
-                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Expenses}" Spacing="6">
+                                    <Label Text="Expenses" FontAttributes="Bold" TextColor="{StaticResource Wine}"
+                                           IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceViewModel}}, Path=IsLoggedInInstructor}" />
+                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Expenses}" Spacing="6"
+                                                         IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceViewModel}}, Path=IsLoggedInInstructor}">
                                         <BindableLayout.ItemTemplate>
                                             <DataTemplate x:DataType="m:Expense">
                                                 <Border Style="{StaticResource Card}">
@@ -84,7 +149,8 @@
                                         </BindableLayout.ItemTemplate>
                                     </VerticalStackLayout>
 
-                                    <Border Style="{StaticResource Card}">
+                                    <Border Style="{StaticResource Card}"
+                                            IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceViewModel}}, Path=IsLoggedInInstructor}">
                                         <VerticalStackLayout Spacing="8">
                                             <Label Text="Add expense" FontAttributes="Bold"
                                                    TextColor="{StaticResource Wine}" />

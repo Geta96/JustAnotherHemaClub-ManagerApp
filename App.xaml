@@ -8,6 +8,8 @@
                 <ResourceDictionary Source="Resources/Styles/Colors.xaml" />
                 <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
             </ResourceDictionary.MergedDictionaries>
+            <conv:InverseBoolConverter x:Key="InverseBoolConverter"
+                                       xmlns:conv="clr-namespace:JustAnotherHemaClub.Converters" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

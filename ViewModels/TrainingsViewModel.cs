@@ -10,6 +10,7 @@ namespace JustAnotherHemaClub.ViewModels;
 public partial class TrainingsViewModel : ObservableObject
 {
     private readonly IGoogleSheetsService _sheets;
+    private readonly AuthService _auth;
 
     public ObservableCollection<Fencer> AllFencers { get; } = new();
 
@@ -27,7 +28,14 @@ public partial class TrainingsViewModel : ObservableObject
 
     public ObservableCollection<PastMonthVm> Months { get; } = new();
 
-    public TrainingsViewModel(IGoogleSheetsService sheets) => _sheets = sheets;
+    public bool IsLoggedInInstructor => _auth.IsLoggedInInstructor;
+    public bool IsLoggedInRegularFencer => _auth.IsLoggedInFencer && !_auth.IsLoggedInInstructor;
+
+    public TrainingsViewModel(IGoogleSheetsService sheets, AuthService auth)
+    {
+        _sheets = sheets;
+        _auth = auth;
+    }
 
     [RelayCommand]
     public async Task LoadAsync()
@@ -44,6 +52,8 @@ public partial class TrainingsViewModel : ObservableObject
             .GroupBy(n => (n.Year, n.Month))
             .ToDictionary(g => g.Key, g => g.Last().Note);
 
+        var myId = _auth.CurrentFencer?.Id;
+
         Months.Clear();
         var grouped = trainings
             .GroupBy(s => (s.Date.Year, s.Date.Month))
@@ -56,7 +66,7 @@ public partial class TrainingsViewModel : ObservableObject
             mvm.IsNoteDirty = false;
 
             foreach (var t in g.OrderByDescending(s => s.Date))
-                mvm.Trainings.Add(new EditableTrainingRow(t, AllFencers));
+                mvm.Trainings.Add(new EditableTrainingRow(t, AllFencers, myId));
 
             Months.Add(mvm);
         }
@@ -170,5 +180,31 @@ public partial class TrainingsViewModel : ObservableObject
             Note = month.Note ?? ""
         });
         month.IsNoteDirty = false;
+    }
+
+    [RelayCommand]
+    public async Task AttendTrainingAsync(EditableTrainingRow row)
+    {
+        if (row is null) return;
+        if (_auth.IsLoggedInInstructor) return;
+        var me = _auth.CurrentFencer;
+        if (me is null) return;
+        if (row.Training.AttendeeFencerIds.Contains(me.Id)) return;
+
+        row.Training.AttendeeFencerIds.Add(me.Id);
+
+        var wasDirty = row.IsDirty;
+
+        try
+        {
+            await _sheets.UpsertTrainingAsync(row.Training);
+            row.CurrentUserAttending = true;
+            row.IsDirty = wasDirty; // never become dirty just from self-attending
+        }
+        catch
+        {
+            row.Training.AttendeeFencerIds.Remove(me.Id);
+            throw;
+        }
     }
 }

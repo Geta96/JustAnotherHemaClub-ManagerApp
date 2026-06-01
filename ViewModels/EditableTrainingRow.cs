@@ -4,19 +4,6 @@ using JustAnotherHemaClub.Models;
 
 namespace JustAnotherHemaClub.ViewModels;
 
-public partial class FencerToggle : ObservableObject
-{
-    public Fencer Fencer { get; }
-
-    [ObservableProperty] private bool isAttending;
-
-    public FencerToggle(Fencer fencer, bool attending)
-    {
-        Fencer = fencer;
-        isAttending = attending;
-    }
-}
-
 public partial class EditableTrainingRow : ObservableObject
 {
     public TrainingSession Training { get; }
@@ -26,10 +13,22 @@ public partial class EditableTrainingRow : ObservableObject
 
     [ObservableProperty] private bool isDirty;
 
-    public EditableTrainingRow(TrainingSession training, IEnumerable<Fencer> allFencers)
+    /// <summary>True when the currently logged-in fencer is in the attendee list.</summary>
+    [ObservableProperty] private bool currentUserAttending;
+
+    /// <summary>True when there is a logged-in non-instructor who could still attend this session.</summary>
+    public bool CanCurrentUserAttend => !string.IsNullOrEmpty(_currentUserFencerId) && !CurrentUserAttending;
+
+    private readonly string? _currentUserFencerId;
+
+    public EditableTrainingRow(TrainingSession training, IEnumerable<Fencer> allFencers, string? currentUserFencerId = null)
     {
         Training = training;
         topic = training.Topic;
+        _currentUserFencerId = currentUserFencerId;
+        currentUserAttending = !string.IsNullOrEmpty(currentUserFencerId) &&
+                               training.AttendeeFencerIds.Contains(currentUserFencerId);
+
         Fencers = new ObservableCollection<FencerToggle>(
             allFencers.Select(f =>
             {
@@ -44,6 +43,9 @@ public partial class EditableTrainingRow : ObservableObject
     }
 
     partial void OnTopicChanged(string value) => IsDirty = true;
+
+    partial void OnCurrentUserAttendingChanged(bool value)
+        => OnPropertyChanged(nameof(CanCurrentUserAttend));
 
     public TrainingSession ToUpdatedTraining() => new()
     {
