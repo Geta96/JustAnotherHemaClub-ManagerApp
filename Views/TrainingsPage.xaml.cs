@@ -17,4 +17,10 @@ public partial class TrainingsPage : ContentPage
         base.OnAppearing();
         await _vm.LoadAsync();
     }
+
+    private void OnAttendeeRowTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is BindableObject bo && bo.BindingContext is FencerToggle t)
+            t.IsAttending = !t.IsAttending;
+    }
 }

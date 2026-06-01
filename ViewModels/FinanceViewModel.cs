@@ -23,19 +23,15 @@ public partial class FinanceViewModel : ObservableObject
 
         var trainings = await _sheets.GetTrainingsAsync();
 
-        // 6-month window from today, plus any older months that have data
-        var today = DateTime.Today;
-        var windowStart = new DateTime(today.Year, today.Month, 1).AddMonths(-5);
-        var windowEnd = new DateTime(today.Year, today.Month, 1).AddMonths(1).AddDays(-1);
-
-        // All months with sessions or expenses, plus the 6-month window
+        // All months with sessions, plus the current month.
         var expensesAll = await _sheets.GetExpensesAsync(DateTime.MinValue.AddYears(1), DateTime.MaxValue.AddYears(-1));
 
-        var monthsSet = new HashSet<(int Y, int M)>();
-        for (var d = windowStart; d <= windowEnd; d = d.AddMonths(1))
-            monthsSet.Add((d.Year, d.Month));
+        var today = DateTime.Today;
+        var monthsSet = new HashSet<(int Y, int M)>
+        {
+            (today.Year, today.Month)
+        };
         foreach (var s in trainings) monthsSet.Add((s.Date.Year, s.Date.Month));
-        foreach (var e in expensesAll) monthsSet.Add((e.Date.Year, e.Date.Month));
 
         var ordered = monthsSet.OrderByDescending(t => t.Y).ThenByDescending(t => t.M);
 

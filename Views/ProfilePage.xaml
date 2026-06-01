@@ -8,15 +8,75 @@
     <ScrollView>
         <VerticalStackLayout Padding="16" Spacing="14">
 
-            <Border Style="{StaticResource Card}">
-                <VerticalStackLayout Spacing="10">
-                    <Label Text="My profile" Style="{StaticResource H2}" />
+            <!-- Guest banner -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding IsGuest}">
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="You are browsing as a guest"
+                           Style="{StaticResource H2}" />
+                    <Label Text="Log in to view and edit your fencer profile."
+                           Style="{StaticResource Caption}" />
+                </VerticalStackLayout>
+            </Border>
 
-                    <Label Text="Name" Style="{StaticResource Caption}" />
+            <!-- Read-only identity card -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding IsLoggedInFencer}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Account" Style="{StaticResource H2}" />
+
+                    <Label Text="Full name" Style="{StaticResource Caption}" />
+                    <Label Text="{Binding Name}" FontAttributes="Bold" />
+
+                    <Label Text="Username" Style="{StaticResource Caption}" />
+                    <HorizontalStackLayout Spacing="0">
+                        <Label Text="@" FontAttributes="Bold" />
+                        <Label Text="{Binding Username}" FontAttributes="Bold" />
+                    </HorizontalStackLayout>
+
+                    <Label Text="Email" Style="{StaticResource Caption}" />
+                    <Label Text="{Binding Email}" FontAttributes="Bold" />
+
+                    <HorizontalStackLayout Spacing="8" Padding="0,8,0,0">
+                        <Border BackgroundColor="#1F8A2E"
+                                StrokeThickness="0" StrokeShape="RoundRectangle 10"
+                                Padding="10,4"
+                                IsVisible="{Binding IsActive}">
+                            <Label Text="Active" TextColor="White"
+                                   FontSize="12" FontAttributes="Bold" />
+                        </Border>
+                        <Border BackgroundColor="{StaticResource Slate}"
+                                StrokeThickness="0" StrokeShape="RoundRectangle 10"
+                                Padding="10,4"
+                                IsVisible="{Binding IsStudent}">
+                            <Label Text="Student · 60%" TextColor="White"
+                                   FontSize="12" FontAttributes="Bold" />
+                        </Border>
+                        <Border BackgroundColor="{StaticResource Wine}"
+                                StrokeThickness="0" StrokeShape="RoundRectangle 10"
+                                Padding="10,4"
+                                IsVisible="{Binding IsInstructor}">
+                            <Label Text="Instructor" TextColor="White"
+                                   FontSize="12" FontAttributes="Bold" />
+                        </Border>
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Editable profile -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding IsLoggedInFencer}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Edit my profile" Style="{StaticResource H2}" />
+
+                    <Label Text="Full name" Style="{StaticResource Caption}" />
                     <Entry Placeholder="Full name" Text="{Binding Name}" />
 
+                    <Label Text="Email (read-only)" Style="{StaticResource Caption}" />
+                    <Entry Placeholder="you@example.com"
+                           Keyboard="Email"
+                           Text="{Binding Email}"
+                           IsReadOnly="True" />
+
                     <Label Text="Username (read-only)" Style="{StaticResource Caption}" />
-                    <Entry Text="{Binding Email}" IsReadOnly="True" />
+                    <Entry Text="{Binding Username}" IsReadOnly="True" />
 
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Padding="0,8,0,0">
                         <CheckBox Grid.Column="0" IsChecked="{Binding IsStudent}" />

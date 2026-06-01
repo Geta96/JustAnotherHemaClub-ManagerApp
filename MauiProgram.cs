@@ -25,7 +25,6 @@ public static class MauiProgram
 
         // Auth + proxy
         builder.Services.AddSingleton<AuthService>();
-        builder.Services.AddSingleton<IProfileService, PreferencesProfileService>();
 
         // ViewModels
         builder.Services.AddTransient<LoginViewModel>();

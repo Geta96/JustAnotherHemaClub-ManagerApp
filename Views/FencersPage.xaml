@@ -11,29 +11,6 @@
 
             <Label Text="Fencer profiles" Style="{StaticResource H1}" />
 
-            <!-- Backend diagnostics -->
-            <Border Style="{StaticResource Card}">
-                <VerticalStackLayout Spacing="6">
-                    <Grid ColumnDefinitions="*,Auto">
-                        <Label Grid.Column="0" Text="Backend status" Style="{StaticResource H2}" />
-                        <Label Grid.Column="1"
-                               Text="✓"
-                               FontSize="20"
-                               FontAttributes="Bold"
-                               TextColor="#1F8A2E"
-                               IsVisible="{Binding BackendRequestSucceeded}" />
-                    </Grid>
-
-                    <Label Text="{Binding BackendStatus}"
-                           FontAttributes="Bold"
-                           TextColor="{StaticResource Wine}" />
-
-                    <Label Text="{Binding BackendError}"
-                           TextColor="{StaticResource DangerRed}"
-                           IsVisible="{Binding BackendRequestSucceeded, Converter={x:Null}}" />
-                </VerticalStackLayout>
-            </Border>
-
             <!-- Picker -->
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="8">

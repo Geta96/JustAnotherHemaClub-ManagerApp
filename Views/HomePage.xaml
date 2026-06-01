@@ -11,9 +11,12 @@
             <!-- Hero -->
             <Grid Padding="0" HeightRequest="320">
                 <!-- Background image -->
-                <Image Source="home_bg.jpg" HeightRequest="120" />
+                <Image Source="home_bg_2.jpg"
+                       Aspect="AspectFill"
+                       HorizontalOptions="Fill"
+                       VerticalOptions="Fill" />
                 <!-- Wine tint for legibility -->
-                <BoxView Color="{StaticResource Wine}" Opacity="0.55"
+                <BoxView Color="{StaticResource Wine}" Opacity="0.20"
                          HorizontalOptions="Fill" VerticalOptions="Fill" />
                 <!-- Foreground content -->
                 <VerticalStackLayout Spacing="6" Padding="20,28,20,24"
@@ -25,12 +28,26 @@
                     <Label Text="Just Another HEMA Club"
                            FontSize="22" FontAttributes="Bold"
                            TextColor="{StaticResource Cream}"
-                           HorizontalOptions="Center" />
+                           HorizontalOptions="Fill"
+                           HorizontalTextAlignment="Center"
+                           LineBreakMode="WordWrap">
+                        <Label.Shadow>
+                            <Shadow Brush="{StaticResource Wine}"
+                                    Offset="0,0" Radius="5" Opacity="1" />
+                        </Label.Shadow>
+                    </Label>
                     <BoxView HeightRequest="2" WidthRequest="60" Color="{StaticResource Slate}"
                              HorizontalOptions="Center" />
                     <Label Text="Historical European Martial Arts in Budapest"
-                           TextColor="{StaticResource Cream}" Opacity="0.9"
-                           HorizontalOptions="Center" />
+                           TextColor="{StaticResource Cream}" Opacity="1"
+                           HorizontalOptions="Fill"
+                           HorizontalTextAlignment="Center"
+                           LineBreakMode="WordWrap">
+                        <Label.Shadow>
+                            <Shadow Brush="{StaticResource Wine}"
+                                    Offset="0,0" Radius="4" Opacity="1" />
+                        </Label.Shadow>
+                    </Label>
                 </VerticalStackLayout>
             </Grid>
 
