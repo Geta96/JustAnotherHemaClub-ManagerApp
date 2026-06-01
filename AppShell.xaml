@@ -39,43 +39,42 @@
     <Shell.ItemTemplate>
         <DataTemplate>
             <Grid HeightRequest="52" Padding="16,0"
-                  ColumnDefinitions="6,28,*" ColumnSpacing="12">
-                <BoxView Grid.Column="0" Color="{StaticResource Wine}"
-                         WidthRequest="4" CornerRadius="2"
-                         VerticalOptions="Fill" Margin="0,10" />
+                  ColumnDefinitions="28,*" ColumnSpacing="12">
 
-                <Label Grid.Column="1"
-                       FontSize="20"
+                <Label Grid.Column="0"
+                       FontSize="22"
+                       FontAttributes="Bold"
                        TextColor="{StaticResource Wine}"
                        HorizontalOptions="Center"
                        VerticalOptions="Center">
                     <Label.Triggers>
                         <DataTrigger TargetType="Label" Binding="{Binding Title}" Value="Home">
-                            <Setter Property="Text" Value="🏠" />
+                            <Setter Property="Text" Value="⌂" />
                         </DataTrigger>
                         <DataTrigger TargetType="Label" Binding="{Binding Title}" Value="Trainings">
-                            <Setter Property="Text" Value="🤺" />
+                            <Setter Property="Text" Value="⚔" />
                         </DataTrigger>
                         <DataTrigger TargetType="Label" Binding="{Binding Title}" Value="Fencers">
-                            <Setter Property="Text" Value="👥" />
+                            <Setter Property="Text" Value="☰" />
                         </DataTrigger>
                         <DataTrigger TargetType="Label" Binding="{Binding Title}" Value="Finance">
-                            <Setter Property="Text" Value="💰" />
+                            <Setter Property="Text" Value="₣" />
                         </DataTrigger>
                         <DataTrigger TargetType="Label" Binding="{Binding Title}" Value="Statistics">
-                            <Setter Property="Text" Value="📊" />
+                            <Setter Property="Text" Value="▦" />
                         </DataTrigger>
                         <DataTrigger TargetType="Label" Binding="{Binding Title}" Value="My Profile">
-                            <Setter Property="Text" Value="👤" />
+                            <Setter Property="Text" Value="◉" />
                         </DataTrigger>
                     </Label.Triggers>
                 </Label>
 
-                <Label   Grid.Column="2"
-                         Text="{Binding Title}"
-                         TextColor="{StaticResource Wine}"
-                         FontSize="16" FontAttributes="Bold"
-                         VerticalOptions="Center" />
+                <Label Grid.Column="1"
+                       Text="{Binding Title}"
+                       TextColor="{StaticResource Wine}"
+                       FontSize="16" FontAttributes="Bold"
+                       VerticalOptions="Center" />
+
                 <VisualStateManager.VisualStateGroups>
                     <VisualStateGroup x:Name="CommonStates">
                         <VisualState x:Name="Normal" />
@@ -93,14 +92,13 @@
     <Shell.MenuItemTemplate>
         <DataTemplate>
             <Grid HeightRequest="48" Padding="16,0"
-                  ColumnDefinitions="6,28,*" ColumnSpacing="12">
-                <BoxView Grid.Column="0" Color="Transparent" WidthRequest="4" />
-                <Label Grid.Column="1" Text="🚪"
-                       FontSize="20"
+                  ColumnDefinitions="28,*" ColumnSpacing="12">
+                <Label Grid.Column="0" Text="⎋"
+                       FontSize="22" FontAttributes="Bold"
                        TextColor="{StaticResource DangerRed}"
                        HorizontalOptions="Center"
                        VerticalOptions="Center" />
-                <Label Grid.Column="2"
+                <Label Grid.Column="1"
                        Text="{Binding Title}"
                        TextColor="{StaticResource DangerRed}"
                        FontSize="15" FontAttributes="Bold"

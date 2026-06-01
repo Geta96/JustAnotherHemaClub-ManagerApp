@@ -65,13 +65,13 @@
 
   <ItemGroup>
     <!-- App Icon -->
-    <MauiIcon Include="Resources\AppIcon\jahcappicon_s.svg" ForegroundFile="Resources\AppIcon\jahclogo.png" Color="#5D1312" />
+    <MauiIcon Include="Resources\Images\app_icon_blue.jpg" Color="#5D1312" />
 
     <!-- Splash Screen -->
     <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#5D1312" BaseSize="128,128" />
 
-    <!-- All images explicitly included -->
-    <MauiImage Include="Resources\Images\**" />
+    <!-- All images explicitly included, but exclude the app icon source -->
+    <MauiImage Include="Resources\Images\**" Exclude="Resources\Images\app_icon_blue.jpg" />
   </ItemGroup>
 
 </Project>
