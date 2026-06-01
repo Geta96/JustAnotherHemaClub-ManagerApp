@@ -25,9 +25,10 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
   </ItemGroup>
 
-  <!--<ItemGroup>
+  <ItemGroup>
+    <!-- Service account JSON used by GoogleSheetsService -->
     <MauiAsset Include="Resources\Raw\service-account.json" LogicalName="service-account.json" />
-  </ItemGroup>-->
+  </ItemGroup>
 
   <ItemGroup>
     <MauiXaml Update="AppShell.xaml">
@@ -48,6 +49,9 @@
     <MauiXaml Update="Views\ProfilePage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </MauiXaml>
+    <MauiXaml Update="Views\RegisterPage.xaml">
+      <Generator></Generator>
+    </MauiXaml>
     <MauiXaml Update="Views\StatisticsPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </MauiXaml>
@@ -65,6 +69,9 @@
 
     <!-- Splash Screen -->
     <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#5D1312" BaseSize="128,128" />
+
+    <!-- All images explicitly included -->
+    <MauiImage Include="Resources\Images\**" />
   </ItemGroup>
 
 </Project>

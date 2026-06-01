@@ -7,7 +7,7 @@ namespace JustAnotherHemaClub;
 
 public static class MauiProgram
 {
-    private const string SpreadsheetId = "PUT_YOUR_SPREADSHEET_ID_HERE";
+    private const string SpreadsheetId = "1KYpk1ElUTYGoFLlcJcJovYXXuvJzmkQ8tkzvh9y4EHU";
 
     public static MauiApp CreateMauiApp()
     {
@@ -20,16 +20,16 @@ public static class MauiProgram
             });
 
         // Backends
-        builder.Services.AddSingleton(_ => new GoogleSheetsService(SpreadsheetId));
-        builder.Services.AddSingleton<DemoGoogleSheetsService>();
+        builder.Services.AddSingleton(new GoogleSheetsService(SpreadsheetId));
+        builder.Services.AddSingleton<IGoogleSheetsService>(sp => sp.GetRequiredService<GoogleSheetsService>());
 
         // Auth + proxy
         builder.Services.AddSingleton<AuthService>();
-        builder.Services.AddSingleton<IGoogleSheetsService, GoogleSheetsServiceProxy>();
         builder.Services.AddSingleton<IProfileService, PreferencesProfileService>();
 
         // ViewModels
         builder.Services.AddTransient<LoginViewModel>();
+        builder.Services.AddTransient<RegisterViewModel>();
         builder.Services.AddTransient<HomeViewModel>();
         builder.Services.AddTransient<TrainingsViewModel>();
         builder.Services.AddTransient<FinanceViewModel>();
@@ -39,6 +39,7 @@ public static class MauiProgram
 
         // Pages
         builder.Services.AddTransient<LoginPage>();
+        builder.Services.AddTransient<RegisterPage>();
         builder.Services.AddTransient<HomePage>();
         builder.Services.AddTransient<TrainingsPage>();
         builder.Services.AddTransient<FinancePage>();

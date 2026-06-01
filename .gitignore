@@ -55,6 +55,8 @@ BenchmarkDotNet.Artifacts/
 # Generated MAUI assets (icons, splash, etc.)
 **/Resources/raw/.GeneratedFiles/
 **/Resources/values/colors.xml
+**/Resources/Raw/service-account.json
+**/service-account*.json
 *.aab
 *.apk
 *.ipa

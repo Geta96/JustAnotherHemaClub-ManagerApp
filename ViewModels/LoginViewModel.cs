@@ -47,6 +47,13 @@ public partial class LoginViewModel : ObservableObject
         await Task.CompletedTask;
     }
 
+    [RelayCommand]
+    private async Task GoToRegisterAsync()
+    {
+        var page = _services.GetRequiredService<Views.RegisterPage>();
+        await Application.Current!.MainPage!.Navigation.PushAsync(page);
+    }
+
     private void EnterShell()
     {
         var shell = _services.GetRequiredService<AppShell>();

@@ -82,7 +82,7 @@
                                     BackgroundColor="#1877F2" TextColor="{StaticResource Cream}"
                                     Command="{Binding OpenFacebookCommand}" />
                         </Grid>
-                        <Button Text="Join the conversation on Telegram"
+                        <Button Text="Telegram"
                                 BackgroundColor="#229ED9" TextColor="{StaticResource Cream}"
                                 Command="{Binding OpenTelegramCommand}" />
                     </VerticalStackLayout>

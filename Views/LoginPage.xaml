@@ -36,6 +36,9 @@
                 <Button Text="Login" Command="{Binding LoginCommand}" />
                 <Button Text="Use as Guest" Command="{Binding UseAsGuestCommand}"
                         Style="{StaticResource SecondaryButton}" />
+                <Button Text="Register as new fencer"
+                        Style="{StaticResource GhostButton}"
+                        Command="{Binding GoToRegisterCommand}" />
                 <Label Text="{Binding Error}" TextColor="{StaticResource DangerRed}" />
             </VerticalStackLayout>
         </Border>

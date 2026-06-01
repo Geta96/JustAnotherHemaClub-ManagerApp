@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels"
+             x:Class="JustAnotherHemaClub.Views.RegisterPage"
+             x:DataType="vm:RegisterViewModel"
+             NavigationPage.HasNavigationBar="True"
+             Title="Register">
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="14">
+
+            <Label Text="New fencer registration" Style="{StaticResource H1}" />
+            <Label Text="Fill this in once. An instructor will see your entry in the club roster."
+                   Style="{StaticResource Caption}" />
+
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Name *" Style="{StaticResource Caption}" />
+                    <Entry Placeholder="Full name" Text="{Binding Name}" />
+
+                    <Label Text="Email *" Style="{StaticResource Caption}" />
+                    <Entry Placeholder="email@example.com" Keyboard="Email" Text="{Binding Email}" />
+
+                    <BoxView HeightRequest="1" Color="{StaticResource Muted}" Opacity="0.3" Margin="0,8" />
+
+                    <Label Text="Login credentials" Style="{StaticResource H2}" />
+                    <Label Text="You'll use these to sign in to the app after registering."
+                           Style="{StaticResource Caption}" />
+
+                    <Label Text="Login username *" Style="{StaticResource Caption}" />
+                    <Entry Placeholder="e.g. alice.sword" Text="{Binding LoginUsername}" />
+
+                    <Label Text="Password (min. 4 characters) *" Style="{StaticResource Caption}" />
+                    <Entry Placeholder="Password" IsPassword="True" Text="{Binding Password}" />
+
+                    <Label Text="Confirm password *" Style="{StaticResource Caption}" />
+                    <Entry Placeholder="Repeat password" IsPassword="True" Text="{Binding ConfirmPassword}" />
+
+                    <BoxView HeightRequest="1" Color="{StaticResource Muted}" Opacity="0.3" />
+
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Padding="0,8,0,0">
+                        <CheckBox Grid.Column="0" IsChecked="{Binding IsStudent}" />
+                        <Label   Grid.Column="1" VerticalOptions="Center"
+                                 Text="I am a student (pays 60% of every fee)." />
+                    </Grid>
+
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                        <CheckBox Grid.Column="0" IsChecked="{Binding GdprAccepted}" />
+                        <Label   Grid.Column="1" VerticalOptions="Center"
+                                 Text="I agree to the GDPR data processing policy. *" />
+                    </Grid>
+
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                        <CheckBox Grid.Column="0" IsChecked="{Binding LiabilityAccepted}" />
+                        <Label   Grid.Column="1" VerticalOptions="Center"
+                                 Text="I accept the liability statement for participating in trainings. *" />
+                    </Grid>
+
+                    <Button x:Name="RegisterButton" Text="Register"
+                            Clicked="OnRegisterClicked" />
+                    <Button x:Name="BackButton" Text="Back"
+                            Style="{StaticResource SecondaryButton}"
+                            Clicked="OnBackClicked" />
+
+                    <Label Text="{Binding StatusMessage}" TextColor="#1F8A2E" FontAttributes="Bold" />
+                    <Label Text="{Binding ErrorMessage}"  TextColor="{StaticResource DangerRed}" FontAttributes="Bold" />
+                </VerticalStackLayout>
+            </Border>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

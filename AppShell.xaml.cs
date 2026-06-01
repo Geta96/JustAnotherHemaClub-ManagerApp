@@ -16,14 +16,13 @@ public partial class AppShell : Shell
 
         UserLabel.Text = _auth.IsGuest
             ? "Signed in as Guest"
-            : $"Signed in as {_auth.CurrentUser?.DisplayName ?? _auth.CurrentUser?.Username ?? "user"}";
+            : $"Signed in as {_auth.CurrentFencer?.Name ?? _auth.CurrentFencer?.Username ?? "user"}";
     }
 
     private async void OnLogoutClicked(object? sender, EventArgs e)
     {
         _auth.Logout();
 
-        // Replace the shell with the login page again.
         var login = _services.GetRequiredService<LoginPage>();
         Application.Current!.MainPage = new NavigationPage(login);
         await Task.CompletedTask;

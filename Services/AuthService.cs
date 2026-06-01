@@ -8,11 +8,15 @@ public class AuthService
 {
     private readonly Lazy<IGoogleSheetsService> _sheets;
 
-    public Instructor? CurrentUser { get; private set; }
+    public Fencer? CurrentFencer { get; private set; }
     public bool IsGuest { get; private set; }
 
-    // Lazy to avoid a circular dependency with the IGoogleSheetsService proxy
-    // (which itself depends on AuthService).
+    public bool IsLoggedInInstructor =>
+        CurrentFencer is not null && CurrentFencer.IsInstructor && !IsGuest;
+
+    public bool IsLoggedInFencer =>
+        CurrentFencer is not null && !IsGuest;
+
     public AuthService(IServiceProvider services)
     {
         _sheets = new Lazy<IGoogleSheetsService>(services.GetRequiredService<IGoogleSheetsService>);
@@ -21,32 +25,34 @@ public class AuthService
     public async Task<bool> LoginAsync(string username, string password)
     {
         IsGuest = false;
-        var hash = Hash(password);
-        var all = await _sheets.Value.GetInstructorsAsync();
-        var match = all.FirstOrDefault(i =>
-            string.Equals(i.Username, username, StringComparison.OrdinalIgnoreCase) &&
-            i.PasswordHash == hash);
-        CurrentUser = match;
+        CurrentFencer = null;
+
+        var inputUser = (username ?? string.Empty).Trim();
+        var inputHash = Hash(password ?? string.Empty);
+
+        var fencers = await _sheets.Value.GetFencersAsync();
+        var match = fencers.FirstOrDefault(f =>
+            !string.IsNullOrWhiteSpace(f.Username) &&
+            string.Equals(f.Username.Trim(), inputUser, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals((f.PasswordHash ?? "").Trim(), inputHash, StringComparison.OrdinalIgnoreCase));
+
+        CurrentFencer = match;
         return match is not null;
     }
 
     public void LoginAsGuest()
     {
         IsGuest = true;
-        CurrentUser = new Instructor
-        {
-            Username = "guest",
-            DisplayName = "Guest",
-            PasswordHash = string.Empty
-        };
+        CurrentFencer = null;
     }
 
     public void Logout()
     {
-        CurrentUser = null;
+        CurrentFencer = null;
         IsGuest = false;
     }
 
+    /// <summary>Uppercase hex SHA-256 of the UTF-8 bytes of the input.</summary>
     public static string Hash(string input)
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));

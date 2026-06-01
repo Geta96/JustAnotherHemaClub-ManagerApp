@@ -10,7 +10,6 @@ public partial class ProfileViewModel : ObservableObject
     private readonly IProfileService _service;
 
     [ObservableProperty] private string name = "";
-    [ObservableProperty] private string nickname = "";
     [ObservableProperty] private string email = "";
     [ObservableProperty] private bool isStudent;
     [ObservableProperty] private bool gdprAccepted;
@@ -24,7 +23,6 @@ public partial class ProfileViewModel : ObservableObject
     {
         var p = await _service.GetAsync();
         Name = p.Name;
-        Nickname = p.Nickname;
         Email = p.Email;
         IsStudent = p.IsStudent;
         GdprAccepted = p.GdprAccepted;
@@ -38,7 +36,6 @@ public partial class ProfileViewModel : ObservableObject
         await _service.SaveAsync(new Profile
         {
             Name = Name,
-            Nickname = Nickname,
             Email = Email,
             IsStudent = IsStudent,
             GdprAccepted = GdprAccepted,

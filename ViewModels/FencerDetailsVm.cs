@@ -8,7 +8,7 @@ public partial class FencerDetailsVm : ObservableObject
     public Fencer Fencer { get; }
 
     public string Name => Fencer.Name;
-    public string Nickname => Fencer.Nickname ?? "";
+    public string Username => Fencer.Username ?? "";
     public string Email => Fencer.Email ?? "";
     public bool Active => Fencer.Active;
     public bool IsStudent => Fencer.IsStudent;
@@ -19,7 +19,7 @@ public partial class FencerDetailsVm : ObservableObject
     public decimal AmountDue { get; }
     public bool IsPaid { get; }
 
-    public bool HasNickname => !string.IsNullOrWhiteSpace(Nickname);
+    public bool HasUsername => !string.IsNullOrWhiteSpace(Username);
     public bool OwesMoney => !IsPaid && AmountDue > 0;
 
     public string PaymentSummary =>

@@ -49,29 +49,63 @@ public class GoogleSheetsService : IGoogleSheetsService
         await req.ExecuteAsync();
     }
 
+    private async Task UpdateAsync(string range, IList<object> row)
+    {
+        var svc = await GetServiceAsync();
+        var body = new ValueRange { Values = new List<IList<object>> { row } };
+        var req = svc.Spreadsheets.Values.Update(body, _spreadsheetId, range);
+        req.ValueInputOption = SpreadsheetsResource.ValuesResource.UpdateRequest.ValueInputOptionEnum.USERENTERED;
+        await req.ExecuteAsync();
+    }
+
     // --- Fencers ---
+    // Columns: A=Id, B=Username, C=PasswordHash, D=Name, E=Email,
+    //          F=Active, G=IsStudent, H=GdprAccepted, I=LiabilityAccepted, J=IsInstructor
     public async Task<List<Fencer>> GetFencersAsync()
     {
-        var rows = await ReadAsync("Fencers!A2:H");
+        var rows = await ReadAsync("Fencers!A2:J");
         return rows.Select(r => new Fencer
         {
             Id = S(r, 0),
-            Name = S(r, 1),
-            Nickname = S(r, 2),
-            Email = S(r, 3),
-            Active = bool.TryParse(S(r, 4), out var a) && a,
-            IsStudent = bool.TryParse(S(r, 5), out var st) && st,
-            GdprAccepted = bool.TryParse(S(r, 6), out var g) && g,
-            LiabilityAccepted = bool.TryParse(S(r, 7), out var l) && l
+            Username = S(r, 1),
+            PasswordHash = S(r, 2),
+            Name = S(r, 3),
+            Email = S(r, 4),
+            Active = ParseBool(S(r, 5)),
+            IsStudent = ParseBool(S(r, 6)),
+            GdprAccepted = ParseBool(S(r, 7)),
+            LiabilityAccepted = ParseBool(S(r, 8)),
+            IsInstructor = ParseBool(S(r, 9))
         }).ToList();
     }
 
     public Task AddFencerAsync(Fencer f) =>
-        AppendAsync("Fencers!A:H", new List<object>
+        AppendAsync("Fencers!A:J", new List<object>
         {
-            f.Id, f.Name, f.Nickname ?? "", f.Email ?? "",
-            f.Active, f.IsStudent, f.GdprAccepted, f.LiabilityAccepted
+            f.Id, f.Username ?? "", f.PasswordHash ?? "",
+            f.Name, f.Email ?? "",
+            f.Active, f.IsStudent, f.GdprAccepted, f.LiabilityAccepted, f.IsInstructor
         });
+
+    public async Task UpsertFencerAsync(Fencer f)
+    {
+        var rows = await ReadAsync("Fencers!A2:J");
+        int rowIndex = -1;
+        for (int i = 0; i < rows.Count; i++)
+            if (S(rows[i], 0) == f.Id) { rowIndex = i; break; }
+
+        var values = new List<object>
+        {
+            f.Id, f.Username ?? "", f.PasswordHash ?? "",
+            f.Name, f.Email ?? "",
+            f.Active, f.IsStudent, f.GdprAccepted, f.LiabilityAccepted, f.IsInstructor
+        };
+
+        if (rowIndex >= 0)
+            await UpdateAsync($"Fencers!A{rowIndex + 2}:J{rowIndex + 2}", values);
+        else
+            await AppendAsync("Fencers!A:J", values);
+    }
 
     // --- Trainings ---
     public async Task<List<TrainingSession>> GetTrainingsAsync()
@@ -140,18 +174,6 @@ public class GoogleSheetsService : IGoogleSheetsService
             e.Amount.ToString(CultureInfo.InvariantCulture)
         });
 
-    // --- Instructors ---
-    public async Task<List<Instructor>> GetInstructorsAsync()
-    {
-        var rows = await ReadAsync("Instructors!A2:C");
-        return rows.Select(r => new Instructor
-        {
-            Username = S(r, 0),
-            PasswordHash = S(r, 1),
-            DisplayName = S(r, 2)
-        }).ToList();
-    }
-
     // --- Month notes ---
     public async Task<List<MonthNote>> GetMonthNotesAsync()
     {
@@ -170,4 +192,9 @@ public class GoogleSheetsService : IGoogleSheetsService
 
     private static string S(IList<object> row, int i) =>
         i < row.Count ? row[i]?.ToString() ?? "" : "";
+
+    private static bool ParseBool(string s) =>
+        s.Equals("TRUE", StringComparison.OrdinalIgnoreCase) ||
+        s == "1" ||
+        s.Equals("yes", StringComparison.OrdinalIgnoreCase);
 }

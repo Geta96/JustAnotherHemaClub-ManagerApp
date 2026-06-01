@@ -11,6 +11,29 @@
 
             <Label Text="Fencer profiles" Style="{StaticResource H1}" />
 
+            <!-- Backend diagnostics -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="6">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Grid.Column="0" Text="Backend status" Style="{StaticResource H2}" />
+                        <Label Grid.Column="1"
+                               Text="✓"
+                               FontSize="20"
+                               FontAttributes="Bold"
+                               TextColor="#1F8A2E"
+                               IsVisible="{Binding BackendRequestSucceeded}" />
+                    </Grid>
+
+                    <Label Text="{Binding BackendStatus}"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource Wine}" />
+
+                    <Label Text="{Binding BackendError}"
+                           TextColor="{StaticResource DangerRed}"
+                           IsVisible="{Binding BackendRequestSucceeded, Converter={x:Null}}" />
+                </VerticalStackLayout>
+            </Border>
+
             <!-- Picker -->
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="8">
@@ -31,7 +54,6 @@
                 <VerticalStackLayout BindingContext="{Binding SelectedDetails}"
                                      x:DataType="vm:FencerDetailsVm" Spacing="0">
 
-                    <!-- Wine header strip -->
                     <Grid BackgroundColor="{StaticResource Wine}" Padding="16,14"
                           ColumnDefinitions="Auto,*" ColumnSpacing="14">
 
@@ -51,14 +73,13 @@
                             <Label Text="{Binding Name}"
                                    FontSize="22" FontAttributes="Bold"
                                    TextColor="{StaticResource Cream}" />
-                            <Label Text="{Binding Nickname, StringFormat='“{0}”'}"
+                            <Label Text="{Binding Username, StringFormat='@{0}'}"
                                    TextColor="{StaticResource Cream}" Opacity="0.8"
                                    FontAttributes="Italic"
-                                   IsVisible="{Binding HasNickname}" />
+                                   IsVisible="{Binding HasUsername}" />
                         </VerticalStackLayout>
                     </Grid>
 
-                    <!-- Status chips -->
                     <HorizontalStackLayout Padding="16,12,16,0" Spacing="8">
                         <Border BackgroundColor="#1F8A2E"
                                 StrokeThickness="0" StrokeShape="RoundRectangle 10"
@@ -66,30 +87,20 @@
                                 IsVisible="{Binding Active}">
                             <Label Text="Active" TextColor="White" FontSize="12" FontAttributes="Bold" />
                         </Border>
-
-                        <Border BackgroundColor="{StaticResource Muted}"
-                                StrokeThickness="0" StrokeShape="RoundRectangle 10"
-                                Padding="10,4"
-                                IsVisible="False">
-                            <Border.Triggers>
-                                <DataTrigger TargetType="Border"
-                                             Binding="{Binding Active}"
-                                             Value="False">
-                                    <Setter Property="IsVisible" Value="True" />
-                                </DataTrigger>
-                            </Border.Triggers>
-                            <Label Text="Inactive" TextColor="White" FontSize="12" FontAttributes="Bold" />
-                        </Border>
-
                         <Border BackgroundColor="{StaticResource Slate}"
                                 StrokeThickness="0" StrokeShape="RoundRectangle 10"
                                 Padding="10,4"
                                 IsVisible="{Binding IsStudent}">
                             <Label Text="Student · 60%" TextColor="White" FontSize="12" FontAttributes="Bold" />
                         </Border>
+                        <Border BackgroundColor="{StaticResource Wine}"
+                                StrokeThickness="0" StrokeShape="RoundRectangle 10"
+                                Padding="10,4"
+                                IsVisible="{Binding Fencer.IsInstructor}">
+                            <Label Text="Instructor" TextColor="White" FontSize="12" FontAttributes="Bold" />
+                        </Border>
                     </HorizontalStackLayout>
 
-                    <!-- Info rows -->
                     <Border Margin="16,12,16,16"
                             BackgroundColor="{StaticResource CreamSoft}"
                             StrokeThickness="0" StrokeShape="RoundRectangle 10"
@@ -103,13 +114,12 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <Label Grid.Row="0" Grid.Column="0" Text="Email"    Style="{StaticResource Caption}" />
+                            <Label Grid.Row="0" Grid.Column="0" Text="Email" Style="{StaticResource Caption}" />
                             <Label Grid.Row="0" Grid.Column="1" Text="{Binding Email}" FontAttributes="Bold" />
 
-                            <Label Grid.Row="1" Grid.Column="0" Text="Nickname" Style="{StaticResource Caption}" />
-                            <Label Grid.Row="1" Grid.Column="1" Text="{Binding Nickname}" />
+                            <Label Grid.Row="1" Grid.Column="0" Text="Username" Style="{StaticResource Caption}" />
+                            <Label Grid.Row="1" Grid.Column="1" Text="{Binding Username}" />
 
-                            <!-- GDPR with tick / cross -->
                             <Label Grid.Row="2" Grid.Column="0" Text="GDPR" Style="{StaticResource Caption}" />
                             <Grid Grid.Row="2" Grid.Column="1" ColumnDefinitions="Auto">
                                 <Label Text="✓" FontSize="20" FontAttributes="Bold"
@@ -128,7 +138,6 @@
                                 </Label>
                             </Grid>
 
-                            <!-- Liability with tick / cross -->
                             <Label Grid.Row="3" Grid.Column="0" Text="Liability" Style="{StaticResource Caption}" />
                             <Grid Grid.Row="3" Grid.Column="1" ColumnDefinitions="Auto">
                                 <Label Text="✓" FontSize="20" FontAttributes="Bold"
@@ -147,7 +156,6 @@
                                 </Label>
                             </Grid>
 
-                            <!-- Payment status -->
                             <Label Grid.Row="4" Grid.Column="0" Text="Payment" Style="{StaticResource Caption}" />
                             <HorizontalStackLayout Grid.Row="4" Grid.Column="1" Spacing="8" VerticalOptions="Center">
                                 <Label Text="✓" FontSize="20" FontAttributes="Bold"
@@ -162,12 +170,15 @@
                             </HorizontalStackLayout>
                         </Grid>
                     </Border>
+
+                    <Button Text="Promote to instructor"
+                            Margin="16,0,16,16"
+                            Style="{StaticResource SecondaryButton}"
+                            Clicked="OnPromoteClicked"
+                            IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FencersViewModel}}, Path=CanPromoteSelected}" />
                 </VerticalStackLayout>
             </Border>
 
-            <!-- =============================================== -->
-            <!-- Club-wide compliance section (NOT per-fencer)   -->
-            <!-- =============================================== -->
             <BoxView HeightRequest="1" Color="{StaticResource Muted}" Opacity="0.4" Margin="0,10,0,0" />
             <VerticalStackLayout Spacing="2" Padding="0,4,0,0">
                 <Label Text="Club-wide compliance" Style="{StaticResource H1}"
@@ -176,7 +187,6 @@
                        Style="{StaticResource Caption}" />
             </VerticalStackLayout>
 
-            <!-- GDPR compliance -->
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="8">
                     <Grid ColumnDefinitions="*,Auto">
@@ -199,7 +209,6 @@
                 </VerticalStackLayout>
             </Border>
 
-            <!-- Liability compliance -->
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="8">
                     <Grid ColumnDefinitions="*,Auto">
