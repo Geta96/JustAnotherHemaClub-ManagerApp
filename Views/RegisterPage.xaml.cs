@@ -14,8 +14,6 @@ public partial class RegisterPage : ContentPage
 
     private async void OnRegisterClicked(object? sender, EventArgs e)
     {
-        await DisplayAlert("Tapped", "Register button received the tap.", "OK");
-
         try
         {
             await _vm.RegisterCommand.ExecuteAsync(null);

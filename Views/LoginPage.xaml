@@ -28,12 +28,26 @@
                 <Entry Placeholder="Username" Text="{Binding Username}" />
                 <Entry Placeholder="Password" IsPassword="True" Text="{Binding Password}" />
                 <Button Text="Login" Command="{Binding LoginCommand}" />
-                <Button Text="Use as Guest" Command="{Binding UseAsGuestCommand}"
-                        Style="{StaticResource SecondaryButton}" />
+
                 <Button Text="Register as new fencer"
-                        Style="{StaticResource GhostButton}"
+                        BackgroundColor="#476FB5"
+                        TextColor="{StaticResource Cream}"
                         Command="{Binding GoToRegisterCommand}" />
-                <Label Text="{Binding Error}" TextColor="{StaticResource DangerRed}" />
+
+                <!-- Error banner -->
+                <Border IsVisible="{Binding HasError}"
+                        BackgroundColor="#FDECEC"
+                        Stroke="{StaticResource DangerRed}" StrokeThickness="1"
+                        StrokeShape="RoundRectangle 8"
+                        Padding="10,8">
+                    <Label Text="{Binding Error}"
+                           TextColor="{StaticResource DangerRed}"
+                           FontAttributes="Bold" />
+                </Border>
+
+                <Button Text="Forgot my password"
+                        Style="{StaticResource GhostButton}"
+                        Command="{Binding ForgotPasswordCommand}" />
             </VerticalStackLayout>
         </Border>
     </Grid>
