@@ -21,7 +21,10 @@ public static class MauiProgram
 
         // Backends
         builder.Services.AddSingleton(new GoogleSheetsService(SpreadsheetId));
-        builder.Services.AddSingleton<IGoogleSheetsService>(sp => sp.GetRequiredService<GoogleSheetsService>());
+        builder.Services.AddSingleton<CachedGoogleSheetsService>(sp =>
+            new CachedGoogleSheetsService(sp.GetRequiredService<GoogleSheetsService>()));
+        builder.Services.AddSingleton<IGoogleSheetsService>(sp => sp.GetRequiredService<CachedGoogleSheetsService>());
+        builder.Services.AddSingleton<ICacheControl>(sp => sp.GetRequiredService<CachedGoogleSheetsService>());
 
         // Auth + proxy
         builder.Services.AddSingleton<AuthService>();

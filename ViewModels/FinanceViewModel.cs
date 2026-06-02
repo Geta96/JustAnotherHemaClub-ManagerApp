@@ -29,9 +29,9 @@ public partial class FinanceViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public async Task LoadAsync()
+    public async Task LoadAsync(bool showSpinner = false)
     {
-        IsLoading = true;
+        if (showSpinner) IsLoading = true;
         try
         {
             Months.Clear();
@@ -90,7 +90,7 @@ public partial class FinanceViewModel : ObservableObject
             RecomputePersonalSummary();
             OnPropertyChanged(nameof(ShowPersonalSummary));
         }
-        finally { IsLoading = false; }
+        finally { if (showSpinner) IsLoading = false; }
     }
 
     private void RecomputePersonalSummary()

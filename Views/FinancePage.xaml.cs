@@ -1,3 +1,4 @@
+using JustAnotherHemaClub.Services;
 using JustAnotherHemaClub.ViewModels;
 
 namespace JustAnotherHemaClub.Views;
@@ -5,16 +6,27 @@ namespace JustAnotherHemaClub.Views;
 public partial class FinancePage : ContentPage
 {
     private readonly FinanceViewModel _vm;
+    private readonly ICacheControl _cache;
 
-    public FinancePage(FinanceViewModel vm)
+    public FinancePage(FinanceViewModel vm, ICacheControl cache)
     {
         InitializeComponent();
         BindingContext = _vm = vm;
+        _cache = cache;
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await _vm.LoadAsync();
+        await _vm.LoadAsync(showSpinner: false);
+    }
+
+    private async void OnRefreshTapped(object? sender, TappedEventArgs e)
+    {
+        _cache.InvalidateFencers();
+        _cache.InvalidateTrainings();
+        _cache.InvalidateExpenses();
+        _cache.InvalidatePayments();
+        await _vm.LoadAsync(showSpinner: true);
     }
 }

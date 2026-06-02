@@ -39,9 +39,9 @@ public partial class TrainingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public async Task LoadAsync()
+    public async Task LoadAsync(bool showSpinner = false)
     {
-        IsLoading = true;
+        if (showSpinner) IsLoading = true;
         try
         {
             AllFencers.Clear();
@@ -75,7 +75,7 @@ public partial class TrainingsViewModel : ObservableObject
                 Months.Add(mvm);
             }
         }
-        finally { IsLoading = false; }
+        finally { if (showSpinner) IsLoading = false; }
     }
 
     /// <summary>
@@ -160,7 +160,7 @@ public partial class TrainingsViewModel : ObservableObject
         };
         await _sheets.UpsertTrainingAsync(t);
 
-        await LoadAsync();
+        await LoadAsync(showSpinner: false);
 
         Topic = "";
         AttendeeFilter = "";

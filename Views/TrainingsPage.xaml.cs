@@ -1,3 +1,4 @@
+using JustAnotherHemaClub.Services;
 using JustAnotherHemaClub.ViewModels;
 
 namespace JustAnotherHemaClub.Views;
@@ -5,19 +6,29 @@ namespace JustAnotherHemaClub.Views;
 public partial class TrainingsPage : ContentPage
 {
     private readonly TrainingsViewModel _vm;
+    private readonly ICacheControl _cache;
     private readonly IServiceProvider _services;
 
-    public TrainingsPage(TrainingsViewModel vm, IServiceProvider services)
+    public TrainingsPage(TrainingsViewModel vm, ICacheControl cache, IServiceProvider services)
     {
         InitializeComponent();
         BindingContext = _vm = vm;
+        _cache = cache;
         _services = services;
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await _vm.LoadAsync();
+        await _vm.LoadAsync(showSpinner: false);
+    }
+
+    private async void OnRefreshTapped(object? sender, TappedEventArgs e)
+    {
+        _cache.InvalidateTrainings();
+        _cache.InvalidateFencers();
+        _cache.InvalidateMonthNotes();
+        await _vm.LoadAsync(showSpinner: true);
     }
 
     private void OnAttendeeRowTapped(object? sender, TappedEventArgs e)

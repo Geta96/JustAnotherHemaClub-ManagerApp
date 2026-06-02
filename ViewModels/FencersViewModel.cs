@@ -54,9 +54,9 @@ public partial class FencersViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public async Task LoadAsync()
+    public async Task LoadAsync(bool showSpinner = false)
     {
-        IsLoading = true;
+        if (showSpinner) IsLoading = true;
         BackendRequestSucceeded = false;
         BackendError = null;
         BackendStatus = "Loading fencers from Google Sheets...";
@@ -121,7 +121,7 @@ public partial class FencersViewModel : ObservableObject
             SelectedDetails = null;
             OnPropertyChanged(nameof(HasSelection));
         }
-        finally { IsLoading = false; }
+        finally { if (showSpinner) IsLoading = false; }
     }
 
     partial void OnSelectedFencerChanged(Fencer? value)

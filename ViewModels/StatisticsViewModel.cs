@@ -33,9 +33,9 @@ public partial class StatisticsViewModel : ObservableObject
     public StatisticsViewModel(IGoogleSheetsService sheets) => _sheets = sheets;
 
     [RelayCommand]
-    public async Task LoadAsync()
+    public async Task LoadAsync(bool showSpinner = false)
     {
-        IsLoading = true;
+        if (showSpinner) IsLoading = true;
         try
         {
             Months.Clear();
@@ -120,6 +120,6 @@ public partial class StatisticsViewModel : ObservableObject
             YearSessions = ySessions;
             YearAvgAttendance = yWeightedAttCount == 0 ? 0 : yWeightedAttSum / yWeightedAttCount;
         }
-        finally { IsLoading = false; }
+        finally { if (showSpinner) IsLoading = false; }
     }
 }

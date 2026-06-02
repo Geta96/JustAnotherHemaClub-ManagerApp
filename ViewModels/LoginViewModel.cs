@@ -9,6 +9,7 @@ public partial class LoginViewModel : ObservableObject
     private readonly AuthService _auth;
     private readonly IGoogleSheetsService _sheets;
     private readonly IBiometricService _biometrics;
+    private readonly ICacheControl _cache;
     private readonly IServiceProvider _services;
 
     [ObservableProperty] private string username = "";
@@ -27,11 +28,13 @@ public partial class LoginViewModel : ObservableObject
     public bool ShowSignInForm => !IsSilentLoggingIn;
 
     public LoginViewModel(AuthService auth, IGoogleSheetsService sheets,
-                          IBiometricService biometrics, IServiceProvider services)
+                          IBiometricService biometrics, ICacheControl cache,
+                          IServiceProvider services)
     {
         _auth = auth;
         _sheets = sheets;
         _biometrics = biometrics;
+        _cache = cache;
         _services = services;
     }
 
@@ -78,6 +81,7 @@ public partial class LoginViewModel : ObservableObject
 
             if (await _auth.LoginWithStoredHashAsync(u, h))
             {
+                await WarmCacheAsync();
                 EnterShell();
             }
             else
@@ -121,6 +125,7 @@ public partial class LoginViewModel : ObservableObject
                     _auth.ClearPersistedCredentials();
                 }
 
+                await WarmCacheAsync();
                 EnterShell();
             }
             else
@@ -234,5 +239,11 @@ public partial class LoginViewModel : ObservableObject
     {
         var shell = _services.GetRequiredService<AppShell>();
         Application.Current!.MainPage = shell;
+    }
+
+    private async Task WarmCacheAsync()
+    {
+        try { await _cache.WarmAsync(); }
+        catch { /* warm-up is best-effort; pages will fall back to the network */ }
     }
 }
