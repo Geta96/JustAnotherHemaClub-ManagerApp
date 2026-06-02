@@ -2,16 +2,14 @@ using JustAnotherHemaClub.ViewModels;
 
 namespace JustAnotherHemaClub.Views;
 
-public partial class TrainingsPage : ContentPage
+public partial class NewTrainingPage : ContentPage
 {
     private readonly TrainingsViewModel _vm;
-    private readonly IServiceProvider _services;
 
-    public TrainingsPage(TrainingsViewModel vm, IServiceProvider services)
+    public NewTrainingPage(TrainingsViewModel vm)
     {
         InitializeComponent();
         BindingContext = _vm = vm;
-        _services = services;
     }
 
     protected override async void OnAppearing()
@@ -26,9 +24,17 @@ public partial class TrainingsPage : ContentPage
             t.IsAttending = !t.IsAttending;
     }
 
-    private async void OnNewTrainingClicked(object? sender, EventArgs e)
+    private async void OnCreateClicked(object? sender, EventArgs e)
     {
-        var page = _services.GetRequiredService<NewTrainingPage>();
-        await Navigation.PushAsync(page);
+        try
+        {
+            await _vm.SaveTrainingCommand.ExecuteAsync(null);
+            await DisplayAlert("Created", "Training has been created.", "OK");
+            await Navigation.PopAsync();
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert("Could not create training", ex.Message, "OK");
+        }
     }
 }

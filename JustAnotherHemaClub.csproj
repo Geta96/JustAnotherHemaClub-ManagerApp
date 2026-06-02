@@ -53,6 +53,9 @@
     <MauiXaml Update="Views\LiabilityPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </MauiXaml>
+    <MauiXaml Update="Views\NewTrainingPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </MauiXaml>
     <MauiXaml Update="Views\ProfilePage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </MauiXaml>
