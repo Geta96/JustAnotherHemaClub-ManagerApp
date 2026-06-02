@@ -19,15 +19,46 @@
             <Label Text="Manager"
                    FontSize="18" TextColor="{StaticResource Cream}" Opacity="0.7"
                    HorizontalOptions="Center" />
+
+            <Label Text="Logging in, please wait..."
+                   FontSize="16" FontAttributes="Bold"
+                   TextColor="{StaticResource Cream}"
+                   HorizontalOptions="Center"
+                   IsVisible="{Binding IsSilentLoggingIn}" />
+            <ActivityIndicator IsRunning="{Binding IsSilentLoggingIn}"
+                               IsVisible="{Binding IsSilentLoggingIn}"
+                               Color="{StaticResource Cream}"
+                               HorizontalOptions="Center" />
         </VerticalStackLayout>
 
         <!-- Sheet -->
-        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="16,0,16,24" Padding="20">
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="16,0,16,24" Padding="20"
+                IsVisible="{Binding ShowSignInForm}">
             <VerticalStackLayout Spacing="12">
                 <Label Text="Sign in" Style="{StaticResource H2}" />
                 <Entry Placeholder="Username" Text="{Binding Username}" />
                 <Entry Placeholder="Password" IsPassword="True" Text="{Binding Password}" />
+
+                <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
+                    <CheckBox IsChecked="{Binding KeepLoggedIn}" />
+                    <Label Text="Keep me logged in"
+                           VerticalOptions="Center" />
+                </HorizontalStackLayout>
+
+                <HorizontalStackLayout Spacing="8" VerticalOptions="Center"
+                                       IsVisible="{Binding CanUseBiometric}">
+                    <CheckBox IsChecked="{Binding UseBiometric}"
+                              IsEnabled="{Binding KeepLoggedIn}" />
+                    <Label Text="Use biometric unlock"
+                           VerticalOptions="Center" />
+                </HorizontalStackLayout>
+
                 <Button Text="Login" Command="{Binding LoginCommand}" />
+
+                <Button Text="Sign in with biometrics"
+                        Style="{StaticResource SecondaryButton}"
+                        IsVisible="{Binding CanTryBiometricLogin}"
+                        Command="{Binding TryBiometricLoginCommand}" />
 
                 <Button Text="Register as new fencer"
                         BackgroundColor="#476FB5"
