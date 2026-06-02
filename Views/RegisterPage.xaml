@@ -47,13 +47,43 @@
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
                         <CheckBox Grid.Column="0" IsChecked="{Binding GdprAccepted}" />
                         <Label   Grid.Column="1" VerticalOptions="Center"
-                                 Text="I agree to the GDPR data processing policy. *" />
+                                 LineBreakMode="WordWrap">
+                            <Label.FormattedText>
+                                <FormattedString>
+                                    <Span Text="I have read and agree to the " />
+                                    <Span Text="GDPR statement"
+                                          TextColor="{StaticResource Wine}"
+                                          TextDecorations="Underline"
+                                          FontAttributes="Bold">
+                                        <Span.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="OnOpenGdprTapped" />
+                                        </Span.GestureRecognizers>
+                                    </Span>
+                                    <Span Text=". *" />
+                                </FormattedString>
+                            </Label.FormattedText>
+                        </Label>
                     </Grid>
 
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
                         <CheckBox Grid.Column="0" IsChecked="{Binding LiabilityAccepted}" />
                         <Label   Grid.Column="1" VerticalOptions="Center"
-                                 Text="I accept the liability statement for participating in trainings. *" />
+                                 LineBreakMode="WordWrap">
+                            <Label.FormattedText>
+                                <FormattedString>
+                                    <Span Text="I have read and agree to the " />
+                                    <Span Text="liability statement"
+                                          TextColor="{StaticResource Wine}"
+                                          TextDecorations="Underline"
+                                          FontAttributes="Bold">
+                                        <Span.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="OnOpenLiabilityTapped" />
+                                        </Span.GestureRecognizers>
+                                    </Span>
+                                    <Span Text=". *" />
+                                </FormattedString>
+                            </Label.FormattedText>
+                        </Label>
                     </Grid>
 
                     <Button x:Name="RegisterButton" Text="Register"

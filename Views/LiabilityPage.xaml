@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="JustAnotherHemaClub.Views.LiabilityPage"
+             Title="Liability statement">
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="14">
+
+            <Label Text="Liability statement" Style="{StaticResource H1}" />
+            <Label Style="{StaticResource Caption}" Text="Last updated: 2025" />
+
+            <!-- Language toggle -->
+            <HorizontalStackLayout Spacing="8">
+                <Button x:Name="EnglishButton" Text="English"
+                        Clicked="OnEnglishClicked" />
+                <Button x:Name="HungarianButton" Text="Magyar"
+                        Style="{StaticResource SecondaryButton}"
+                        Clicked="OnHungarianClicked" />
+            </HorizontalStackLayout>
+
+            <!-- English -->
+            <VerticalStackLayout x:Name="EnglishSection" Spacing="10">
+                <Label Text="English" Style="{StaticResource H2}" />
+                <Label LineBreakMode="WordWrap">
+                    <Label.Text>
+Historical European Martial Arts (HEMA) training involves physical contact with weapons and
+other participants. Injuries can occur even when proper equipment is worn and safety rules
+are followed.
+
+By checking the liability box on the registration / profile page you confirm that:
+
+  - You participate in Club trainings, sparring and events voluntarily and at your own risk.
+  - You are physically fit for vigorous physical activity, or you have consulted a doctor
+    and accept the responsibility of doing so.
+  - You will wear and maintain the protective equipment required for each activity.
+  - You will follow the safety rules and the instructors' directions during every session.
+  - Neither the Club, its instructors, nor other members are liable for injuries, loss or
+    damage to property arising from your participation, except in cases of gross negligence
+    or wilful misconduct.
+
+I acknowledge that participating in training involves physical exertion and a potential
+risk of injury. In order to protect my own physical integrity, I will use appropriate
+protective equipment and will follow the instructor's directions at all times. Neither the
+association nor the instructor is liable for injuries or accidents arising from my own
+fault or risk-taking.
+
+During practice and sparring I will do everything I can to protect my partner's and my own
+physical integrity. I will observe the safety regulations and the rules for using equipment.
+I take responsibility for the personal and borrowed equipment I use. Before each training
+session I make sure that it can be used safely.
+
+I am required to use borrowed equipment for its intended purpose and to compensate for any
+damage caused to it that is not the result of intended use.
+
+I declare that my state of health permits me to participate in training, and that I have
+no illness or limitation that would, during participation in training, pose a danger to
+myself or to others.
+
+If you do not agree to these terms, please do not check the liability box and do not take
+part in the Club's training activities.
+                    </Label.Text>
+                </Label>
+            </VerticalStackLayout>
+
+            <!-- Hungarian -->
+            <VerticalStackLayout x:Name="HungarianSection" Spacing="10" IsVisible="False">
+                <Label Text="Magyar" Style="{StaticResource H2}" />
+                <Label LineBreakMode="WordWrap">
+                    <Label.Text>
+A felelossegvallalasi nyilatkozat bejelolesevel a regisztracios / profil oldalon az
+alabbiakat ismered el:
+
+  - A Klub edzesein, gyakorlasain es esemenyein onkentesen, sajat felelossegedre veszel reszt.
+  - Fizikailag alkalmas vagy az intenziv testmozgasra, vagy orvossal konzultaltal es ezt a
+    felelosseget vallalod.
+  - Az adott tevekenyseghez eloirt vedofelszerelest viseled es karbantartod.
+  - Minden alkalommal betartod a biztonsagi szabalyokat es az edzok utasitasait.
+  - A Klubot, az edzoket es a tobbi tagot nem terheli felelosseg a reszveteledbol eredo
+    serulesekert, kar- vagy vagyonveszteseger, kiveve sulyos gondatlansag vagy szandekos
+    magatartas eseten.
+
+Tudomasul veszem, hogy az edzesen valo reszvetel fizikai megterhelessel es potencialis
+serulesveszellyel jar.
+Sajat testi epsegem megovasa erdekeben megfelelo vedofelszerelest hasznalok, es az edzo
+utasitasait minden esetben betartom. Az esetleges serulesekert, balesetekert, amelyek
+sajat hibambol vagy kockazatvallalasbol erednek, az egyesuletet es az edzot nem terheli
+felelosseg.
+
+Gyakorlas es a parbajok soran mindent megteszek partnerem es a sajat testi epsegenek
+megovasaert. Betartom a biztonsagi eloirasokat, az eszkozhasznalati szabalyokat.
+
+Felelosseget vallalok az altalam hasznalt sajat es kolcsonzott felszerelesert, eszkozokert.
+Edzes elott meggyozodok rola, hogy biztonsagosan hasznalhatok.
+
+Koteles vagyok a kolcson kapott eszkozoket rendeltetesszeruen hasznalni, es azokban
+keletkezett esetleges kart megteriteni, ha az nem rendeltetesszeru hasznalatbol ered.
+
+Kijelentem, hogy egeszsegi allapotom lehetove teszi az edzesen valo reszvetelt, es nem all
+fenn olyan betegsegem vagy korlatozottsagom, amely az edzeseken valo reszvetel soran ram
+vagy masokra veszelyt jelentene.
+
+Ha nem ertesz egyet ezekkel a feltetelekkel, kerjuk, ne jelold be a felelossegvallalasi
+jelolonegyzetet es ne vegy reszt a Klub edzesein.
+                    </Label.Text>
+                </Label>
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

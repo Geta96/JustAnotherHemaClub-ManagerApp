@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="JustAnotherHemaClub.Views.GdprPage"
+             Title="GDPR statement">
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="14">
+
+            <Label Text="GDPR data processing statement" Style="{StaticResource H1}" />
+            <Label Style="{StaticResource Caption}" Text="Last updated: 2025" />
+
+            <!-- Language toggle -->
+            <HorizontalStackLayout Spacing="8">
+                <Button x:Name="EnglishButton" Text="English"
+                        Clicked="OnEnglishClicked" />
+                <Button x:Name="HungarianButton" Text="Magyar"
+                        Style="{StaticResource SecondaryButton}"
+                        Clicked="OnHungarianClicked" />
+            </HorizontalStackLayout>
+
+            <!-- English -->
+            <VerticalStackLayout x:Name="EnglishSection" Spacing="10">
+                <Label Text="English" Style="{StaticResource H2}" />
+                <Label LineBreakMode="WordWrap">
+                    <Label.Text>
+                        Just Another HEMA Club ("the Club") processes the personal data you provide in this app
+(name, email, username, training attendance and payment status) solely for the purpose of
+running club activities: enrolling fencers, organising trainings, and tracking dues and expenses.
+
+Your data is stored in a private Google Sheet accessible only to the Club's instructors and
+to the service account used by this application. It is never sold or shared with third parties.
+
+Photos and videos may be taken of fencers during trainings, sparring sessions and Club
+events. These pictures and videos may be used by the Club for marketing and promotional
+purposes, including but not limited to publication on the Club's social media channels,
+website and printed materials. If you do not wish to appear in such material, please notify
+an instructor in writing; we will then exclude you from any media intended for publication.
+
+You may at any time:
+  - request a copy of the data we hold about you,
+  - request correction of inaccurate data,
+  - request deletion of your account and associated data,
+  - withdraw your consent to the use of your image in marketing material.
+
+To exercise these rights, contact an instructor in person or by email.
+
+By checking the GDPR box on the registration / profile page you confirm that you have read,
+understood and agreed to this statement.
+                    </Label.Text>
+                </Label>
+            </VerticalStackLayout>
+
+            <!-- Hungarian -->
+            <VerticalStackLayout x:Name="HungarianSection" Spacing="10" IsVisible="False">
+                <Label Text="Magyar" Style="{StaticResource H2}" />
+                <Label LineBreakMode="WordWrap">
+                    <Label.Text>
+A Just Another HEMA Club (a tovabbiakban "a Klub") az alkalmazasban megadott szemelyes
+adatokat (nev, e-mail cim, felhasznalonev, edzeseken valo reszvetel es befizetesi statusz)
+kizarolag a Klub mukodtetese celjabol kezeli: a vivok nyilvantartasahoz, az edzesek
+szervezesehez, valamint a tagdijak es koltsegek nyomon kovetesehez.
+
+Az adatokat egy privat Google Sheet-ben taroljuk, amelyhez kizarolag a Klub edzoi es az
+alkalmazas altal hasznalt szolgaltatasi fiok fer hozza. Az adatokat harmadik felnek nem
+adjuk at, nem ertekesitjuk.
+
+Az edzeseken, gyakorlasokon es a Klub esemenyein a vivokrol fenykepek es videofelvetelek
+keszulhetnek. Ezek a kepek es videok a Klub altal marketing- es promocios celokra
+felhasznalhatok, beleertve - de nem kizarolagosan - a Klub kozossegi media oldalain, a
+honlapon es nyomtatott anyagokban valo kozzetetelt. Ha nem szeretnel ilyen anyagokban
+megjelenni, kerjuk, jelezd irasban valamelyik edzonek; ebben az esetben kihagyunk minden
+nyilvanossagra szant felvetelbol.
+
+Barmikor jogosult vagy:
+  - masolatot kerni a rolad tarolt adatokrol,
+  - kerni a pontatlan adatok helyesbiteset,
+  - kerni a fiokod es a kapcsolodo adatok torleset,
+  - visszavonni a hozzajarulasodat a kepmasod marketinganyagokban valo felhasznalasahoz.
+
+Ezeket a jogokat egy edzonel szemelyesen vagy e-mailben gyakorolhatod.
+
+Az adatvedelmi jelolonegyzet bejelolesevel a regisztracios / profil oldalon megerositi,
+hogy a jelen nyilatkozatot elolvastad, megertetted es elfogadtad.
+                    </Label.Text>
+                </Label>
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
