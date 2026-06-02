@@ -21,6 +21,7 @@ public partial class TrainingsViewModel : ObservableObject
     [ObservableProperty] private DateTime trainingDate = DateTime.Today;
     [ObservableProperty] private string topic = "";
     [ObservableProperty] private string attendeeFilter = "";
+    [ObservableProperty] private bool isLoading;
 
     public int SelectedCount => NewTrainingAttendees.Count(t => t.IsAttending);
     public string SelectedCountLabel =>
@@ -40,36 +41,41 @@ public partial class TrainingsViewModel : ObservableObject
     [RelayCommand]
     public async Task LoadAsync()
     {
-        AllFencers.Clear();
-        foreach (var f in await _sheets.GetFencersAsync()) AllFencers.Add(f);
-
-        RebuildAttendeeToggles();
-
-        var trainings = await _sheets.GetTrainingsAsync();
-        var notes = await _sheets.GetMonthNotesAsync();
-
-        var noteByMonth = notes
-            .GroupBy(n => (n.Year, n.Month))
-            .ToDictionary(g => g.Key, g => g.Last().Note);
-
-        var myId = _auth.CurrentFencer?.Id;
-
-        Months.Clear();
-        var grouped = trainings
-            .GroupBy(s => (s.Date.Year, s.Date.Month))
-            .OrderByDescending(g => g.Key.Year).ThenByDescending(g => g.Key.Month);
-
-        foreach (var g in grouped)
+        IsLoading = true;
+        try
         {
-            var mvm = new PastMonthVm(g.Key.Year, g.Key.Month);
-            if (noteByMonth.TryGetValue(g.Key, out var n)) mvm.Note = n;
-            mvm.IsNoteDirty = false;
+            AllFencers.Clear();
+            foreach (var f in await _sheets.GetFencersAsync()) AllFencers.Add(f);
 
-            foreach (var t in g.OrderByDescending(s => s.Date))
-                mvm.Trainings.Add(new EditableTrainingRow(t, AllFencers, myId));
+            RebuildAttendeeToggles();
 
-            Months.Add(mvm);
+            var trainings = await _sheets.GetTrainingsAsync();
+            var notes = await _sheets.GetMonthNotesAsync();
+
+            var noteByMonth = notes
+                .GroupBy(n => (n.Year, n.Month))
+                .ToDictionary(g => g.Key, g => g.Last().Note);
+
+            var myId = _auth.CurrentFencer?.Id;
+
+            Months.Clear();
+            var grouped = trainings
+                .GroupBy(s => (s.Date.Year, s.Date.Month))
+                .OrderByDescending(g => g.Key.Year).ThenByDescending(g => g.Key.Month);
+
+            foreach (var g in grouped)
+            {
+                var mvm = new PastMonthVm(g.Key.Year, g.Key.Month);
+                if (noteByMonth.TryGetValue(g.Key, out var n)) mvm.Note = n;
+                mvm.IsNoteDirty = false;
+
+                foreach (var t in g.OrderByDescending(s => s.Date))
+                    mvm.Trainings.Add(new EditableTrainingRow(t, AllFencers, myId));
+
+                Months.Add(mvm);
+            }
         }
+        finally { IsLoading = false; }
     }
 
     /// <summary>

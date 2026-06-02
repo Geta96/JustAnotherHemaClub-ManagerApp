@@ -5,105 +5,122 @@
              x:Class="JustAnotherHemaClub.Views.StatisticsPage"
              x:DataType="vm:StatisticsViewModel"
              Title="Statistics">
-    <ScrollView>
-        <VerticalStackLayout Padding="16" Spacing="14">
+    <Grid>
+        <ScrollView>
+            <VerticalStackLayout Padding="16" Spacing="14">
 
-            <Label Text="Statistics" Style="{StaticResource H1}" />
+                <Label Text="Statistics" Style="{StaticResource H1}" />
 
-            <!-- All-time -->
-            <Border Style="{StaticResource Card}">
-                <VerticalStackLayout Spacing="8">
-                    <Label Text="All time" Style="{StaticResource H2}" />
-                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="6">
-                        <VerticalStackLayout Grid.Row="0" Grid.Column="0">
-                            <Label Text="Income" Style="{StaticResource Caption}" />
-                            <Label Text="{Binding AllTimeIncome, StringFormat='{0:N0}'}"
-                                   FontSize="20" FontAttributes="Bold" TextColor="{StaticResource Slate}" />
-                        </VerticalStackLayout>
-                        <VerticalStackLayout Grid.Row="0" Grid.Column="1">
-                            <Label Text="Expenses" Style="{StaticResource Caption}" />
-                            <Label Text="{Binding AllTimeExpenses, StringFormat='{0:N0}'}"
-                                   FontSize="20" FontAttributes="Bold" TextColor="{StaticResource Wine}" />
-                        </VerticalStackLayout>
-                        <VerticalStackLayout Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2">
-                            <Label Text="Balance" Style="{StaticResource Caption}" />
-                            <Label Text="{Binding AllTimeBalance, StringFormat='{0:N0}'}"
-                                   FontSize="26" FontAttributes="Bold" />
-                        </VerticalStackLayout>
-                        <VerticalStackLayout Grid.Row="2" Grid.Column="0">
-                            <Label Text="Sessions" Style="{StaticResource Caption}" />
-                            <Label Text="{Binding AllTimeSessions}" FontAttributes="Bold" />
-                        </VerticalStackLayout>
-                        <VerticalStackLayout Grid.Row="2" Grid.Column="1">
-                            <Label Text="Avg attendance" Style="{StaticResource Caption}" />
-                            <Label Text="{Binding AllTimeAvgAttendance, StringFormat='{0:N2}'}" FontAttributes="Bold" />
-                        </VerticalStackLayout>
-                    </Grid>
-                    <Label Text="{Binding ActiveFencers, StringFormat='Active fencers: {0}'}"
-                           Style="{StaticResource Caption}" />
-                </VerticalStackLayout>
-            </Border>
+                <VerticalStackLayout Spacing="14"
+                                     IsVisible="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}">
 
-            <!-- Current year -->
-            <Border Style="{StaticResource Card}">
-                <VerticalStackLayout Spacing="8">
-                    <Label Text="{Binding Year, StringFormat='{0}'}" Style="{StaticResource H2}" />
-                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="6">
-                        <VerticalStackLayout Grid.Row="0" Grid.Column="0">
-                            <Label Text="Income" Style="{StaticResource Caption}" />
-                            <Label Text="{Binding YearIncome, StringFormat='{0:N0}'}"
-                                   FontSize="18" FontAttributes="Bold" TextColor="{StaticResource Slate}" />
-                        </VerticalStackLayout>
-                        <VerticalStackLayout Grid.Row="0" Grid.Column="1">
-                            <Label Text="Expenses" Style="{StaticResource Caption}" />
-                            <Label Text="{Binding YearExpenses, StringFormat='{0:N0}'}"
-                                   FontSize="18" FontAttributes="Bold" TextColor="{StaticResource Wine}" />
-                        </VerticalStackLayout>
-                        <VerticalStackLayout Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2">
-                            <Label Text="Balance" Style="{StaticResource Caption}" />
-                            <Label Text="{Binding YearBalance, StringFormat='{0:N0}'}"
-                                   FontSize="22" FontAttributes="Bold" />
-                        </VerticalStackLayout>
-                        <VerticalStackLayout Grid.Row="2" Grid.Column="0">
-                            <Label Text="Sessions" Style="{StaticResource Caption}" />
-                            <Label Text="{Binding YearSessions}" FontAttributes="Bold" />
-                        </VerticalStackLayout>
-                        <VerticalStackLayout Grid.Row="2" Grid.Column="1">
-                            <Label Text="Avg attendance" Style="{StaticResource Caption}" />
-                            <Label Text="{Binding YearAvgAttendance, StringFormat='{0:N2}'}" FontAttributes="Bold" />
-                        </VerticalStackLayout>
-                    </Grid>
-                </VerticalStackLayout>
-            </Border>
-
-            <!-- Per-month breakdown -->
-            <Label Text="Monthly breakdown" Style="{StaticResource H2}" />
-            <CollectionView ItemsSource="{Binding Months}">
-                <CollectionView.ItemTemplate>
-                    <DataTemplate x:DataType="vm:MonthStatRow">
-                        <Border Style="{StaticResource Card}" Margin="0,0,0,8">
-                            <Grid ColumnDefinitions="*,Auto,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="10">
-                                <Label Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="4"
-                                       Text="{Binding Title}" FontAttributes="Bold"
-                                       TextColor="{StaticResource Wine}" />
-                                <Label Grid.Row="1" Grid.Column="0"
-                                       Text="{Binding Sessions, StringFormat='{0} sessions'}"
-                                       Style="{StaticResource Caption}" />
-                                <Label Grid.Row="1" Grid.Column="1"
-                                       Text="{Binding Income, StringFormat='In {0:N0}'}"
-                                       TextColor="{StaticResource Slate}" />
-                                <Label Grid.Row="1" Grid.Column="2"
-                                       Text="{Binding Expenses, StringFormat='Out {0:N0}'}"
-                                       TextColor="{StaticResource Wine}" />
-                                <Label Grid.Row="1" Grid.Column="3"
-                                       Text="{Binding Balance, StringFormat='= {0:N0}'}"
-                                       FontAttributes="Bold" />
+                    <!-- All-time -->
+                    <Border Style="{StaticResource Card}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="All time" Style="{StaticResource H2}" />
+                            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="6">
+                                <VerticalStackLayout Grid.Row="0" Grid.Column="0">
+                                    <Label Text="Income" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding AllTimeIncome, StringFormat='{0:N0}'}"
+                                           FontSize="20" FontAttributes="Bold" TextColor="{StaticResource Slate}" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Row="0" Grid.Column="1">
+                                    <Label Text="Expenses" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding AllTimeExpenses, StringFormat='{0:N0}'}"
+                                           FontSize="20" FontAttributes="Bold" TextColor="{StaticResource Wine}" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2">
+                                    <Label Text="Balance" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding AllTimeBalance, StringFormat='{0:N0}'}"
+                                           FontSize="26" FontAttributes="Bold" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Row="2" Grid.Column="0">
+                                    <Label Text="Sessions" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding AllTimeSessions}" FontAttributes="Bold" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Row="2" Grid.Column="1">
+                                    <Label Text="Avg attendance" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding AllTimeAvgAttendance, StringFormat='{0:N2}'}" FontAttributes="Bold" />
+                                </VerticalStackLayout>
                             </Grid>
-                        </Border>
-                    </DataTemplate>
-                </CollectionView.ItemTemplate>
-            </CollectionView>
+                            <Label Text="{Binding ActiveFencers, StringFormat='Active fencers: {0}'}"
+                                   Style="{StaticResource Caption}" />
+                        </VerticalStackLayout>
+                    </Border>
 
+                    <!-- Current year -->
+                    <Border Style="{StaticResource Card}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="{Binding Year, StringFormat='{0}'}" Style="{StaticResource H2}" />
+                            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="6">
+                                <VerticalStackLayout Grid.Row="0" Grid.Column="0">
+                                    <Label Text="Income" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding YearIncome, StringFormat='{0:N0}'}"
+                                           FontSize="18" FontAttributes="Bold" TextColor="{StaticResource Slate}" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Row="0" Grid.Column="1">
+                                    <Label Text="Expenses" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding YearExpenses, StringFormat='{0:N0}'}"
+                                           FontSize="18" FontAttributes="Bold" TextColor="{StaticResource Wine}" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2">
+                                    <Label Text="Balance" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding YearBalance, StringFormat='{0:N0}'}"
+                                           FontSize="22" FontAttributes="Bold" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Row="2" Grid.Column="0">
+                                    <Label Text="Sessions" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding YearSessions}" FontAttributes="Bold" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Row="2" Grid.Column="1">
+                                    <Label Text="Avg attendance" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding YearAvgAttendance, StringFormat='{0:N2}'}" FontAttributes="Bold" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Per-month breakdown -->
+                    <Label Text="Monthly breakdown" Style="{StaticResource H2}" />
+                    <CollectionView ItemsSource="{Binding Months}">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:MonthStatRow">
+                                <Border Style="{StaticResource Card}" Margin="0,0,0,8">
+                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="10">
+                                        <Label Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="4"
+                                               Text="{Binding Title}" FontAttributes="Bold"
+                                               TextColor="{StaticResource Wine}" />
+                                        <Label Grid.Row="1" Grid.Column="0"
+                                               Text="{Binding Sessions, StringFormat='{0} sessions'}"
+                                               Style="{StaticResource Caption}" />
+                                        <Label Grid.Row="1" Grid.Column="1"
+                                               Text="{Binding Income, StringFormat='In {0:N0}'}"
+                                               TextColor="{StaticResource Slate}" />
+                                        <Label Grid.Row="1" Grid.Column="2"
+                                               Text="{Binding Expenses, StringFormat='Out {0:N0}'}"
+                                               TextColor="{StaticResource Wine}" />
+                                        <Label Grid.Row="1" Grid.Column="3"
+                                               Text="{Binding Balance, StringFormat='= {0:N0}'}"
+                                               FontAttributes="Bold" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+
+                </VerticalStackLayout>
+
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <!-- Screen-centred overlay -->
+        <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="8"
+                             InputTransparent="False"
+                             IsVisible="{Binding IsLoading}">
+            <ActivityIndicator IsRunning="{Binding IsLoading}"
+                               Color="{StaticResource Wine}"
+                               WidthRequest="48" HeightRequest="48" />
+            <Label Text="Loading..." TextColor="{StaticResource Wine}" FontAttributes="Bold" />
         </VerticalStackLayout>
-    </ScrollView>
+    </Grid>
 </ContentPage>

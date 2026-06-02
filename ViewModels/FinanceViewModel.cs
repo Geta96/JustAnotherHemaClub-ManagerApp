@@ -20,6 +20,7 @@ public partial class FinanceViewModel : ObservableObject
     [ObservableProperty] private decimal personalTotalDue;
     [ObservableProperty] private bool personalAllPaid;
     [ObservableProperty] private string personalSummary = "";
+    [ObservableProperty] private bool isLoading;
 
     public FinanceViewModel(IGoogleSheetsService sheets, AuthService auth)
     {
@@ -30,68 +31,66 @@ public partial class FinanceViewModel : ObservableObject
     [RelayCommand]
     public async Task LoadAsync()
     {
-        Months.Clear();
-
-        var fencers = await _sheets.GetFencersAsync();
-
-        var trainings = await _sheets.GetTrainingsAsync();
-
-        // All months with sessions, plus the current month.
-        var expensesAll = await _sheets.GetExpensesAsync(DateTime.MinValue.AddYears(1), DateTime.MaxValue.AddYears(-1));
-
-        var today = DateTime.Today;
-        var monthsSet = new HashSet<(int Y, int M)>
+        IsLoading = true;
+        try
         {
-            (today.Year, today.Month)
-        };
-        foreach (var s in trainings) monthsSet.Add((s.Date.Year, s.Date.Month));
+            Months.Clear();
 
-        var ordered = monthsSet.OrderByDescending(t => t.Y).ThenByDescending(t => t.M);
+            var fencers = await _sheets.GetFencersAsync();
+            var trainings = await _sheets.GetTrainingsAsync();
+            var expensesAll = await _sheets.GetExpensesAsync(DateTime.MinValue.AddYears(1), DateTime.MaxValue.AddYears(-1));
 
-        var isInstructor = _auth.IsLoggedInInstructor;
-        var currentFencerId = _auth.CurrentFencer?.Id;
+            var today = DateTime.Today;
+            var monthsSet = new HashSet<(int Y, int M)> { (today.Year, today.Month) };
+            foreach (var s in trainings) monthsSet.Add((s.Date.Year, s.Date.Month));
 
-        foreach (var (y, m) in ordered)
-        {
-            var monthVm = new MonthFinanceVm(y, m);
+            var ordered = monthsSet.OrderByDescending(t => t.Y).ThenByDescending(t => t.M);
 
-            // Attendance per fencer for the month
-            var monthSessions = trainings.Where(s => s.Date.Year == y && s.Date.Month == m).ToList();
-            var attendance = monthSessions
-                .SelectMany(s => s.AttendeeFencerIds)
-                .GroupBy(id => id)
-                .ToDictionary(g => g.Key, g => g.Count());
+            var isInstructor = _auth.IsLoggedInInstructor;
+            var currentFencerId = _auth.CurrentFencer?.Id;
 
-            var payments = await _sheets.GetPaymentsAsync(y, m);
-
-            var fencersForMonth = isInstructor
-                ? fencers.Where(f => f.Active)
-                : fencers.Where(f => f.Active && f.Id == currentFencerId);
-
-            foreach (var f in fencersForMonth)
+            foreach (var (y, m) in ordered)
             {
-                attendance.TryGetValue(f.Id, out var count);
-                var amount = DuesCalculator.Calculate(count, f.IsStudent);
-                var paid = payments.Any(p => p.FencerId == f.Id);
-                if (count == 0 && !paid) continue;
+                var monthVm = new MonthFinanceVm(y, m);
 
-                monthVm.Dues.Add(new FencerDueRow(f, count, amount, paid));
+                var monthSessions = trainings.Where(s => s.Date.Year == y && s.Date.Month == m).ToList();
+                var attendance = monthSessions
+                    .SelectMany(s => s.AttendeeFencerIds)
+                    .GroupBy(id => id)
+                    .ToDictionary(g => g.Key, g => g.Count());
+
+                var payments = await _sheets.GetPaymentsAsync(y, m);
+
+                var fencersForMonth = isInstructor
+                    ? fencers.Where(f => f.Active)
+                    : fencers.Where(f => f.Active && f.Id == currentFencerId);
+
+                foreach (var f in fencersForMonth)
+                {
+                    attendance.TryGetValue(f.Id, out var count);
+                    var amount = DuesCalculator.Calculate(count, f.IsStudent);
+                    var paid = payments.Any(p => p.FencerId == f.Id);
+                    if (count == 0 && !paid) continue;
+
+                    monthVm.Dues.Add(new FencerDueRow(f, count, amount, paid));
+                }
+
+                if (isInstructor)
+                {
+                    var from = new DateTime(y, m, 1);
+                    var to = from.AddMonths(1).AddDays(-1);
+                    foreach (var e in expensesAll.Where(e => e.Date >= from && e.Date <= to))
+                        monthVm.Expenses.Add(e);
+                }
+
+                monthVm.RaiseTotals();
+                Months.Add(monthVm);
             }
 
-            if (isInstructor)
-            {
-                var from = new DateTime(y, m, 1);
-                var to = from.AddMonths(1).AddDays(-1);
-                foreach (var e in expensesAll.Where(e => e.Date >= from && e.Date <= to))
-                    monthVm.Expenses.Add(e);
-            }
-
-            monthVm.RaiseTotals();
-            Months.Add(monthVm);
+            RecomputePersonalSummary();
+            OnPropertyChanged(nameof(ShowPersonalSummary));
         }
-
-        RecomputePersonalSummary();
-        OnPropertyChanged(nameof(ShowPersonalSummary));
+        finally { IsLoading = false; }
     }
 
     private void RecomputePersonalSummary()

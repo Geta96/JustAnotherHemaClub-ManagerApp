@@ -24,6 +24,7 @@ public partial class FencersViewModel : ObservableObject
     [ObservableProperty] private bool backendRequestSucceeded;
     [ObservableProperty] private string backendStatus = "Not loaded yet.";
     [ObservableProperty] private string? backendError;
+    [ObservableProperty] private bool isLoading;
 
     public bool HasSelection => SelectedDetails is not null;
     public bool CanPromoteSelected =>
@@ -55,6 +56,7 @@ public partial class FencersViewModel : ObservableObject
     [RelayCommand]
     public async Task LoadAsync()
     {
+        IsLoading = true;
         BackendRequestSucceeded = false;
         BackendError = null;
         BackendStatus = "Loading fencers from Google Sheets...";
@@ -119,6 +121,7 @@ public partial class FencersViewModel : ObservableObject
             SelectedDetails = null;
             OnPropertyChanged(nameof(HasSelection));
         }
+        finally { IsLoading = false; }
     }
 
     partial void OnSelectedFencerChanged(Fencer? value)

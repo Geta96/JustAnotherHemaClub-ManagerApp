@@ -6,154 +6,172 @@
              x:Class="JustAnotherHemaClub.Views.TrainingsPage"
              x:DataType="vm:TrainingsViewModel"
              Title="Trainings">
-    <ScrollView>
-        <VerticalStackLayout Padding="16" Spacing="14">
+    <Grid>
+        <ScrollView>
+            <VerticalStackLayout Padding="16" Spacing="14">
 
-            <Border Style="{StaticResource Card}"
-                    IsVisible="{Binding IsLoggedInInstructor}">
-                <VerticalStackLayout Spacing="10">
-                    <Label Text="New training" Style="{StaticResource H2}" />
-                    <DatePicker Date="{Binding TrainingDate}" />
-                    <Entry Placeholder="Topic" Text="{Binding Topic}" />
+                <Label Text="Trainings" Style="{StaticResource H1}" />
 
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                        <Label Grid.Column="0" Text="Attendees" Style="{StaticResource Caption}"
-                               VerticalOptions="Center" />
-                        <Label Grid.Column="1" Text="{Binding SelectedCountLabel}"
-                               FontAttributes="Bold"
-                               TextColor="{StaticResource Wine}"
-                               VerticalOptions="Center" />
-                    </Grid>
+                <VerticalStackLayout Spacing="14"
+                                     IsVisible="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}">
+                    <Border Style="{StaticResource Card}"
+                            IsVisible="{Binding IsLoggedInInstructor}">
+                        <VerticalStackLayout Spacing="10">
+                            <Label Text="New training" Style="{StaticResource H2}" />
+                            <DatePicker Date="{Binding TrainingDate}" />
+                            <Entry Placeholder="Topic" Text="{Binding Topic}" />
 
-                    <Entry Placeholder="Search fencers by name or @username"
-                           Text="{Binding AttendeeFilter, Mode=TwoWay}" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <Label Grid.Column="0" Text="Attendees" Style="{StaticResource Caption}"
+                                       VerticalOptions="Center" />
+                                <Label Grid.Column="1" Text="{Binding SelectedCountLabel}"
+                                       FontAttributes="Bold"
+                                       TextColor="{StaticResource Wine}"
+                                       VerticalOptions="Center" />
+                            </Grid>
 
-                    <HorizontalStackLayout Spacing="8">
-                        <Button Text="Select all (visible)"
-                                Style="{StaticResource SecondaryButton}"
-                                Command="{Binding SelectAllVisibleAttendeesCommand}" />
-                        <Button Text="Clear"
-                                Style="{StaticResource SecondaryButton}"
-                                Command="{Binding ClearAttendeesCommand}" />
-                    </HorizontalStackLayout>
+                            <Entry Placeholder="Search fencers by name or @username"
+                                   Text="{Binding AttendeeFilter, Mode=TwoWay}" />
 
-                    <CollectionView ItemsSource="{Binding FilteredAttendees}"
-                                    HeightRequest="320"
-                                    SelectionMode="None">
+                            <HorizontalStackLayout Spacing="8">
+                                <Button Text="Select all (visible)"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Command="{Binding SelectAllVisibleAttendeesCommand}" />
+                                <Button Text="Clear"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Command="{Binding ClearAttendeesCommand}" />
+                            </HorizontalStackLayout>
+
+                            <CollectionView ItemsSource="{Binding FilteredAttendees}"
+                                            HeightRequest="320"
+                                            SelectionMode="None">
+                                <CollectionView.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:FencerToggle">
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10"
+                                              Padding="6,6">
+                                            <Grid.GestureRecognizers>
+                                                <TapGestureRecognizer Tapped="OnAttendeeRowTapped" />
+                                            </Grid.GestureRecognizers>
+                                            <CheckBox Grid.Column="0" IsChecked="{Binding IsAttending}" />
+                                            <Label Grid.Column="1" Text="{Binding Fencer.Name}"
+                                                   FontAttributes="Bold"
+                                                   VerticalOptions="Center" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </CollectionView.ItemTemplate>
+                            </CollectionView>
+
+                            <Button Text="Save Training" Command="{Binding SaveTrainingCommand}" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Label Text="Past trainings by month" Style="{StaticResource H1}" />
+
+                    <CollectionView ItemsSource="{Binding Months}">
                         <CollectionView.ItemTemplate>
-                            <DataTemplate x:DataType="vm:FencerToggle">
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10"
-                                      Padding="6,6">
-                                    <Grid.GestureRecognizers>
-                                        <TapGestureRecognizer Tapped="OnAttendeeRowTapped" />
-                                    </Grid.GestureRecognizers>
-                                    <CheckBox Grid.Column="0" IsChecked="{Binding IsAttending}" />
-                                    <Label Grid.Column="1" Text="{Binding Fencer.Name}"
-                                           FontAttributes="Bold"
-                                           VerticalOptions="Center" />
-                                </Grid>
+                            <DataTemplate x:DataType="vm:PastMonthVm">
+                                <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                                    <VerticalStackLayout Spacing="10">
+
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                            <Grid.GestureRecognizers>
+                                                <TapGestureRecognizer Command="{Binding ToggleExpandedCommand}" />
+                                            </Grid.GestureRecognizers>
+                                            <Label Grid.Column="0" Text="{Binding ExpandGlyph}"
+                                                   FontSize="20" TextColor="{StaticResource Wine}"
+                                                   VerticalOptions="Center" />
+                                            <Label Grid.Column="1" Text="{Binding Title}" Style="{StaticResource H2}"
+                                                   VerticalOptions="Center" />
+                                        </Grid>
+
+                                        <VerticalStackLayout IsVisible="{Binding IsExpanded}" Spacing="10">
+                                            <Editor Placeholder="Optional month description / note"
+                                                    AutoSize="TextChanges"
+                                                    Text="{Binding Note}"
+                                                    IsReadOnly="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=IsLoggedInInstructor, Converter={StaticResource InverseBoolConverter}}" />
+                                            <Button Text="Save note"
+                                                    Style="{StaticResource SecondaryButton}"
+                                                    IsVisible="{Binding IsNoteDirty}"
+                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=SaveMonthNoteCommand}"
+                                                    CommandParameter="{Binding .}" />
+
+                                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Trainings}" Spacing="8">
+                                                <BindableLayout.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:EditableTrainingRow">
+                                                        <Border Style="{StaticResource Card}">
+                                                            <VerticalStackLayout Spacing="8">
+                                                                <Label Text="{Binding Training.Date, StringFormat='{0:yyyy-MM-dd (ddd)}'}"
+                                                                       FontAttributes="Bold"
+                                                                       TextColor="{StaticResource Wine}" />
+                                                                <Entry Placeholder="Description" Text="{Binding Topic}"
+                                                                       IsReadOnly="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=IsLoggedInInstructor, Converter={StaticResource InverseBoolConverter}}" />
+
+                                                                <!-- Instructor-only: full attendee list -->
+                                                                <VerticalStackLayout Spacing="6"
+                                                                                     IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=IsLoggedInInstructor}">
+                                                                    <Label Text="Attendees" Style="{StaticResource Caption}" />
+                                                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Fencers}">
+                                                                        <BindableLayout.ItemTemplate>
+                                                                            <DataTemplate x:DataType="vm:FencerToggle">
+                                                                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Padding="0,2">
+                                                                                    <Grid.GestureRecognizers>
+                                                                                        <TapGestureRecognizer Tapped="OnAttendeeRowTapped" />
+                                                                                    </Grid.GestureRecognizers>
+                                                                                    <CheckBox Grid.Column="0" IsChecked="{Binding IsAttending}" />
+                                                                                    <Label   Grid.Column="1" Text="{Binding Fencer.Name}"
+                                                                                             VerticalOptions="Center" />
+                                                                                </Grid>
+                                                                            </DataTemplate>
+                                                                        </BindableLayout.ItemTemplate>
+                                                                    </VerticalStackLayout>
+                                                                </VerticalStackLayout>
+
+                                                                <!-- Regular fencer: self-attend control -->
+                                                                <HorizontalStackLayout Spacing="10" VerticalOptions="Center"
+                                                                                     IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=IsLoggedInRegularFencer}">
+                                                                    <Button Text="Attend Training"
+                                                                            BackgroundColor="#476FB5"
+                                                                            TextColor="{StaticResource Cream}"
+                                                                            IsVisible="{Binding CanCurrentUserAttend}"
+                                                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=AttendTrainingCommand}"
+                                                                            CommandParameter="{Binding .}" />
+                                                                    <Label Text="✓ Attended"
+                                                                           TextColor="#1F8A2E"
+                                                                           FontAttributes="Bold" FontSize="16"
+                                                                           VerticalOptions="Center"
+                                                                           IsVisible="{Binding CurrentUserAttending}" />
+                                                                </HorizontalStackLayout>
+
+                                                                <Button Text="Save changes"
+                                                                        IsVisible="{Binding IsDirty}"
+                                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=SaveTrainingEditCommand}"
+                                                                        CommandParameter="{Binding .}" />
+                                                            </VerticalStackLayout>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </BindableLayout.ItemTemplate>
+                                            </VerticalStackLayout>
+                                        </VerticalStackLayout>
+
+                                    </VerticalStackLayout>
+                                </Border>
                             </DataTemplate>
                         </CollectionView.ItemTemplate>
                     </CollectionView>
 
-                    <Button Text="Save Training" Command="{Binding SaveTrainingCommand}" />
                 </VerticalStackLayout>
-            </Border>
 
-            <Label Text="Past trainings by month" Style="{StaticResource H1}" />
+            </VerticalStackLayout>
+        </ScrollView>
 
-            <CollectionView ItemsSource="{Binding Months}">
-                <CollectionView.ItemTemplate>
-                    <DataTemplate x:DataType="vm:PastMonthVm">
-                        <Border Style="{StaticResource Card}" Margin="0,0,0,10">
-                            <VerticalStackLayout Spacing="10">
-
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                                    <Grid.GestureRecognizers>
-                                        <TapGestureRecognizer Command="{Binding ToggleExpandedCommand}" />
-                                    </Grid.GestureRecognizers>
-                                    <Label Grid.Column="0" Text="{Binding ExpandGlyph}"
-                                           FontSize="20" TextColor="{StaticResource Wine}"
-                                           VerticalOptions="Center" />
-                                    <Label Grid.Column="1" Text="{Binding Title}" Style="{StaticResource H2}"
-                                           VerticalOptions="Center" />
-                                </Grid>
-
-                                <VerticalStackLayout IsVisible="{Binding IsExpanded}" Spacing="10">
-                                    <Editor Placeholder="Optional month description / note"
-                                            AutoSize="TextChanges"
-                                            Text="{Binding Note}"
-                                            IsReadOnly="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=IsLoggedInInstructor, Converter={StaticResource InverseBoolConverter}}" />
-                                    <Button Text="Save note"
-                                            Style="{StaticResource SecondaryButton}"
-                                            IsVisible="{Binding IsNoteDirty}"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=SaveMonthNoteCommand}"
-                                            CommandParameter="{Binding .}" />
-
-                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Trainings}" Spacing="8">
-                                        <BindableLayout.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:EditableTrainingRow">
-                                                <Border Style="{StaticResource Card}">
-                                                    <VerticalStackLayout Spacing="8">
-                                                        <Label Text="{Binding Training.Date, StringFormat='{0:yyyy-MM-dd (ddd)}'}"
-                                                               FontAttributes="Bold"
-                                                               TextColor="{StaticResource Wine}" />
-                                                        <Entry Placeholder="Description" Text="{Binding Topic}"
-                                                               IsReadOnly="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=IsLoggedInInstructor, Converter={StaticResource InverseBoolConverter}}" />
-
-                                                        <!-- Instructor-only: full attendee list -->
-                                                        <VerticalStackLayout Spacing="6"
-                                                                             IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=IsLoggedInInstructor}">
-                                                            <Label Text="Attendees" Style="{StaticResource Caption}" />
-                                                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Fencers}">
-                                                                <BindableLayout.ItemTemplate>
-                                                                    <DataTemplate x:DataType="vm:FencerToggle">
-                                                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Padding="0,2">
-                                                                            <Grid.GestureRecognizers>
-                                                                                <TapGestureRecognizer Tapped="OnAttendeeRowTapped" />
-                                                                            </Grid.GestureRecognizers>
-                                                                            <CheckBox Grid.Column="0" IsChecked="{Binding IsAttending}" />
-                                                                            <Label   Grid.Column="1" Text="{Binding Fencer.Name}"
-                                                                                     VerticalOptions="Center" />
-                                                                        </Grid>
-                                                                    </DataTemplate>
-                                                                </BindableLayout.ItemTemplate>
-                                                            </VerticalStackLayout>
-                                                        </VerticalStackLayout>
-
-                                                        <!-- Regular fencer: self-attend control -->
-                                                        <HorizontalStackLayout Spacing="10" VerticalOptions="Center"
-                                                                               IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=IsLoggedInRegularFencer}">
-                                                            <Button Text="Attend Training"
-                                                                    BackgroundColor="#476FB5"
-                                                                    TextColor="{StaticResource Cream}"
-                                                                    IsVisible="{Binding CanCurrentUserAttend}"
-                                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=AttendTrainingCommand}"
-                                                                    CommandParameter="{Binding .}" />
-                                                            <Label Text="✓ Attended"
-                                                                   TextColor="#1F8A2E"
-                                                                   FontAttributes="Bold" FontSize="16"
-                                                                   VerticalOptions="Center"
-                                                                   IsVisible="{Binding CurrentUserAttending}" />
-                                                        </HorizontalStackLayout>
-
-                                                        <Button Text="Save changes"
-                                                                IsVisible="{Binding IsDirty}"
-                                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=SaveTrainingEditCommand}"
-                                                                CommandParameter="{Binding .}" />
-                                                    </VerticalStackLayout>
-                                                </Border>
-                                            </DataTemplate>
-                                        </BindableLayout.ItemTemplate>
-                                    </VerticalStackLayout>
-                                </VerticalStackLayout>
-
-                            </VerticalStackLayout>
-                        </Border>
-                    </DataTemplate>
-                </CollectionView.ItemTemplate>
-            </CollectionView>
-
+        <!-- Screen-centred overlay -->
+        <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="8"
+                             InputTransparent="False"
+                             IsVisible="{Binding IsLoading}">
+            <ActivityIndicator IsRunning="{Binding IsLoading}"
+                               Color="{StaticResource Wine}"
+                               WidthRequest="48" HeightRequest="48" />
+            <Label Text="Loading..." TextColor="{StaticResource Wine}" FontAttributes="Bold" />
         </VerticalStackLayout>
-    </ScrollView>
+    </Grid>
 </ContentPage>
