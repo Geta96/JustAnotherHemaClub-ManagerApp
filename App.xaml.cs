@@ -7,6 +7,7 @@ public partial class App : Application
     public App(IServiceProvider services)
     {
         InitializeComponent();
+        UserAppTheme = AppTheme.Light;   // force light theme app-wide
 
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             ShowError(e.ExceptionObject as Exception);

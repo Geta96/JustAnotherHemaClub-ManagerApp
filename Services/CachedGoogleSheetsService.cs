@@ -16,6 +16,7 @@ public sealed class CachedGoogleSheetsService : IGoogleSheetsService, ICacheCont
     private List<Expense>? _expenses;
     private List<MonthNote>? _monthNotes;
     private readonly Dictionary<(int Y, int M), List<Payment>> _paymentsByMonth = new();
+    private List<IndividualLesson>? _individualLessons;
 
     public CachedGoogleSheetsService(GoogleSheetsService inner) => _inner = inner;
 
@@ -140,6 +141,38 @@ public sealed class CachedGoogleSheetsService : IGoogleSheetsService, ICacheCont
         _monthNotes?.Add(note);
     }
 
+    // ---------- Individual lessons ----------
+    public async Task<List<IndividualLesson>> GetIndividualLessonsAsync()
+    {
+        if (_individualLessons is not null) return Clone(_individualLessons);
+        await _gate.WaitAsync();
+        try
+        {
+            _individualLessons ??= await _inner.GetIndividualLessonsAsync();
+            return Clone(_individualLessons);
+        }
+        finally { _gate.Release(); }
+    }
+
+    public async Task UpsertIndividualLessonAsync(IndividualLesson lesson)
+    {
+        await _inner.UpsertIndividualLessonAsync(lesson);
+        if (_individualLessons is not null)
+        {
+            var idx = _individualLessons.FindIndex(l => l.Id == lesson.Id);
+            // Rejected = deleted from cached view.
+            if (lesson.Status == IndividualLessonStatus.Rejected)
+            {
+                if (idx >= 0) _individualLessons.RemoveAt(idx);
+            }
+            else
+            {
+                if (idx >= 0) _individualLessons[idx] = lesson;
+                else _individualLessons.Add(lesson);
+            }
+        }
+    }
+
     // ---------- ICacheControl ----------
     public async Task WarmAsync()
     {
@@ -168,12 +201,14 @@ public sealed class CachedGoogleSheetsService : IGoogleSheetsService, ICacheCont
         _expenses = null;
         _monthNotes = null;
         _paymentsByMonth.Clear();
+        _individualLessons = null;
     }
 
     public void InvalidateFencers() => _fencers = null;
     public void InvalidateTrainings() => _trainings = null;
     public void InvalidateExpenses() => _expenses = null;
     public void InvalidateMonthNotes() => _monthNotes = null;
+    public void InvalidateIndividualLessons() => _individualLessons = null;
 
     public void InvalidatePayments(int? year = null, int? month = null)
     {

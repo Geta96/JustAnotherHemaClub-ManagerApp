@@ -50,6 +50,9 @@
         <MauiXaml Update="Views\HomePage.xaml">
             <Generator>MSBuild:Compile</Generator>
         </MauiXaml>
+        <MauiXaml Update="Views\IndividualLessonsPage.xaml">
+            <Generator>MSBuild:Compile</Generator>
+        </MauiXaml>
         <MauiXaml Update="Views\LiabilityPage.xaml">
             <Generator>MSBuild:Compile</Generator>
         </MauiXaml>
@@ -81,10 +84,7 @@
 
     <ItemGroup>
         <!-- App Icon: blue background, foreground scaled down so nothing gets cropped -->
-        <MauiIcon Include="Resources\AppIcon\appicon.png"
-                  ForegroundFile="Resources\AppIcon\appicon.png"
-                  ForegroundScale="0.65"
-                  Color="#476FB5" />
+        <MauiIcon Include="Resources\AppIcon\appicon2.png" ForegroundFile="Resources\AppIcon\appicon2.png" ForegroundScale="1   " Color="#476FB5" />
 
         <!-- Splash Screen -->
         <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#5D1312 " BaseSize="128,128" />

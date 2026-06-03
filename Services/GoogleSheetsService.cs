@@ -190,6 +190,70 @@ public class GoogleSheetsService : IGoogleSheetsService
     public Task UpsertMonthNoteAsync(MonthNote note) =>
         AppendAsync("MonthNotes!A:C", new List<object> { note.Year, note.Month, note.Note });
 
+    // --- Individual lessons ---
+    // Columns: A=Id, B=Date, C=StudentId, D=InstructorId, E=Topic,
+    //          F=Notes, G=NextIdea, H=Status, I=RequestedInstructorIds (CSV)
+    public async Task<List<IndividualLesson>> GetIndividualLessonsAsync()
+    {
+        var rows = await ReadAsync("IndividualLessons!A2:I");
+        var list = new List<IndividualLesson>();
+        foreach (var r in rows)
+        {
+            var id = S(r, 0);
+            if (string.IsNullOrWhiteSpace(id)) continue;
+
+            var statusStr = S(r, 7);
+            if (!Enum.TryParse<IndividualLessonStatus>(statusStr, true, out var status))
+                status = IndividualLessonStatus.Accepted;
+
+            // Rejected rows are treated as deleted.
+            if (status == IndividualLessonStatus.Rejected) continue;
+
+            list.Add(new IndividualLesson
+            {
+                Id = id,
+                Date = DateTime.TryParse(S(r, 1), CultureInfo.InvariantCulture,
+                                         DateTimeStyles.RoundtripKind, out var d) ? d : DateTime.MinValue,
+                StudentId = S(r, 2),
+                InstructorId = S(r, 3),
+                Topic = S(r, 4),
+                Notes = S(r, 5),
+                NextIdea = S(r, 6),
+                Status = status,
+                RequestedInstructorIds = S(r, 8)
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .ToList()
+            });
+        }
+        return list;
+    }
+
+    public async Task UpsertIndividualLessonAsync(IndividualLesson l)
+    {
+        var rows = await ReadAsync("IndividualLessons!A2:I");
+        int rowIndex = -1;
+        for (int i = 0; i < rows.Count; i++)
+            if (S(rows[i], 0) == l.Id) { rowIndex = i; break; }
+
+        var values = new List<object>
+        {
+            l.Id,
+            l.Date.ToString("o", CultureInfo.InvariantCulture),
+            l.StudentId,
+            l.InstructorId ?? "",
+            l.Topic ?? "",
+            l.Notes ?? "",
+            l.NextIdea ?? "",
+            l.Status.ToString(),
+            string.Join(",", l.RequestedInstructorIds ?? new())
+        };
+
+        if (rowIndex >= 0)
+            await UpdateAsync($"IndividualLessons!A{rowIndex + 2}:I{rowIndex + 2}", values);
+        else
+            await AppendAsync("IndividualLessons!A:I", values);
+    }
+
     private static string S(IList<object> row, int i) =>
         i < row.Count ? row[i]?.ToString() ?? "" : "";
 

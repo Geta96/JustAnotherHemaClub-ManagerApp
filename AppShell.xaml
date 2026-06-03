@@ -66,6 +66,9 @@
                         <DataTrigger TargetType="Label" Binding="{Binding Title}" Value="My Profile">
                             <Setter Property="Text" Value="◉" />
                         </DataTrigger>
+                        <DataTrigger TargetType="Label" Binding="{Binding Title}" Value="1 on 1 Lessons">
+                            <Setter Property="Text" Value="✶" />
+                        </DataTrigger>
                     </Label.Triggers>
                 </Label>
 
@@ -111,8 +114,13 @@
         <ShellContent ContentTemplate="{DataTemplate views:HomePage}" />
     </FlyoutItem>
 
-    <FlyoutItem Title="Trainings" Route="trainings">
-        <ShellContent ContentTemplate="{DataTemplate views:TrainingsPage}" />
+    <FlyoutItem Title="Trainings" FlyoutDisplayOptions="AsMultipleItems">
+        <ShellContent Title="Trainings"
+                      Route="trainings"
+                      ContentTemplate="{DataTemplate views:TrainingsPage}" />
+        <ShellContent Title="1 on 1 Lessons"
+                      Route="individuallessons"
+                      ContentTemplate="{DataTemplate views:IndividualLessonsPage}" />
     </FlyoutItem>
 
     <FlyoutItem Title="Fencers" Route="fencers">

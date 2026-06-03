@@ -19,4 +19,7 @@ public interface IGoogleSheetsService
 
     Task<List<MonthNote>> GetMonthNotesAsync();
     Task UpsertMonthNoteAsync(MonthNote note);
+
+    Task<List<IndividualLesson>> GetIndividualLessonsAsync();
+    Task UpsertIndividualLessonAsync(IndividualLesson lesson);
 }

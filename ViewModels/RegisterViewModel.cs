@@ -31,10 +31,13 @@ public partial class RegisterViewModel : ObservableObject
     {
         ErrorMessage = StatusMessage = null;
 
+        var trimmedEmail = (Email ?? "").Trim();
+
         // Validate
         string? validation =
             string.IsNullOrWhiteSpace(Name)            ? "Name is required." :
-            string.IsNullOrWhiteSpace(Email)           ? "Email is required." :
+            string.IsNullOrWhiteSpace(trimmedEmail)    ? "Email is required." :
+            !IsValidEmail(trimmedEmail)                ? "Please enter a valid email address (must contain '@')." :
             string.IsNullOrWhiteSpace(LoginUsername)   ? "Login username is required." :
             string.IsNullOrWhiteSpace(Password) || Password.Length < 4
                                                        ? "Password must be at least 4 characters." :
@@ -58,14 +61,25 @@ public partial class RegisterViewModel : ObservableObject
 
             var existingFencers = await _sheets.GetFencersAsync();
 
-            bool taken = existingFencers.Any(f =>
+            bool usernameTaken = existingFencers.Any(f =>
                 !string.IsNullOrEmpty(f.Username) &&
                 string.Equals(f.Username.Trim(), desiredUser, StringComparison.OrdinalIgnoreCase));
 
-            if (taken)
+            if (usernameTaken)
             {
                 ErrorMessage = "That username is already taken. Please choose another.";
                 await ShowAsync("Username taken", ErrorMessage);
+                return;
+            }
+
+            bool emailTaken = existingFencers.Any(f =>
+                !string.IsNullOrEmpty(f.Email) &&
+                string.Equals(f.Email.Trim(), trimmedEmail, StringComparison.OrdinalIgnoreCase));
+
+            if (emailTaken)
+            {
+                ErrorMessage = "That email is already registered. Please use a different email or log in.";
+                await ShowAsync("Email already registered", ErrorMessage);
                 return;
             }
 
@@ -75,7 +89,7 @@ public partial class RegisterViewModel : ObservableObject
                 Username = desiredUser,
                 PasswordHash = AuthService.Hash(Password),
                 Name = Name.Trim(),
-                Email = Email.Trim(),
+                Email = trimmedEmail,
                 Active = true,
                 IsStudent = IsStudent,
                 GdprAccepted = GdprAccepted,
@@ -97,7 +111,23 @@ public partial class RegisterViewModel : ObservableObject
             ErrorMessage = ex.Message;
             await ShowAsync("Registration failed", ex.ToString());
         }
-        finally { IsBusy = true; IsBusy = false; }
+        finally { IsBusy = false; }
+    }
+
+    private static bool IsValidEmail(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return false;
+        if (!email.Contains('@')) return false;
+        try
+        {
+            // System.Net.Mail.MailAddress enforces a valid shape (local@domain).
+            var addr = new System.Net.Mail.MailAddress(email);
+            return addr.Address == email;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     [RelayCommand]
