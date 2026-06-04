@@ -16,9 +16,9 @@
                    HeightRequest="320"
                    Aspect="AspectFill"
                    HorizontalOptions="Fill" />
-            <Label Text="Manager"
+            <!--<Label Text="Manager"
                    FontSize="18" TextColor="{StaticResource Cream}" Opacity="0.7"
-                   HorizontalOptions="Center" />
+                   HorizontalOptions="Center" />-->
 
             <!-- Loading group: animated in/out from code-behind -->
             <VerticalStackLayout x:Name="LoadingGroup"

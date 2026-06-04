@@ -11,6 +11,9 @@ public partial class LoginPage : ContentPage
     // How far up the crest shifts when the sign-in card is visible.
     private const double CrestUpOffset = -140;
 
+    // Extra upward shift when an error banner is visible, so the text can be read.
+    private const double CrestErrorExtraOffset = -40;
+
     // Distance the card/loading travel during their fade in/out.
     private const double CardTravel = 40;
     private const double LoadingTravel = 20;
@@ -50,7 +53,8 @@ public partial class LoginPage : ContentPage
 
     private async void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(LoginViewModel.IsSilentLoggingIn))
+        if (e.PropertyName != nameof(LoginViewModel.IsSilentLoggingIn) &&
+            e.PropertyName != nameof(LoginViewModel.HasError))
             return;
         await RunStateAsync();
     }
@@ -110,8 +114,11 @@ public partial class LoginPage : ContentPage
             // If card was fully hidden, reset its start offset so it slides up.
             if (SignInCard.Opacity < 0.01) SignInCard.TranslationY = CardTravel;
 
+            // Shift the crest further up when an error banner is showing so its text isn't clipped.
+            var crestY = CrestUpOffset + (_vm.HasError ? CrestErrorExtraOffset : 0);
+
             await Task.WhenAll(
-                CrestGroup.TranslateTo(0, CrestUpOffset, ms, Easing.CubicInOut),
+                CrestGroup.TranslateTo(0, crestY, ms, Easing.CubicInOut),
                 SignInCard.TranslateTo(0, 0, ms, Easing.CubicOut),
                 SignInCard.FadeTo(1, ms, Easing.CubicOut),
                 LoadingGroup.TranslateTo(0, LoadingTravel, ms, Easing.CubicIn),
