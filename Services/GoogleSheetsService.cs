@@ -30,6 +30,8 @@ public class GoogleSheetsService : IGoogleSheetsService
             HttpClientInitializer = credential,
             ApplicationName = "JAHC Manager"
         });
+        // Fail faster than the default 100 s, so users get a clearer error sooner.
+        _service.HttpClient.Timeout = TimeSpan.FromSeconds(20);
         return _service;
     }
 

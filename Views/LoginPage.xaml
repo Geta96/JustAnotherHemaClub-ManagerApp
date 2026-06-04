@@ -7,10 +7,10 @@
              NavigationPage.HasNavigationBar="False"
              BackgroundColor="{StaticResource Wine}">
 
-    <Grid RowDefinitions="*,Auto">
-
-        <!-- Crest area -->
-        <VerticalStackLayout Grid.Row="0" VerticalOptions="Center" HorizontalOptions="Fill"
+    <Grid>
+        <!-- Crest area: centered in the whole screen; we offset it up when the card is showing -->
+        <VerticalStackLayout x:Name="CrestGroup"
+                             VerticalOptions="Center" HorizontalOptions="Fill"
                              Spacing="8" Padding="0">
             <Image Source="monochrome_logo.jpg"
                    HeightRequest="320"
@@ -20,20 +20,29 @@
                    FontSize="18" TextColor="{StaticResource Cream}" Opacity="0.7"
                    HorizontalOptions="Center" />
 
-            <Label Text="Logging in, please wait..."
-                   FontSize="16" FontAttributes="Bold"
-                   TextColor="{StaticResource Cream}"
-                   HorizontalOptions="Center"
-                   IsVisible="{Binding IsSilentLoggingIn}" />
-            <ActivityIndicator IsRunning="{Binding IsSilentLoggingIn}"
-                               IsVisible="{Binding IsSilentLoggingIn}"
-                               Color="{StaticResource Cream}"
-                               HorizontalOptions="Center" />
+            <!-- Loading group: animated in/out from code-behind -->
+            <VerticalStackLayout x:Name="LoadingGroup"
+                                 Spacing="8" HorizontalOptions="Center"
+                                 Opacity="0"
+                                 TranslationY="20"
+                                 InputTransparent="True">
+                <Label Text="Logging in, please wait..."
+                       FontSize="16" FontAttributes="Bold"
+                       TextColor="{StaticResource Cream}"
+                       HorizontalOptions="Center" />
+                <ActivityIndicator IsRunning="{Binding IsSilentLoggingIn}"
+                                   Color="{StaticResource Cream}"
+                                   HorizontalOptions="Center" />
+            </VerticalStackLayout>
         </VerticalStackLayout>
 
-        <!-- Sheet -->
-        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="16,0,16,24" Padding="20"
-                IsVisible="{Binding ShowSignInForm}">
+        <!-- Sheet: overlays the bottom, doesn't push the crest -->
+        <Border x:Name="SignInCard"
+                Style="{StaticResource Card}"
+                Margin="16,0,16,24" Padding="20"
+                VerticalOptions="End"
+                Opacity="0"
+                TranslationY="40">
             <VerticalStackLayout Spacing="12">
                 <Label Text="Sign in" Style="{StaticResource H2}" />
                 <Entry Placeholder="Username" Text="{Binding Username}" />

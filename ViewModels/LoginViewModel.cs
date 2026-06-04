@@ -106,6 +106,8 @@ public partial class LoginViewModel : ObservableObject
                 return;
             }
 
+            IsSilentLoggingIn = true;
+
             if (await _auth.LoginAsync(Username, Password))
             {
                 if (KeepLoggedIn)
@@ -115,7 +117,10 @@ public partial class LoginViewModel : ObservableObject
                     if (enableBio)
                     {
                         // Verify the user can satisfy biometrics now, otherwise don't gate next launch.
+                        // Hide the "logging in" splash so the biometric prompt is visible over the form.
+                        IsSilentLoggingIn = false;
                         enableBio = await _biometrics.AuthenticateAsync("Confirm biometrics to enable quick sign-in");
+                        IsSilentLoggingIn = true;
                     }
                     await _auth.PersistCredentialsAsync(Username.Trim(), hash, enableBio);
                     _auth.MarkPersisted(true);
@@ -133,7 +138,16 @@ public partial class LoginViewModel : ObservableObject
                 Error = "Incorrect username or password. Please try again.";
             }
         }
+        catch (TaskCanceledException)
+        {
+            Error = "Couldn't reach the server. Check your internet connection ";
+        }
+        catch (HttpRequestException ex)
+        {
+            Error = $"Network error: {ex.Message}. Check your connection or VPN settings.";
+        }
         catch (Exception ex) { Error = $"Login failed: {ex.Message}"; }
+        finally { IsSilentLoggingIn = false; }
     }
 
     [RelayCommand]
