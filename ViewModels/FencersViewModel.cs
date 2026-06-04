@@ -61,36 +61,28 @@ public partial class FencersViewModel : ObservableObject
         BackendError = null;
         BackendStatus = "Loading fencers from Google Sheets...";
 
-        Fencers.Clear();
-        MissingGdpr.Clear();
-        MissingLiability.Clear();
-
         try
         {
-            var all = (await _sheets.GetFencersAsync()).OrderBy(f => f.Name).ToList();
-
-            foreach (var f in all)
-                Fencers.Add(f);
-
-            foreach (var f in all.Where(f => f.Active && !f.GdprAccepted))
-                MissingGdpr.Add(f);
-
-            foreach (var f in all.Where(f => f.Active && !f.LiabilityAccepted))
-                MissingLiability.Add(f);
-
             var today = DateTime.Today;
-            var trainings = (await _sheets.GetTrainingsAsync())
+
+            // All three reads in parallel.
+            var fencersTask   = _sheets.GetFencersAsync();
+            var trainingsTask = _sheets.GetTrainingsAsync();
+            var paymentsTask  = _sheets.GetPaymentsAsync(today.Year, today.Month);
+            await Task.WhenAll(fencersTask, trainingsTask, paymentsTask);
+
+            var all = fencersTask.Result.OrderBy(f => f.Name).ToList();
+            var monthTrainings = trainingsTask.Result
                 .Where(t => t.Date.Year == today.Year && t.Date.Month == today.Month)
                 .ToList();
+            var payments = paymentsTask.Result;
 
-            var payments = await _sheets.GetPaymentsAsync(today.Year, today.Month);
-
-            var attendance = trainings
+            var attendance = monthTrainings
                 .SelectMany(t => t.AttendeeFencerIds)
                 .GroupBy(id => id)
                 .ToDictionary(g => g.Key, g => g.Count());
 
-            _statusByFencer = all.ToDictionary(
+            var statusByFencer = all.ToDictionary(
                 f => f.Id,
                 f =>
                 {
@@ -99,6 +91,19 @@ public partial class FencersViewModel : ObservableObject
                     var paid = payments.Any(p => p.FencerId == f.Id);
                     return (count, amount, paid);
                 });
+
+            var missingGdpr      = all.Where(f => f.Active && !f.GdprAccepted).ToList();
+            var missingLiability = all.Where(f => f.Active && !f.LiabilityAccepted).ToList();
+
+            // Single visible swap.
+            Fencers.Clear();
+            foreach (var f in all) Fencers.Add(f);
+            MissingGdpr.Clear();
+            foreach (var f in missingGdpr) MissingGdpr.Add(f);
+            MissingLiability.Clear();
+            foreach (var f in missingLiability) MissingLiability.Add(f);
+
+            _statusByFencer = statusByFencer;
 
             SelectedFencer ??= Fencers.FirstOrDefault();
             RecomputeSelectedDetails();

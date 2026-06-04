@@ -14,4 +14,5 @@ public interface ICacheControl
     void InvalidatePayments(int? year = null, int? month = null);
     void InvalidateMonthNotes();
     void InvalidateIndividualLessons();
+    void InvalidateRecurringTrainings();
 }

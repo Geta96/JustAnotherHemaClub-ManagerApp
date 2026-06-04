@@ -17,21 +17,16 @@
                             BackgroundColor="{StaticResource CreamSoft}"
                             Stroke="{StaticResource Wine}" StrokeThickness="1"
                             StrokeShape="RoundRectangle 10"
-                            Padding="14,6"
+                            Padding="10,6"
                             HorizontalOptions="End">
                         <Border.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OnRefreshTapped" />
                         </Border.GestureRecognizers>
-                        <Label VerticalOptions="Center">
-                            <Label.FormattedText>
-                                <FormattedString>
-                                    <Span Text="↻ " FontSize="22" FontAttributes="Bold"
-                                          TextColor="{StaticResource Wine}" />
-                                    <Span Text="Refresh" FontSize="14"
-                                          TextColor="{StaticResource Wine}" />
-                                </FormattedString>
-                            </Label.FormattedText>
-                        </Label>
+                        <Label Text="↻"
+                               FontSize="22" FontAttributes="Bold"
+                               TextColor="{StaticResource Wine}"
+                               VerticalOptions="Center"
+                               HorizontalOptions="Center" />
                     </Border>
                 </Grid>
 
@@ -176,17 +171,39 @@
                                                 </BindableLayout.ItemTemplate>
                                             </VerticalStackLayout>
 
+                                            <!-- Add expense: collapsed by default -->
                                             <Border Style="{StaticResource Card}"
                                                     IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceViewModel}}, Path=IsLoggedInInstructor}">
                                                 <VerticalStackLayout Spacing="8">
-                                                    <Label Text="Add expense" FontAttributes="Bold"
-                                                           TextColor="{StaticResource Wine}" />
-                                                    <Entry Placeholder="Category" Text="{Binding NewExpenseCategory}" />
-                                                    <Entry Placeholder="Description" Text="{Binding NewExpenseDescription}" />
-                                                    <Entry Placeholder="Amount" Keyboard="Numeric" Text="{Binding NewExpenseAmount}" />
+
+                                                    <!-- Button (visible when not adding) -->
                                                     <Button Text="Add Expense"
-                                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceViewModel}}, Path=AddExpenseCommand}"
-                                                            CommandParameter="{Binding .}" />
+                                                            BackgroundColor="#476FB5"
+                                                            TextColor="{StaticResource Cream}"
+                                                            IsVisible="{Binding IsAddingExpense, Converter={StaticResource InverseBoolConverter}}"
+                                                            Command="{Binding BeginAddExpenseCommand}" />
+
+                                                    <!-- Form (visible while adding) -->
+                                                    <VerticalStackLayout Spacing="8" IsVisible="{Binding IsAddingExpense}">
+                                                        <Label Text="Add expense" FontAttributes="Bold"
+                                                               TextColor="{StaticResource Wine}" />
+                                                        <Entry Placeholder="Category" Text="{Binding NewExpenseCategory}" />
+                                                        <Entry Placeholder="Description" Text="{Binding NewExpenseDescription}" />
+                                                        <Entry Placeholder="Amount" Keyboard="Numeric" Text="{Binding NewExpenseAmount}" />
+
+                                                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                                            <Button Grid.Column="0" Text="Cancel"
+                                                                    BackgroundColor="{StaticResource Wine}"
+                                                                    TextColor="{StaticResource Cream}"
+                                                                    Command="{Binding CancelAddExpenseCommand}" />
+                                                            <Button Grid.Column="1" Text="Save"
+                                                                    BackgroundColor="#476FB5"
+                                                                    TextColor="{StaticResource Cream}"
+                                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceViewModel}}, Path=AddExpenseCommand}"
+                                                                    CommandParameter="{Binding .}" />
+                                                        </Grid>
+                                                    </VerticalStackLayout>
+
                                                 </VerticalStackLayout>
                                             </Border>
 

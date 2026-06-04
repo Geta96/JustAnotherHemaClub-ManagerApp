@@ -21,6 +21,9 @@ public partial class MonthFinanceVm : ObservableObject
     [ObservableProperty] private bool isExpanded;
     public string ExpandGlyph => IsExpanded ? "▾" : "▸";
 
+    // Controls the inline "Add expense" form visibility.
+    [ObservableProperty] private bool isAddingExpense;
+
     public MonthFinanceVm(int year, int month)
     {
         Year = year;
@@ -50,4 +53,16 @@ public partial class MonthFinanceVm : ObservableObject
 
     [RelayCommand]
     private void ToggleExpanded() => IsExpanded = !IsExpanded;
+
+    [RelayCommand]
+    private void BeginAddExpense() => IsAddingExpense = true;
+
+    [RelayCommand]
+    private void CancelAddExpense()
+    {
+        NewExpenseCategory = "";
+        NewExpenseDescription = "";
+        NewExpenseAmount = 0;
+        IsAddingExpense = false;
+    }
 }

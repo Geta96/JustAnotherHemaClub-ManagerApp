@@ -34,32 +34,48 @@ public partial class FinanceViewModel : ObservableObject
         if (showSpinner) IsLoading = true;
         try
         {
-            Months.Clear();
+            // Independent reads in parallel.
+            var fencersTask  = _sheets.GetFencersAsync();
+            var trainingsTask = _sheets.GetTrainingsAsync();
+            var expensesTask = _sheets.GetExpensesAsync(
+                DateTime.MinValue.AddYears(1), DateTime.MaxValue.AddYears(-1));
+            await Task.WhenAll(fencersTask, trainingsTask, expensesTask);
 
-            var fencers = await _sheets.GetFencersAsync();
-            var trainings = await _sheets.GetTrainingsAsync();
-            var expensesAll = await _sheets.GetExpensesAsync(DateTime.MinValue.AddYears(1), DateTime.MaxValue.AddYears(-1));
+            var fencers     = fencersTask.Result;
+            var trainings   = trainingsTask.Result;
+            var expensesAll = expensesTask.Result;
 
             var today = DateTime.Today;
             var monthsSet = new HashSet<(int Y, int M)> { (today.Year, today.Month) };
             foreach (var s in trainings) monthsSet.Add((s.Date.Year, s.Date.Month));
 
-            var ordered = monthsSet.OrderByDescending(t => t.Y).ThenByDescending(t => t.M);
+            var ordered = monthsSet
+                .OrderByDescending(t => t.Y).ThenByDescending(t => t.M)
+                .ToList();
 
-            var isInstructor = _auth.IsLoggedInInstructor;
+            // Fetch every month's payments in parallel.
+            var paymentTasks = ordered
+                .Select(t => _sheets.GetPaymentsAsync(t.Y, t.M))
+                .ToArray();
+            await Task.WhenAll(paymentTasks);
+
+            var isInstructor    = _auth.IsLoggedInInstructor;
             var currentFencerId = _auth.CurrentFencer?.Id;
 
-            foreach (var (y, m) in ordered)
+            // Build all month VMs locally first, then publish in one swap.
+            var built = new List<MonthFinanceVm>(ordered.Count);
+            for (int i = 0; i < ordered.Count; i++)
             {
+                var (y, m) = ordered[i];
                 var monthVm = new MonthFinanceVm(y, m);
 
-                var monthSessions = trainings.Where(s => s.Date.Year == y && s.Date.Month == m).ToList();
+                var monthSessions = trainings.Where(s => s.Date.Year == y && s.Date.Month == m);
                 var attendance = monthSessions
                     .SelectMany(s => s.AttendeeFencerIds)
                     .GroupBy(id => id)
                     .ToDictionary(g => g.Key, g => g.Count());
 
-                var payments = await _sheets.GetPaymentsAsync(y, m);
+                var payments = paymentTasks[i].Result;
 
                 var fencersForMonth = isInstructor
                     ? fencers.Where(f => f.Active)
@@ -84,8 +100,12 @@ public partial class FinanceViewModel : ObservableObject
                 }
 
                 monthVm.RaiseTotals();
-                Months.Add(monthVm);
+                built.Add(monthVm);
             }
+
+            // Single visual update at the end instead of N incremental Adds.
+            Months.Clear();
+            foreach (var mv in built) Months.Add(mv);
 
             RecomputePersonalSummary();
             OnPropertyChanged(nameof(ShowPersonalSummary));
@@ -160,6 +180,7 @@ public partial class FinanceViewModel : ObservableObject
         month.NewExpenseCategory = "";
         month.NewExpenseDescription = "";
         month.NewExpenseAmount = 0;
+        month.IsAddingExpense = false;
         month.RaiseTotals();
     }
 }

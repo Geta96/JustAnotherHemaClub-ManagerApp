@@ -23,6 +23,20 @@ public partial class TrainingsViewModel : ObservableObject
     [ObservableProperty] private string attendeeFilter = "";
     [ObservableProperty] private bool isLoading;
 
+    // --- Recurring training options for the "New training" form ---
+    [ObservableProperty] private bool isRecurring;
+    [ObservableProperty] private TimeSpan recurringTime = new(18, 0, 0);
+
+    /// <summary>
+    /// The form's weekday is derived from the picked TrainingDate, so instructors
+    /// pick "the first session on this date" and from then on it repeats weekly.
+    /// </summary>
+    public DayOfWeek RecurringDayOfWeek => TrainingDate.DayOfWeek;
+    public string RecurringSummary =>
+        IsRecurring
+            ? $"Repeats every {RecurringDayOfWeek} at {RecurringTime:hh\\:mm}, starting {TrainingDate:yyyy-MM-dd}."
+            : "";
+
     public int SelectedCount => NewTrainingAttendees.Count(t => t.IsAttending);
     public string SelectedCountLabel =>
         $"{SelectedCount} of {NewTrainingAttendees.Count} selected";
@@ -44,13 +58,19 @@ public partial class TrainingsViewModel : ObservableObject
         if (showSpinner) IsLoading = true;
         try
         {
-            AllFencers.Clear();
-            foreach (var f in await _sheets.GetFencersAsync()) AllFencers.Add(f);
+            // 3 reads in parallel instead of one-after-another.
+            var fencersTask   = _sheets.GetFencersAsync();
+            var trainingsTask = _sheets.GetTrainingsAsync();
+            var notesTask     = _sheets.GetMonthNotesAsync();
+            await Task.WhenAll(fencersTask, trainingsTask, notesTask);
 
+            // Fencers first so attendee toggles can rebuild against the new list.
+            AllFencers.Clear();
+            foreach (var f in fencersTask.Result) AllFencers.Add(f);
             RebuildAttendeeToggles();
 
-            var trainings = await _sheets.GetTrainingsAsync();
-            var notes = await _sheets.GetMonthNotesAsync();
+            var trainings = trainingsTask.Result;
+            var notes     = notesTask.Result;
 
             var noteByMonth = notes
                 .GroupBy(n => (n.Year, n.Month))
@@ -58,7 +78,8 @@ public partial class TrainingsViewModel : ObservableObject
 
             var myId = _auth.CurrentFencer?.Id;
 
-            Months.Clear();
+            // Build months locally, swap once.
+            var built = new List<PastMonthVm>();
             var grouped = trainings
                 .GroupBy(s => (s.Date.Year, s.Date.Month))
                 .OrderByDescending(g => g.Key.Year).ThenByDescending(g => g.Key.Month);
@@ -68,12 +89,13 @@ public partial class TrainingsViewModel : ObservableObject
                 var mvm = new PastMonthVm(g.Key.Year, g.Key.Month);
                 if (noteByMonth.TryGetValue(g.Key, out var n)) mvm.Note = n;
                 mvm.IsNoteDirty = false;
-
                 foreach (var t in g.OrderByDescending(s => s.Date))
                     mvm.Trainings.Add(new EditableTrainingRow(t, AllFencers, myId));
-
-                Months.Add(mvm);
+                built.Add(mvm);
             }
+
+            Months.Clear();
+            foreach (var mv in built) Months.Add(mv);
         }
         finally { if (showSpinner) IsLoading = false; }
     }
@@ -160,10 +182,26 @@ public partial class TrainingsViewModel : ObservableObject
         };
         await _sheets.UpsertTrainingAsync(t);
 
+        // If the instructor ticked "recurring", also persist a weekly rule so the
+        // materializer will create future sessions automatically.
+        if (IsRecurring)
+        {
+            var rule = new RecurringTrainingRule
+            {
+                DayOfWeek          = TrainingDate.DayOfWeek,
+                TimeOfDay          = RecurringTime,
+                Topic              = Topic,
+                StartDate          = TrainingDate.Date.AddDays(7), // first auto-created session is next week
+                CreatedByFencerId  = _auth.CurrentFencer?.Id ?? ""
+            };
+            await _sheets.UpsertRecurringTrainingAsync(rule);
+        }
+
         await LoadAsync(showSpinner: false);
 
         Topic = "";
         AttendeeFilter = "";
+        IsRecurring = false;
     }
 
     [RelayCommand]
@@ -211,6 +249,20 @@ public partial class TrainingsViewModel : ObservableObject
         {
             row.Training.AttendeeFencerIds.Remove(me.Id);
             throw;
+        }
+    }
+
+    [RelayCommand]
+    public async Task DeleteTrainingAsync(EditableTrainingRow row)
+    {
+        if (row is null || !_auth.IsLoggedInInstructor) return;
+
+        await _sheets.DeleteTrainingAsync(row.Training.Id);
+
+        // Remove from the in-memory month groups so the UI updates without a full reload.
+        foreach (var month in Months)
+        {
+            if (month.Trainings.Remove(row)) break;
         }
     }
 }

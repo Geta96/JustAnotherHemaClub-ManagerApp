@@ -17,6 +17,7 @@ public sealed class CachedGoogleSheetsService : IGoogleSheetsService, ICacheCont
     private List<MonthNote>? _monthNotes;
     private readonly Dictionary<(int Y, int M), List<Payment>> _paymentsByMonth = new();
     private List<IndividualLesson>? _individualLessons;
+    private List<RecurringTrainingRule>? _recurringTrainings;
 
     public CachedGoogleSheetsService(GoogleSheetsService inner) => _inner = inner;
 
@@ -72,6 +73,12 @@ public sealed class CachedGoogleSheetsService : IGoogleSheetsService, ICacheCont
             if (idx >= 0) _trainings[idx] = training;
             else _trainings.Add(training);
         }
+    }
+
+    public async Task DeleteTrainingAsync(string trainingId)
+    {
+        await _inner.DeleteTrainingAsync(trainingId);
+        _trainings?.RemoveAll(t => t.Id == trainingId);
     }
 
     // ---------- Payments (keyed per month) ----------
@@ -173,6 +180,36 @@ public sealed class CachedGoogleSheetsService : IGoogleSheetsService, ICacheCont
         }
     }
 
+    // ---------- Recurring trainings ----------
+    public async Task<List<RecurringTrainingRule>> GetRecurringTrainingsAsync()
+    {
+        if (_recurringTrainings is not null) return Clone(_recurringTrainings);
+        await _gate.WaitAsync();
+        try
+        {
+            _recurringTrainings ??= await _inner.GetRecurringTrainingsAsync();
+            return Clone(_recurringTrainings);
+        }
+        finally { _gate.Release(); }
+    }
+
+    public async Task UpsertRecurringTrainingAsync(RecurringTrainingRule rule)
+    {
+        await _inner.UpsertRecurringTrainingAsync(rule);
+        if (_recurringTrainings is not null)
+        {
+            var idx = _recurringTrainings.FindIndex(r => r.Id == rule.Id);
+            if (idx >= 0) _recurringTrainings[idx] = rule;
+            else _recurringTrainings.Add(rule);
+        }
+    }
+
+    public async Task DeleteRecurringTrainingAsync(string ruleId)
+    {
+        await _inner.DeleteRecurringTrainingAsync(ruleId);
+        _recurringTrainings?.RemoveAll(r => r.Id == ruleId);
+    }
+
     // ---------- ICacheControl ----------
     public async Task WarmAsync()
     {
@@ -202,6 +239,7 @@ public sealed class CachedGoogleSheetsService : IGoogleSheetsService, ICacheCont
         _monthNotes = null;
         _paymentsByMonth.Clear();
         _individualLessons = null;
+        _recurringTrainings = null;
     }
 
     public void InvalidateFencers() => _fencers = null;
@@ -209,6 +247,7 @@ public sealed class CachedGoogleSheetsService : IGoogleSheetsService, ICacheCont
     public void InvalidateExpenses() => _expenses = null;
     public void InvalidateMonthNotes() => _monthNotes = null;
     public void InvalidateIndividualLessons() => _individualLessons = null;
+    public void InvalidateRecurringTrainings() => _recurringTrainings = null;
 
     public void InvalidatePayments(int? year = null, int? month = null)
     {

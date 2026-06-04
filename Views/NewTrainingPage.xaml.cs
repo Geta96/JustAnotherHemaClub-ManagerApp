@@ -6,16 +6,30 @@ public partial class NewTrainingPage : ContentPage
 {
     private readonly TrainingsViewModel _vm;
 
+    // Set by the caller before pushing this page; consumed (and cleared) in OnAppearing.
+    private bool _startAsWeekly;
+
     public NewTrainingPage(TrainingsViewModel vm)
     {
         InitializeComponent();
         BindingContext = _vm = vm;
     }
 
+    /// <summary>
+    /// Call before navigating to pre-check the "Repeat weekly on this day" checkbox.
+    /// </summary>
+    public void PrepareForWeekly() => _startAsWeekly = true;
+
     protected override async void OnAppearing()
     {
         base.OnAppearing();
         await _vm.LoadAsync();
+
+        if (_startAsWeekly)
+        {
+            _vm.IsRecurring = true;
+            _startAsWeekly = false;
+        }
     }
 
     private void OnAttendeeRowTapped(object? sender, TappedEventArgs e)

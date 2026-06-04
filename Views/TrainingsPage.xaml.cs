@@ -42,4 +42,20 @@ public partial class TrainingsPage : ContentPage
         var page = _services.GetRequiredService<NewTrainingPage>();
         await Navigation.PushAsync(page);
     }
+
+    private async void OnDeleteTrainingClicked(object? sender, EventArgs e)
+    {
+        if (sender is not BindableObject bo || bo.BindingContext is not EditableTrainingRow row)
+            return;
+
+        var confirm = await DisplayAlert(
+            "Delete training",
+            $"Delete the training on {row.Training.Date:yyyy-MM-dd}? This cannot be undone.",
+            "Delete",
+            "Cancel");
+
+        if (!confirm) return;
+
+        await _vm.DeleteTrainingCommand.ExecuteAsync(row);
+    }
 }

@@ -1,5 +1,6 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using JustAnotherHemaClub.Models;
 
 namespace JustAnotherHemaClub.ViewModels;
@@ -15,6 +16,11 @@ public partial class EditableTrainingRow : ObservableObject
 
     /// <summary>True when the currently logged-in fencer is in the attendee list.</summary>
     [ObservableProperty] private bool currentUserAttending;
+
+    /// <summary>Collapsed view by default; instructors expand to edit.</summary>
+    [ObservableProperty] private bool isExpanded;
+
+    public string ExpandGlyph => IsExpanded ? "▾" : "▸";
 
     /// <summary>True when there is a logged-in non-instructor who could still attend this session.</summary>
     public bool CanCurrentUserAttend => !string.IsNullOrEmpty(_currentUserFencerId) && !CurrentUserAttending;
@@ -42,10 +48,16 @@ public partial class EditableTrainingRow : ObservableObject
             }));
     }
 
+    [RelayCommand]
+    private void ToggleExpanded() => IsExpanded = !IsExpanded;
+
     partial void OnTopicChanged(string value) => IsDirty = true;
 
     partial void OnCurrentUserAttendingChanged(bool value)
         => OnPropertyChanged(nameof(CanCurrentUserAttend));
+
+    partial void OnIsExpandedChanged(bool value)
+        => OnPropertyChanged(nameof(ExpandGlyph));
 
     public TrainingSession ToUpdatedTraining() => new()
     {

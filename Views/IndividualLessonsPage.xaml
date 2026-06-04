@@ -1,0 +1,284 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels"
+             xmlns:m="clr-namespace:JustAnotherHemaClub.Models"
+             x:Class="JustAnotherHemaClub.Views.IndividualLessonsPage"
+             x:DataType="vm:IndividualLessonsViewModel"
+             Title="1 on 1 Lessons">
+    <Grid>
+        <ScrollView>
+            <VerticalStackLayout Padding="16" Spacing="14">
+
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalOptions="Center">
+                    <Label Grid.Column="0" Text="1 on 1 Lessons" Style="{StaticResource H1}"
+                           VerticalOptions="Center" />
+                    <Border Grid.Column="1"
+                            BackgroundColor="{StaticResource CreamSoft}"
+                            Stroke="{StaticResource Wine}" StrokeThickness="1"
+                            StrokeShape="RoundRectangle 10"
+                            Padding="10,6"
+                            HorizontalOptions="End">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnRefreshTapped" />
+                        </Border.GestureRecognizers>
+                        <Label Text="↻"
+                               FontSize="22" FontAttributes="Bold"
+                               TextColor="{StaticResource Wine}"
+                               VerticalOptions="Center"
+                               HorizontalOptions="Center" />
+                    </Border>
+                </Grid>
+
+                <VerticalStackLayout Spacing="14"
+                                     IsVisible="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}">
+
+                    <!-- Filters (instructor) -->
+                    <Border Style="{StaticResource Card}" IsVisible="{Binding IsInstructor}">
+                        <VerticalStackLayout Spacing="8">
+                            <Grid ColumnDefinitions="*,Auto" VerticalOptions="Center">
+                                <Label Grid.Column="0" Text="Filters" Style="{StaticResource H2}"
+                                       VerticalOptions="Center" />
+                                <Button Grid.Column="1" Text="Clear"
+                                        BackgroundColor="{StaticResource Wine}"
+                                        TextColor="{StaticResource Cream}"
+                                        HeightRequest="36"
+                                        Padding="14,0"
+                                        Command="{Binding ClearFiltersCommand}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10" RowDefinitions="Auto,Auto" RowSpacing="6">
+                                <Label Grid.Row="0" Grid.Column="0" Text="Student" Style="{StaticResource Caption}" />
+                                <Label Grid.Row="0" Grid.Column="1" Text="Instructor" Style="{StaticResource Caption}" />
+                                <Picker Grid.Row="1" Grid.Column="0"
+                                        Title="(all)"
+                                        ItemsSource="{Binding FilterStudents}"
+                                        ItemDisplayBinding="{Binding Name}"
+                                        SelectedItem="{Binding FilterStudent}" />
+                                <Picker Grid.Row="1" Grid.Column="1"
+                                        Title="(all)"
+                                        ItemsSource="{Binding Instructors}"
+                                        ItemDisplayBinding="{Binding Name}"
+                                        SelectedItem="{Binding FilterInstructor}" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Open form -->
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10"
+                          IsVisible="{Binding IsInstructor}">
+                        <Button Grid.Column="0"
+                                Text="Request 1 on 1 Lesson"
+                                BackgroundColor="#476FB5"
+                                TextColor="{StaticResource Cream}"
+                                Command="{Binding ShowRequestLessonFormCommand}" />
+                        <Button Grid.Column="1"
+                                Text="Add as Instructor"
+                                BackgroundColor="#476FB5"
+                                TextColor="{StaticResource Cream}"
+                                Command="{Binding ShowAddLessonFormCommand}" />
+                    </Grid>
+                    <Button Text="Request a 1 on 1 Lesson"
+                            BackgroundColor="#476FB5"
+                            TextColor="{StaticResource Cream}"
+                            IsVisible="{Binding IsStudentViewer}"
+                            Command="{Binding ShowFormCommand}" />
+
+                    <!-- New / Request form -->
+                    <Border Style="{StaticResource Card}" IsVisible="{Binding IsFormVisible}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="New Lesson" Style="{StaticResource H2}" />
+
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                <DatePicker Grid.Column="0" Date="{Binding NewDate}" />
+                                <TimePicker Grid.Column="1" Time="{Binding NewTime}" />
+                            </Grid>
+
+                            <!-- Instructor (Add directly): pick a student + (optionally) instructor -->
+                            <VerticalStackLayout Spacing="6" IsVisible="{Binding IsInstructorAddMode}">
+                                <Label Text="Student" Style="{StaticResource Caption}" />
+                                <Picker Title="Select student"
+                                        ItemsSource="{Binding Students}"
+                                        ItemDisplayBinding="{Binding Name}"
+                                        SelectedItem="{Binding NewStudent}" />
+                                <Label Text="Instructor" Style="{StaticResource Caption}" />
+                                <Picker Title="Select instructor"
+                                        ItemsSource="{Binding Instructors}"
+                                        ItemDisplayBinding="{Binding Name}"
+                                        SelectedItem="{Binding NewInstructor}" />
+                            </VerticalStackLayout>
+
+                            <!-- Request flow: student OR instructor-in-request-mode -->
+                            <VerticalStackLayout Spacing="6" IsVisible="{Binding ShowRequestPickerSection}">
+                                <Label Text="Request from instructor(s)" Style="{StaticResource Caption}" />
+                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding RequestTargets}">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:FencerToggle">
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Padding="0,2">
+                                                <CheckBox Grid.Column="0" IsChecked="{Binding IsAttending}" />
+                                                <Label   Grid.Column="1" Text="{Binding Fencer.Name}"
+                                                         VerticalOptions="Center" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
+                            </VerticalStackLayout>
+
+                            <Entry Placeholder="Topic" Text="{Binding NewTopic}" />
+
+                            <!-- Notes / next idea only when adding directly as an instructor -->
+                            <VerticalStackLayout Spacing="6" IsVisible="{Binding IsInstructorAddMode}">
+                                <Label Text="Notes (hidden from students)" Style="{StaticResource Caption}" />
+                                <Editor Placeholder="Observations, experience, things to work on"
+                                        AutoSize="TextChanges"
+                                        Text="{Binding NewNotes}" />
+                                <Label Text="Next session idea (hidden from students)" Style="{StaticResource Caption}" />
+                                <Editor Placeholder="Plan for the next lesson"
+                                        AutoSize="TextChanges"
+                                        Text="{Binding NewNextIdea}" />
+                            </VerticalStackLayout>
+
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                <Button Grid.Column="0" Text="Cancel"
+                                        BackgroundColor="{StaticResource Wine}"
+                                        TextColor="{StaticResource Cream}"
+                                        Command="{Binding HideFormCommand}" />
+                                <Button Grid.Column="1" Text="Save"
+                                        BackgroundColor="#476FB5"
+                                        TextColor="{StaticResource Cream}"
+                                        Command="{Binding SubmitFormCommand}" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Lessons list -->
+                    <CollectionView ItemsSource="{Binding Lessons}">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:IndividualLessonRowVm">
+                                <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                                    <VerticalStackLayout Spacing="8">
+
+                                        <!-- Compact header: tap to expand/collapse -->
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                            <Grid.GestureRecognizers>
+                                                <TapGestureRecognizer Command="{Binding ToggleExpandedCommand}" />
+                                            </Grid.GestureRecognizers>
+
+                                            <Label Grid.Column="0"
+                                                   Text="{Binding ExpandGlyph}"
+                                                   FontSize="18" FontAttributes="Bold"
+                                                   TextColor="{StaticResource Wine}"
+                                                   VerticalOptions="Center" />
+
+                                            <VerticalStackLayout Grid.Column="1" Spacing="0">
+                                                <Label Text="{Binding DateText}"
+                                                       FontAttributes="Bold"
+                                                       TextColor="{StaticResource Wine}" />
+                                                <Label Style="{StaticResource Caption}"
+                                                       LineBreakMode="TailTruncation">
+                                                    <Label.FormattedText>
+                                                        <FormattedString>
+                                                            <Span Text="{Binding StudentName}" />
+                                                            <Span Text=" • " />
+                                                            <Span Text="{Binding InstructorName}" />
+                                                            <Span Text=" — " />
+                                                            <Span Text="{Binding TopicPreview}" />
+                                                        </FormattedString>
+                                                    </Label.FormattedText>
+                                                </Label>
+                                            </VerticalStackLayout>
+
+                                            <Label Grid.Column="2"
+                                                   Text="Pending"
+                                                   FontAttributes="Bold"
+                                                   TextColor="#B8860B"
+                                                   VerticalOptions="Center"
+                                                   IsVisible="{Binding IsPending}" />
+                                        </Grid>
+
+                                        <!-- Expanded details -->
+                                        <VerticalStackLayout IsVisible="{Binding IsExpanded}" Spacing="8">
+
+                                            <Label>
+                                                <Label.FormattedText>
+                                                    <FormattedString>
+                                                        <Span Text="Student: " FontAttributes="Bold" />
+                                                        <Span Text="{Binding StudentName}" />
+                                                    </FormattedString>
+                                                </Label.FormattedText>
+                                            </Label>
+
+                                            <Label>
+                                                <Label.FormattedText>
+                                                    <FormattedString>
+                                                        <Span Text="Instructor: " FontAttributes="Bold" />
+                                                        <Span Text="{Binding InstructorName}" />
+                                                    </FormattedString>
+                                                </Label.FormattedText>
+                                            </Label>
+
+                                            <Label Text="{Binding Lesson.Topic, StringFormat='Topic: {0}'}" />
+
+                                            <!-- Private fields (instructor-only) -->
+                                            <VerticalStackLayout Spacing="6" IsVisible="{Binding ShowPrivateFields}">
+                                                <Label Text="Notes (hidden from students)" Style="{StaticResource Caption}" />
+                                                <Editor AutoSize="TextChanges"
+                                                        Text="{Binding Lesson.Notes}" />
+                                                <Label Text="Next session idea (hidden from students)" Style="{StaticResource Caption}" />
+                                                <Editor AutoSize="TextChanges"
+                                                        Text="{Binding Lesson.NextIdea}" />
+                                            </VerticalStackLayout>
+
+                                            <!-- Accept / Reject (only the targeted instructor) -->
+                                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10"
+                                                  IsVisible="{Binding IsCurrentUserTargetedInstructor}">
+                                                <Button Grid.Column="0" Text="Reject"
+                                                        BackgroundColor="{StaticResource DangerRed}"
+                                                        TextColor="{StaticResource Cream}"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:IndividualLessonsViewModel}}, Path=RejectRequestCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                                <Button Grid.Column="1" Text="Accept"
+                                                        BackgroundColor="#1F8A2E"
+                                                        TextColor="{StaticResource Cream}"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:IndividualLessonsViewModel}}, Path=AcceptRequestCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                            </Grid>
+
+                                            <!-- Instructor action row: Delete (left) / Save (right) -->
+                                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10"
+                                                  IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:IndividualLessonsViewModel}}, Path=IsInstructor}">
+                                                <Button Grid.Column="0"
+                                                        Text="Delete"
+                                                        BackgroundColor="{StaticResource DangerRed}"
+                                                        TextColor="{StaticResource Cream}"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:IndividualLessonsViewModel}}, Path=DeleteLessonCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                                <Button Grid.Column="1"
+                                                        Text="Save"
+                                                        BackgroundColor="#476FB5"
+                                                        TextColor="{StaticResource Cream}"
+                                                        IsVisible="{Binding IsAccepted}"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:IndividualLessonsViewModel}}, Path=SaveLessonCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                            </Grid>
+
+                                        </VerticalStackLayout>
+
+                                    </VerticalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="8"
+                             IsVisible="{Binding IsLoading}">
+            <ActivityIndicator IsRunning="{Binding IsLoading}"
+                               Color="{StaticResource Wine}"
+                               WidthRequest="48" HeightRequest="48" />
+            <Label Text="Loading..." TextColor="{StaticResource Wine}" FontAttributes="Bold" />
+        </VerticalStackLayout>
+    </Grid>
+</ContentPage>

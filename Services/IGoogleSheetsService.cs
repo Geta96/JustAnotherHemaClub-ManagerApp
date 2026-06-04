@@ -10,6 +10,7 @@ public interface IGoogleSheetsService
 
     Task<List<TrainingSession>> GetTrainingsAsync();
     Task UpsertTrainingAsync(TrainingSession training);
+    Task DeleteTrainingAsync(string trainingId);
 
     Task<List<Payment>> GetPaymentsAsync(int year, int month);
     Task MarkPaidAsync(Payment payment);
@@ -22,4 +23,8 @@ public interface IGoogleSheetsService
 
     Task<List<IndividualLesson>> GetIndividualLessonsAsync();
     Task UpsertIndividualLessonAsync(IndividualLesson lesson);
+
+    Task<List<RecurringTrainingRule>> GetRecurringTrainingsAsync();
+    Task UpsertRecurringTrainingAsync(RecurringTrainingRule rule);
+    Task DeleteRecurringTrainingAsync(string ruleId);
 }

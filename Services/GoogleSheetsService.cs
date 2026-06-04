@@ -113,13 +113,22 @@ public class GoogleSheetsService : IGoogleSheetsService
     public async Task<List<TrainingSession>> GetTrainingsAsync()
     {
         var rows = await ReadAsync("Trainings!A2:D");
-        return rows.Select(r => new TrainingSession
+        var list = new List<TrainingSession>();
+        foreach (var r in rows)
         {
-            Id = S(r, 0),
-            Date = DateTime.Parse(S(r, 1), CultureInfo.InvariantCulture),
-            Topic = S(r, 2),
-            AttendeeFencerIds = S(r, 3).Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
-        }).ToList();
+            var id = S(r, 0);
+            // Skip blank / cleared rows so deletes look like deletes on the next read.
+            if (string.IsNullOrWhiteSpace(id)) continue;
+
+            list.Add(new TrainingSession
+            {
+                Id = id,
+                Date = DateTime.Parse(S(r, 1), CultureInfo.InvariantCulture),
+                Topic = S(r, 2),
+                AttendeeFencerIds = S(r, 3).Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
+            });
+        }
+        return list;
     }
 
     public Task UpsertTrainingAsync(TrainingSession t) =>
@@ -130,6 +139,26 @@ public class GoogleSheetsService : IGoogleSheetsService
             t.Topic,
             string.Join(",", t.AttendeeFencerIds)
         });
+
+    public async Task DeleteTrainingAsync(string trainingId)
+    {
+        if (string.IsNullOrWhiteSpace(trainingId)) return;
+
+        var rows = await ReadAsync("Trainings!A2:D");
+        var svc = await GetServiceAsync();
+
+        // Clearing a row leaves a blank line in the sheet, which is harmless
+        // because GetTrainingsAsync now skips rows with no Id. This avoids
+        // needing the numeric sheetId required for a true row-delete batch op.
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (S(rows[i], 0) != trainingId) continue;
+
+            var range = $"Trainings!A{i + 2}:D{i + 2}";
+            await svc.Spreadsheets.Values.Clear(new Google.Apis.Sheets.v4.Data.ClearValuesRequest(),
+                                                _spreadsheetId, range).ExecuteAsync();
+        }
+    }
 
     // --- Payments ---
     public async Task<List<Payment>> GetPaymentsAsync(int year, int month)
@@ -254,6 +283,82 @@ public class GoogleSheetsService : IGoogleSheetsService
             await UpdateAsync($"IndividualLessons!A{rowIndex + 2}:I{rowIndex + 2}", values);
         else
             await AppendAsync("IndividualLessons!A:I", values);
+    }
+
+    // --- Recurring trainings ---
+    // Columns: A=Id, B=DayOfWeek, C=TimeOfDay, D=Topic,
+    //          E=StartDate, F=EndDate, G=CreatedByFencerId
+    public async Task<List<RecurringTrainingRule>> GetRecurringTrainingsAsync()
+    {
+        var rows = await ReadAsync("RecurringTrainings!A2:G");
+        var list = new List<RecurringTrainingRule>();
+        foreach (var r in rows)
+        {
+            var id = S(r, 0);
+            if (string.IsNullOrWhiteSpace(id)) continue;
+
+            if (!Enum.TryParse<DayOfWeek>(S(r, 1), true, out var dow)) continue;
+            if (!TimeSpan.TryParse(S(r, 2), CultureInfo.InvariantCulture, out var tod)) tod = TimeSpan.Zero;
+            if (!DateTime.TryParse(S(r, 4), CultureInfo.InvariantCulture,
+                                   DateTimeStyles.RoundtripKind, out var start)) start = DateTime.Today;
+
+            DateTime? end = null;
+            var endStr = S(r, 5);
+            if (!string.IsNullOrWhiteSpace(endStr) &&
+                DateTime.TryParse(endStr, CultureInfo.InvariantCulture,
+                                  DateTimeStyles.RoundtripKind, out var e))
+                end = e;
+
+            list.Add(new RecurringTrainingRule
+            {
+                Id = id,
+                DayOfWeek = dow,
+                TimeOfDay = tod,
+                Topic = S(r, 3),
+                StartDate = start,
+                EndDate = end,
+                CreatedByFencerId = S(r, 6)
+            });
+        }
+        return list;
+    }
+
+    public async Task UpsertRecurringTrainingAsync(RecurringTrainingRule rule)
+    {
+        var rows = await ReadAsync("RecurringTrainings!A2:G");
+        int rowIndex = -1;
+        for (int i = 0; i < rows.Count; i++)
+            if (S(rows[i], 0) == rule.Id) { rowIndex = i; break; }
+
+        var values = new List<object>
+        {
+            rule.Id,
+            rule.DayOfWeek.ToString(),
+            rule.TimeOfDay.ToString(@"hh\:mm", CultureInfo.InvariantCulture),
+            rule.Topic ?? "",
+            rule.StartDate.ToString("o", CultureInfo.InvariantCulture),
+            rule.EndDate?.ToString("o", CultureInfo.InvariantCulture) ?? "",
+            rule.CreatedByFencerId ?? ""
+        };
+
+        if (rowIndex >= 0)
+            await UpdateAsync($"RecurringTrainings!A{rowIndex + 2}:G{rowIndex + 2}", values);
+        else
+            await AppendAsync("RecurringTrainings!A:G", values);
+    }
+
+    public async Task DeleteRecurringTrainingAsync(string ruleId)
+    {
+        var rows = await ReadAsync("RecurringTrainings!A2:G");
+        int rowIndex = -1;
+        for (int i = 0; i < rows.Count; i++)
+            if (S(rows[i], 0) == ruleId) { rowIndex = i; break; }
+        if (rowIndex < 0) return;
+
+        // Blank the row so subsequent reads ignore it (GetRecurringTrainingsAsync
+        // already skips rows whose Id column is empty).
+        var blanks = new List<object> { "", "", "", "", "", "", "" };
+        await UpdateAsync($"RecurringTrainings!A{rowIndex + 2}:G{rowIndex + 2}", blanks);
     }
 
     private static string S(IList<object> row, int i) =>

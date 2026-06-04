@@ -16,7 +16,7 @@
                        HorizontalOptions="Fill"
                        VerticalOptions="Fill" />
                 <!-- Wine tint for legibility -->
-                <BoxView Color="{StaticResource Wine}" Opacity="0.20"
+                <BoxView Color="{StaticResource Wine}" Opacity="0.10"
                          HorizontalOptions="Fill" VerticalOptions="Fill" />
                 <!-- Foreground content -->
                 <VerticalStackLayout Spacing="6" Padding="20,28,20,24"
