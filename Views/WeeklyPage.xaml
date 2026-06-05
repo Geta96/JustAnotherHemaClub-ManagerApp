@@ -16,20 +16,16 @@
                             BackgroundColor="{StaticResource CreamSoft}"
                             Stroke="{StaticResource Wine}" StrokeThickness="1"
                             StrokeShape="RoundRectangle 10"
-                            Padding="14,6"
+                            Padding="10,6"
                             HorizontalOptions="End">
                         <Border.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OnRefreshTapped" />
                         </Border.GestureRecognizers>
-                        <Label VerticalOptions="Center"
-                               TextColor="{StaticResource Wine}">
-                            <Label.FormattedText>
-                                <FormattedString>
-                                    <Span Text="↻ " FontSize="22" FontAttributes="Bold"
-                                          TextColor="{StaticResource Wine}" />
-                                </FormattedString>
-                            </Label.FormattedText>
-                        </Label>
+                        <Label Text="↻"
+                               FontSize="22" FontAttributes="Bold"
+                               TextColor="{StaticResource Wine}"
+                               VerticalOptions="Center"
+                               HorizontalOptions="Center" />
                     </Border>
                 </Grid>
 
