@@ -178,13 +178,15 @@ public partial class FencersViewModel : ObservableObject
         }
         else
         {
+            // Compact stat-sheet format: "1.5 avg · 2 mo"
             var avg = perMonth.Average(x => x.Count);
-            averageAttendanceText = $"{avg:0.0} / month over {perMonth.Count} active month(s)";
+            averageAttendanceText = $"{avg:0.0} avg · {perMonth.Count} mo";
 
+            // Compact "most" format: "2 in Jun 2026"
             var top = perMonth.OrderByDescending(x => x.Count).First();
             var topLabel = new DateTime(top.Year, top.Month, 1)
                 .ToString("MMM yyyy", CultureInfo.InvariantCulture);
-            mostAttendanceText = $"{top.Count} session(s) in {topLabel}";
+            mostAttendanceText = $"{top.Count} in {topLabel}";
         }
 
         // 1 on 1 lessons (only counts accepted lessons; pending/rejected don't count).

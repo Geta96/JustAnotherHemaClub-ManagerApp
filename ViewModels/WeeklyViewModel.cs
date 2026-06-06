@@ -113,6 +113,7 @@ public partial class WeeklyViewModel : ObservableObject
         if (row is null || !row.IsDirty || !IsLoggedInInstructor) return;
         await _sheets.UpsertRecurringTrainingAsync(row.ToUpdatedRule());
         row.IsDirty = false;
+        row.IsExpanded = false;
     }
 
     [RelayCommand]

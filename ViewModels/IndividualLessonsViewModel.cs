@@ -341,6 +341,7 @@ public partial class IndividualLessonsViewModel : ObservableObject
     {
         if (row is null || !IsInstructor) return;
         await _sheets.UpsertIndividualLessonAsync(row.Lesson);
+        row.IsExpanded = false;
         await ReloadLessonsAsync();
     }
 

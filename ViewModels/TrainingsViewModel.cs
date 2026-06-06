@@ -229,6 +229,7 @@ public partial class TrainingsViewModel : ObservableObject
         var updated = row.ToUpdatedTraining();
         await _sheets.UpsertTrainingAsync(updated);
         row.IsDirty = false;
+        row.IsExpanded = false;
     }
 
     [RelayCommand]
