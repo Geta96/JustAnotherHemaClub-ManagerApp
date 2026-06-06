@@ -1,0 +1,590 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels"
+             xmlns:m="clr-namespace:JustAnotherHemaClub.Models"
+             xmlns:sel="clr-namespace:JustAnotherHemaClub.Selectors"
+             x:Class="JustAnotherHemaClub.Views.TrainingsHubPage"
+             x:DataType="vm:TrainingsHubViewModel"
+             Title="Trainings">
+
+    <ContentPage.Resources>
+
+        <!-- =================== TRAININGS TAB =================== -->
+        <DataTemplate x:Key="TrainingsTabTemplate"
+                      x:DataType="vm:TrainingsViewModel">
+            <ScrollView>
+                <VerticalStackLayout Padding="16,8,16,16" Spacing="14">
+
+                    <Button Text="New Training"
+                            BackgroundColor="#476FB5"
+                            TextColor="{StaticResource Cream}"
+                            IsVisible="{Binding IsLoggedInInstructor}"
+                            Clicked="OnNewTrainingClicked" />
+
+                    <Label Text="Past trainings by month" Style="{StaticResource H1}" />
+
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Months}" Spacing="10">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="vm:PastMonthVm">
+                                <Border Style="{StaticResource Card}">
+                                    <VerticalStackLayout Spacing="10">
+
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8"
+                                              BackgroundColor="Transparent">
+                                            <Grid.GestureRecognizers>
+                                                <TapGestureRecognizer Command="{Binding ToggleExpandedCommand}" />
+                                            </Grid.GestureRecognizers>
+                                            <Label Grid.Column="0" Text="{Binding ExpandGlyph}"
+                                                   FontSize="20" TextColor="{StaticResource Wine}"
+                                                   VerticalOptions="Center" />
+                                            <Label Grid.Column="1" Text="{Binding Title}" Style="{StaticResource H2}"
+                                                   VerticalOptions="Center" />
+                                        </Grid>
+
+                                        <VerticalStackLayout IsVisible="{Binding IsExpanded}" Spacing="10">
+                                            <Editor Placeholder="Optional month description / note"
+                                                    AutoSize="TextChanges"
+                                                    Text="{Binding Note}"
+                                                    IsReadOnly="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=IsLoggedInInstructor, Converter={StaticResource InverseBoolConverter}}" />
+                                            <Button Text="Save note"
+                                                    Style="{StaticResource SecondaryButton}"
+                                                    IsVisible="{Binding IsNoteDirty}"
+                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=SaveMonthNoteCommand}"
+                                                    CommandParameter="{Binding .}" />
+
+                                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Trainings}" Spacing="8">
+                                                <BindableLayout.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:EditableTrainingRow">
+                                                        <Border Style="{StaticResource Card}">
+                                                            <VerticalStackLayout Spacing="8">
+                                                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8"
+                                                                      BackgroundColor="Transparent">
+                                                                    <Grid.GestureRecognizers>
+                                                                        <TapGestureRecognizer Command="{Binding ToggleExpandedCommand}" />
+                                                                    </Grid.GestureRecognizers>
+                                                                    <Label Grid.Column="0"
+                                                                           Text="{Binding ExpandGlyph}"
+                                                                           FontSize="18" FontAttributes="Bold"
+                                                                           TextColor="{StaticResource Wine}"
+                                                                           VerticalOptions="Center" />
+                                                                    <VerticalStackLayout Grid.Column="1" Spacing="0">
+                                                                        <Label Text="{Binding Training.Date, StringFormat='{0:yyyy-MM-dd (ddd)}'}"
+                                                                               FontAttributes="Bold"
+                                                                               TextColor="{StaticResource Wine}" />
+                                                                        <Label Text="{Binding Topic}"
+                                                                               Style="{StaticResource Caption}"
+                                                                               LineBreakMode="TailTruncation" />
+                                                                    </VerticalStackLayout>
+                                                                    <HorizontalStackLayout Grid.Column="2" Spacing="6" VerticalOptions="Center"
+                                                                                           IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=IsLoggedInRegularFencer}">
+                                                                        <Button Text="Attend"
+                                                                                BackgroundColor="#476FB5"
+                                                                                TextColor="{StaticResource Cream}"
+                                                                                HeightRequest="36" Padding="12,0"
+                                                                                IsVisible="{Binding CanCurrentUserAttend}"
+                                                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=AttendTrainingCommand}"
+                                                                                CommandParameter="{Binding .}" />
+                                                                        <Label Text="✓"
+                                                                               TextColor="#1F8A2E"
+                                                                               FontAttributes="Bold" FontSize="18"
+                                                                               VerticalOptions="Center"
+                                                                               IsVisible="{Binding CurrentUserAttending}" />
+                                                                    </HorizontalStackLayout>
+                                                                </Grid>
+
+                                                                <VerticalStackLayout IsVisible="{Binding IsExpanded}" Spacing="8">
+
+                                                                    <Entry Placeholder="Description" Text="{Binding Topic}"
+                                                                           IsReadOnly="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=IsLoggedInInstructor, Converter={StaticResource InverseBoolConverter}}" />
+
+                                                                    <VerticalStackLayout Spacing="6"
+                                                                                         IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=IsLoggedInInstructor}">
+                                                                        <Label Text="Attendees" Style="{StaticResource Caption}" />
+                                                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Fencers}">
+                                                                            <BindableLayout.ItemTemplate>
+                                                                                <DataTemplate x:DataType="vm:FencerToggle">
+                                                                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Padding="0,2">
+                                                                                        <Grid.GestureRecognizers>
+                                                                                            <TapGestureRecognizer Tapped="OnAttendeeRowTapped" />
+                                                                                        </Grid.GestureRecognizers>
+                                                                                        <CheckBox Grid.Column="0" IsChecked="{Binding IsAttending}" />
+                                                                                        <Label   Grid.Column="1" Text="{Binding Fencer.Name}"
+                                                                                                 VerticalOptions="Center" />
+                                                                                    </Grid>
+                                                                                </DataTemplate>
+                                                                            </BindableLayout.ItemTemplate>
+                                                                        </VerticalStackLayout>
+                                                                    </VerticalStackLayout>
+
+                                                                    <HorizontalStackLayout Spacing="10" VerticalOptions="Center"
+                                                                                           IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=IsLoggedInRegularFencer}">
+                                                                        <Button Text="Attend Training"
+                                                                                BackgroundColor="#476FB5"
+                                                                                TextColor="{StaticResource Cream}"
+                                                                                IsVisible="{Binding CanCurrentUserAttend}"
+                                                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=AttendTrainingCommand}"
+                                                                                CommandParameter="{Binding .}" />
+                                                                        <Label Text="✓ Attended"
+                                                                               TextColor="#1F8A2E"
+                                                                               FontAttributes="Bold" FontSize="16"
+                                                                               VerticalOptions="Center"
+                                                                               IsVisible="{Binding CurrentUserAttending}" />
+                                                                    </HorizontalStackLayout>
+
+                                                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10"
+                                                                          IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=IsLoggedInInstructor}">
+                                                                        <Button Grid.Column="0"
+                                                                                Text="Delete"
+                                                                                BackgroundColor="{StaticResource DangerRed}"
+                                                                                TextColor="{StaticResource Cream}"
+                                                                                Clicked="OnDeleteTrainingClicked" />
+                                                                        <Button Grid.Column="1"
+                                                                                Text="Save"
+                                                                                BackgroundColor="#476FB5"
+                                                                                TextColor="{StaticResource Cream}"
+                                                                                IsEnabled="{Binding IsDirty}"
+                                                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=SaveTrainingEditCommand}"
+                                                                                CommandParameter="{Binding .}" />
+                                                                    </Grid>
+                                                                </VerticalStackLayout>
+                                                            </VerticalStackLayout>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </BindableLayout.ItemTemplate>
+                                            </VerticalStackLayout>
+                                        </VerticalStackLayout>
+
+                                    </VerticalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+
+                </VerticalStackLayout>
+            </ScrollView>
+        </DataTemplate>
+
+        <!-- =================== WEEKLY TAB =================== -->
+        <DataTemplate x:Key="WeeklyTabTemplate"
+                      x:DataType="vm:WeeklyViewModel">
+            <ScrollView>
+                <VerticalStackLayout Padding="16,8,16,16" Spacing="14">
+
+                    <Label Text="Weekly trainings" Style="{StaticResource H1}" />
+
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rules}" Spacing="10">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="vm:WeeklyRuleRow">
+                                <Border Style="{StaticResource Card}">
+                                    <VerticalStackLayout Spacing="8">
+
+                                        <!-- Tappable header: glyph on the left, day name + summary stacked vertically -->
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10"
+                                              BackgroundColor="Transparent">
+                                            <Grid.GestureRecognizers>
+                                                <TapGestureRecognizer Command="{Binding ToggleExpandedCommand}" />
+                                            </Grid.GestureRecognizers>
+                                            <Label Grid.Column="0" Text="{Binding ExpandGlyph}"
+                                                   FontSize="20" FontAttributes="Bold"
+                                                   TextColor="{StaticResource Wine}"
+                                                   VerticalOptions="Center"
+                                                   IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:WeeklyViewModel}}, Path=IsLoggedInInstructor}" />
+                                            <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                                <Label Text="{Binding DayName}"
+                                                       FontAttributes="Bold"
+                                                       FontSize="18"
+                                                       TextColor="{StaticResource Wine}" />
+                                                <Label Text="{Binding Summary}"
+                                                       Style="{StaticResource Caption}"
+                                                       LineBreakMode="TailTruncation" />
+                                            </VerticalStackLayout>
+                                        </Grid>
+
+                                        <!-- Non-instructor: read-only topic line, always visible -->
+                                        <Label Text="{Binding Topic, StringFormat='Topic: {0}'}"
+                                               IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:WeeklyViewModel}}, Path=IsNotLoggedInInstructor}" />
+
+                                        <!-- Instructor: full editor, only when expanded -->
+                                        <VerticalStackLayout Spacing="6"
+                                                             IsVisible="{Binding IsExpanded}">
+                                            <VerticalStackLayout Spacing="6"
+                                                                 IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:WeeklyViewModel}}, Path=IsLoggedInInstructor}">
+                                                <Label Text="Topic" Style="{StaticResource Caption}" />
+                                                <Entry Text="{Binding Topic}" />
+
+                                                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
+                                                    <VerticalStackLayout Grid.Column="0" Spacing="4">
+                                                        <Label Text="Start" Style="{StaticResource Caption}" />
+                                                        <TimePicker Time="{Binding TimeOfDay}" />
+                                                    </VerticalStackLayout>
+                                                    <VerticalStackLayout Grid.Column="1" Spacing="4">
+                                                        <Label Text="End" Style="{StaticResource Caption}" />
+                                                        <TimePicker Time="{Binding EndTimeOfDay}" />
+                                                    </VerticalStackLayout>
+                                                    <VerticalStackLayout Grid.Column="2" Spacing="4">
+                                                        <Label Text="Starts on" Style="{StaticResource Caption}" />
+                                                        <DatePicker Date="{Binding StartDate}" />
+                                                    </VerticalStackLayout>
+                                                </Grid>
+
+                                                <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
+                                                    <CheckBox IsChecked="{Binding HasEndDate}" />
+                                                    <Label Text="Has end date" VerticalOptions="Center" />
+                                                </HorizontalStackLayout>
+                                                <DatePicker Date="{Binding EndDate}"
+                                                            IsVisible="{Binding HasEndDate}" />
+
+                                                <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                                    <Button Grid.Column="0" Text="Delete"
+                                                            BackgroundColor="{StaticResource DangerRed}"
+                                                            TextColor="{StaticResource Cream}"
+                                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WeeklyViewModel}}, Path=DeleteRuleCommand}"
+                                                            CommandParameter="{Binding .}" />
+                                                    <Button Grid.Column="1" Text="Save changes"
+                                                            BackgroundColor="#476FB5"
+                                                            TextColor="{StaticResource Cream}"
+                                                            IsVisible="{Binding IsDirty}"
+                                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:WeeklyViewModel}}, Path=SaveRuleCommand}"
+                                                            CommandParameter="{Binding .}" />
+                                                </Grid>
+                                            </VerticalStackLayout>
+                                        </VerticalStackLayout>
+                                    </VerticalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+
+                    <Button Text="Add Weekly Training"
+                            BackgroundColor="#476FB5"
+                            TextColor="{StaticResource Cream}"
+                            IsVisible="{Binding IsLoggedInInstructor}"
+                            Clicked="OnAddWeeklyTrainingClicked" />
+
+                    <Label Text="No recurring trainings yet."
+                           Style="{StaticResource Caption}"
+                           HorizontalOptions="Center"
+                           IsVisible="{Binding HasNoRules}" />
+
+                </VerticalStackLayout>
+            </ScrollView>
+        </DataTemplate>
+
+        <!-- =================== 1 ON 1 TAB =================== -->
+        <DataTemplate x:Key="LessonsTabTemplate"
+                      x:DataType="vm:IndividualLessonsViewModel">
+            <ScrollView>
+                <VerticalStackLayout Padding="16,8,16,16" Spacing="14">
+
+                    <Border Style="{StaticResource Card}" IsVisible="{Binding IsInstructor}">
+                        <VerticalStackLayout Spacing="8">
+                            <Grid ColumnDefinitions="*,Auto" VerticalOptions="Center">
+                                <Label Grid.Column="0" Text="Filters" Style="{StaticResource H2}"
+                                       VerticalOptions="Center" />
+                                <Button Grid.Column="1" Text="Clear"
+                                        BackgroundColor="{StaticResource Wine}"
+                                        TextColor="{StaticResource Cream}"
+                                        HeightRequest="36"
+                                        Padding="14,0"
+                                        Command="{Binding ClearFiltersCommand}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10" RowDefinitions="Auto,Auto" RowSpacing="6">
+                                <Label Grid.Row="0" Grid.Column="0" Text="Student" Style="{StaticResource Caption}" />
+                                <Label Grid.Row="0" Grid.Column="1" Text="Instructor" Style="{StaticResource Caption}" />
+                                <Picker Grid.Row="1" Grid.Column="0"
+                                        Title="(all)"
+                                        ItemsSource="{Binding FilterStudents}"
+                                        ItemDisplayBinding="{Binding Name}"
+                                        SelectedItem="{Binding FilterStudent}" />
+                                <Picker Grid.Row="1" Grid.Column="1"
+                                        Title="(all)"
+                                        ItemsSource="{Binding Instructors}"
+                                        ItemDisplayBinding="{Binding Name}"
+                                        SelectedItem="{Binding FilterInstructor}" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10"
+                          IsVisible="{Binding IsInstructor}">
+                        <Button Grid.Column="0"
+                                Text="Request 1 on 1 Lesson"
+                                BackgroundColor="#476FB5"
+                                TextColor="{StaticResource Cream}"
+                                Command="{Binding ShowRequestLessonFormCommand}" />
+                        <Button Grid.Column="1"
+                                Text="Add as Instructor"
+                                BackgroundColor="#476FB5"
+                                TextColor="{StaticResource Cream}"
+                                Command="{Binding ShowAddLessonFormCommand}" />
+                    </Grid>
+                    <Button Text="Request a 1 on 1 Lesson"
+                            BackgroundColor="#476FB5"
+                            TextColor="{StaticResource Cream}"
+                            IsVisible="{Binding IsStudentViewer}"
+                            Command="{Binding ShowFormCommand}" />
+
+                    <Border Style="{StaticResource Card}" IsVisible="{Binding IsFormVisible}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="New Lesson" Style="{StaticResource H2}" />
+
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                <DatePicker Grid.Column="0" Date="{Binding NewDate}" />
+                                <TimePicker Grid.Column="1" Time="{Binding NewTime}" />
+                            </Grid>
+
+                            <VerticalStackLayout Spacing="6" IsVisible="{Binding IsInstructorAddMode}">
+                                <Label Text="Student" Style="{StaticResource Caption}" />
+                                <Picker Title="Select student"
+                                        ItemsSource="{Binding Students}"
+                                        ItemDisplayBinding="{Binding Name}"
+                                        SelectedItem="{Binding NewStudent}" />
+                                <Label Text="Instructor" Style="{StaticResource Caption}" />
+                                <Picker Title="Select instructor"
+                                        ItemsSource="{Binding Instructors}"
+                                        ItemDisplayBinding="{Binding Name}"
+                                        SelectedItem="{Binding NewInstructor}" />
+                            </VerticalStackLayout>
+
+                            <VerticalStackLayout Spacing="6" IsVisible="{Binding ShowRequestPickerSection}">
+                                <Label Text="Request from instructor(s)" Style="{StaticResource Caption}" />
+                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding RequestTargets}">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:FencerToggle">
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Padding="0,2">
+                                                <CheckBox Grid.Column="0" IsChecked="{Binding IsAttending}" />
+                                                <Label   Grid.Column="1" Text="{Binding Fencer.Name}"
+                                                         VerticalOptions="Center" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
+                            </VerticalStackLayout>
+
+                            <Entry Placeholder="Topic" Text="{Binding NewTopic}" />
+
+                            <VerticalStackLayout Spacing="6" IsVisible="{Binding IsInstructorAddMode}">
+                                <Label Text="Notes (hidden from students)" Style="{StaticResource Caption}" />
+                                <Editor Placeholder="Observations, experience, things to work on"
+                                        AutoSize="TextChanges"
+                                        Text="{Binding NewNotes}" />
+                                <Label Text="Next session idea (hidden from students)" Style="{StaticResource Caption}" />
+                                <Editor Placeholder="Plan for the next lesson"
+                                        AutoSize="TextChanges"
+                                        Text="{Binding NewNextIdea}" />
+                            </VerticalStackLayout>
+
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                <Button Grid.Column="0" Text="Cancel"
+                                        BackgroundColor="{StaticResource Wine}"
+                                        TextColor="{StaticResource Cream}"
+                                        Command="{Binding HideFormCommand}" />
+                                <Button Grid.Column="1" Text="Save"
+                                        BackgroundColor="#476FB5"
+                                        TextColor="{StaticResource Cream}"
+                                        Command="{Binding SubmitFormCommand}" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Lessons}" Spacing="10">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="vm:IndividualLessonRowVm">
+                                <Border Style="{StaticResource Card}">
+                                    <VerticalStackLayout Spacing="8">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8"
+                                              BackgroundColor="Transparent">
+                                            <Grid.GestureRecognizers>
+                                                <TapGestureRecognizer Command="{Binding ToggleExpandedCommand}" />
+                                            </Grid.GestureRecognizers>
+
+                                            <Label Grid.Column="0"
+                                                   Text="{Binding ExpandGlyph}"
+                                                   FontSize="18" FontAttributes="Bold"
+                                                   TextColor="{StaticResource Wine}"
+                                                   VerticalOptions="Center" />
+
+                                            <VerticalStackLayout Grid.Column="1" Spacing="0">
+                                                <Label Text="{Binding DateText}"
+                                                       FontAttributes="Bold"
+                                                       TextColor="{StaticResource Wine}" />
+                                                <Label Style="{StaticResource Caption}"
+                                                       LineBreakMode="TailTruncation">
+                                                    <Label.FormattedText>
+                                                        <FormattedString>
+                                                            <Span Text="{Binding StudentName}" />
+                                                            <Span Text=" • " />
+                                                            <Span Text="{Binding InstructorName}" />
+                                                            <Span Text=" — " />
+                                                            <Span Text="{Binding TopicPreview}" />
+                                                        </FormattedString>
+                                                    </Label.FormattedText>
+                                                </Label>
+                                            </VerticalStackLayout>
+
+                                            <Label Grid.Column="2"
+                                                   Text="Pending"
+                                                   FontAttributes="Bold"
+                                                   TextColor="#B8860B"
+                                                   VerticalOptions="Center"
+                                                   IsVisible="{Binding IsPending}" />
+                                        </Grid>
+
+                                        <VerticalStackLayout IsVisible="{Binding IsExpanded}" Spacing="8">
+                                            <Label>
+                                                <Label.FormattedText>
+                                                    <FormattedString>
+                                                        <Span Text="Student: " FontAttributes="Bold" />
+                                                        <Span Text="{Binding StudentName}" />
+                                                    </FormattedString>
+                                                </Label.FormattedText>
+                                            </Label>
+                                            <Label>
+                                                <Label.FormattedText>
+                                                    <FormattedString>
+                                                        <Span Text="Instructor: " FontAttributes="Bold" />
+                                                        <Span Text="{Binding InstructorName}" />
+                                                    </FormattedString>
+                                                </Label.FormattedText>
+                                            </Label>
+
+                                            <Label Text="{Binding Lesson.Topic, StringFormat='Topic: {0}'}" />
+
+                                            <VerticalStackLayout Spacing="6" IsVisible="{Binding ShowPrivateFields}">
+                                                <Label Text="Notes (hidden from students)" Style="{StaticResource Caption}" />
+                                                <Editor AutoSize="TextChanges"
+                                                        Text="{Binding Lesson.Notes}" />
+                                                <Label Text="Next session idea (hidden from students)" Style="{StaticResource Caption}" />
+                                                <Editor AutoSize="TextChanges"
+                                                        Text="{Binding Lesson.NextIdea}" />
+                                            </VerticalStackLayout>
+
+                                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10"
+                                                  IsVisible="{Binding IsCurrentUserTargetedInstructor}">
+                                                <Button Grid.Column="0" Text="Reject"
+                                                        BackgroundColor="{StaticResource DangerRed}"
+                                                        TextColor="{StaticResource Cream}"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:IndividualLessonsViewModel}}, Path=RejectRequestCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                                <Button Grid.Column="1" Text="Accept"
+                                                        BackgroundColor="#1F8A2E"
+                                                        TextColor="{StaticResource Cream}"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:IndividualLessonsViewModel}}, Path=AcceptRequestCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                            </Grid>
+
+                                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10"
+                                                  IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:IndividualLessonsViewModel}}, Path=IsInstructor}">
+                                                <Button Grid.Column="0"
+                                                        Text="Delete"
+                                                        BackgroundColor="{StaticResource DangerRed}"
+                                                        TextColor="{StaticResource Cream}"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:IndividualLessonsViewModel}}, Path=DeleteLessonCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                                <Button Grid.Column="1"
+                                                        Text="Save"
+                                                        BackgroundColor="#476FB5"
+                                                        TextColor="{StaticResource Cream}"
+                                                        IsVisible="{Binding IsAccepted}"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:IndividualLessonsViewModel}}, Path=SaveLessonCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                            </Grid>
+                                        </VerticalStackLayout>
+                                    </VerticalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+
+                </VerticalStackLayout>
+            </ScrollView>
+        </DataTemplate>
+
+        <sel:TrainingsHubTabTemplateSelector x:Key="TabSelector"
+                                             TrainingsTemplate="{StaticResource TrainingsTabTemplate}"
+                                             WeeklyTemplate="{StaticResource WeeklyTabTemplate}"
+                                             LessonsTemplate="{StaticResource LessonsTabTemplate}" />
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,*">
+
+        <!-- Title + refresh -->
+        <Grid Grid.Row="0" Padding="16,16,16,0"
+              ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalOptions="Center">
+            <Label Grid.Column="0" Text="Trainings" Style="{StaticResource H1}"
+                   VerticalOptions="Center" />
+            <Border Grid.Column="1"
+                    BackgroundColor="{StaticResource CreamSoft}"
+                    Stroke="{StaticResource Wine}" StrokeThickness="1"
+                    StrokeShape="RoundRectangle 10"
+                    Padding="10,6"
+                    HorizontalOptions="End">
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnRefreshTapped" />
+                </Border.GestureRecognizers>
+                <Label Text="↻"
+                       FontSize="22" FontAttributes="Bold"
+                       TextColor="{StaticResource Wine}"
+                       VerticalOptions="Center"
+                       HorizontalOptions="Center" />
+            </Border>
+        </Grid>
+
+        <!-- Tab buttons -->
+        <Grid Grid.Row="1" Padding="16,8" ColumnDefinitions="*,*,*" ColumnSpacing="6">
+            <Button Grid.Column="0" Text="Trainings"
+                    Command="{Binding ShowTrainingsTabCommand}"
+                    BackgroundColor="{StaticResource CreamSoft}"
+                    TextColor="{StaticResource Wine}">
+                <Button.Triggers>
+                    <DataTrigger TargetType="Button" Binding="{Binding IsTrainingsTab}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Wine}" />
+                        <Setter Property="TextColor" Value="{StaticResource Cream}" />
+                    </DataTrigger>
+                </Button.Triggers>
+            </Button>
+            <Button Grid.Column="1" Text="Weekly"
+                    Command="{Binding ShowWeeklyTabCommand}"
+                    BackgroundColor="{StaticResource CreamSoft}"
+                    TextColor="{StaticResource Wine}">
+                <Button.Triggers>
+                    <DataTrigger TargetType="Button" Binding="{Binding IsWeeklyTab}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Wine}" />
+                        <Setter Property="TextColor" Value="{StaticResource Cream}" />
+                    </DataTrigger>
+                </Button.Triggers>
+            </Button>
+            <Button Grid.Column="2" Text="1 on 1"
+                    Command="{Binding ShowLessonsTabCommand}"
+                    BackgroundColor="{StaticResource CreamSoft}"
+                    TextColor="{StaticResource Wine}">
+                <Button.Triggers>
+                    <DataTrigger TargetType="Button" Binding="{Binding IsLessonsTab}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Wine}" />
+                        <Setter Property="TextColor" Value="{StaticResource Cream}" />
+                    </DataTrigger>
+                </Button.Triggers>
+            </Button>
+        </Grid>
+
+        <!-- Swipeable tab content -->
+        <CarouselView Grid.Row="2"
+                      ItemsSource="{Binding Tabs}"
+                      Position="{Binding SelectedTabIndex, Mode=TwoWay}"
+                      Loop="False"
+                      IsSwipeEnabled="True"
+                      ItemTemplate="{StaticResource TabSelector}"
+                      IsVisible="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}" />
+
+        <!-- Loading overlay -->
+        <VerticalStackLayout Grid.RowSpan="3"
+                             HorizontalOptions="Center" VerticalOptions="Center" Spacing="8"
+                             IsVisible="{Binding IsLoading}">
+            <ActivityIndicator IsRunning="{Binding IsLoading}"
+                               Color="{StaticResource Wine}"
+                               WidthRequest="48" HeightRequest="48" />
+            <Label Text="Loading..." TextColor="{StaticResource Wine}" FontAttributes="Bold" />
+        </VerticalStackLayout>
+    </Grid>
+</ContentPage>

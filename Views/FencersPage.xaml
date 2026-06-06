@@ -50,8 +50,9 @@
                             StrokeShape="RoundRectangle 14"
                             Padding="0">
                         <VerticalStackLayout BindingContext="{Binding SelectedDetails}"
-                                             x:DataType="vm:FencerDetailsVm" Spacing="0">
+                                             x:DataType="vm:FencerDetailsVm" Spacing="14">
 
+                            <!-- Wine header strip: avatar + name + handle -->
                             <Grid BackgroundColor="{StaticResource Wine}" Padding="16,14"
                                   ColumnDefinitions="Auto,*" ColumnSpacing="14">
 
@@ -61,16 +62,18 @@
                                         StrokeThickness="0"
                                         WidthRequest="56" HeightRequest="56"
                                         VerticalOptions="Center">
-                                    <Label Text="{Binding Name}"
+                                    <Label Text="{Binding Initials}"
                                            FontSize="22" FontAttributes="Bold"
                                            TextColor="{StaticResource Wine}"
-                                           HorizontalOptions="Center" VerticalOptions="Center" />
+                                           HorizontalOptions="Center" VerticalOptions="Center"
+                                           LineBreakMode="NoWrap" />
                                 </Border>
 
                                 <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="2">
                                     <Label Text="{Binding Name}"
                                            FontSize="22" FontAttributes="Bold"
-                                           TextColor="{StaticResource Cream}" />
+                                           TextColor="{StaticResource Cream}"
+                                           LineBreakMode="TailTruncation" />
                                     <Label Text="{Binding Username, StringFormat='@{0}'}"
                                            TextColor="{StaticResource Cream}" Opacity="0.8"
                                            FontAttributes="Italic"
@@ -78,7 +81,8 @@
                                 </VerticalStackLayout>
                             </Grid>
 
-                            <HorizontalStackLayout Padding="16,12,16,0" Spacing="8">
+                            <!-- Role chips -->
+                            <HorizontalStackLayout Padding="16,0,16,0" Spacing="8">
                                 <Border BackgroundColor="#1F8A2E"
                                         StrokeThickness="0" StrokeShape="RoundRectangle 10"
                                         Padding="10,4"
@@ -99,7 +103,8 @@
                                 </Border>
                             </HorizontalStackLayout>
 
-                            <Border Margin="16,12,16,16"
+                            <!-- Instructor-only detail block -->
+                            <Border Margin="16,0,16,0"
                                     BackgroundColor="{StaticResource CreamSoft}"
                                     StrokeThickness="0" StrokeShape="RoundRectangle 10"
                                     Padding="14"
@@ -113,14 +118,19 @@
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
 
-                                    <Label Grid.Row="0" Grid.Column="0" Text="Email" Style="{StaticResource Caption}" />
-                                    <Label Grid.Row="0" Grid.Column="1" Text="{Binding Email}" FontAttributes="Bold" />
+                                    <Label Grid.Row="0" Grid.Column="0" Text="Email" Style="{StaticResource Caption}"
+                                           VerticalOptions="Center" />
+                                    <Label Grid.Row="0" Grid.Column="1" Text="{Binding Email}" FontAttributes="Bold"
+                                           VerticalOptions="Center" LineBreakMode="TailTruncation" />
 
-                                    <Label Grid.Row="1" Grid.Column="0" Text="Username" Style="{StaticResource Caption}" />
-                                    <Label Grid.Row="1" Grid.Column="1" Text="{Binding Username}" />
+                                    <Label Grid.Row="1" Grid.Column="0" Text="Username" Style="{StaticResource Caption}"
+                                           VerticalOptions="Center" />
+                                    <Label Grid.Row="1" Grid.Column="1" Text="{Binding Username}"
+                                           VerticalOptions="Center" />
 
-                                    <Label Grid.Row="2" Grid.Column="0" Text="GDPR" Style="{StaticResource Caption}" />
-                                    <Grid Grid.Row="2" Grid.Column="1" ColumnDefinitions="Auto">
+                                    <Label Grid.Row="2" Grid.Column="0" Text="GDPR" Style="{StaticResource Caption}"
+                                           VerticalOptions="Center" />
+                                    <Grid Grid.Row="2" Grid.Column="1" ColumnDefinitions="Auto" VerticalOptions="Center">
                                         <Label Text="✓" FontSize="20" FontAttributes="Bold"
                                                TextColor="#1F8A2E"
                                                IsVisible="{Binding GdprAccepted}" />
@@ -137,8 +147,9 @@
                                         </Label>
                                     </Grid>
 
-                                    <Label Grid.Row="3" Grid.Column="0" Text="Liability" Style="{StaticResource Caption}" />
-                                    <Grid Grid.Row="3" Grid.Column="1" ColumnDefinitions="Auto">
+                                    <Label Grid.Row="3" Grid.Column="0" Text="Liability" Style="{StaticResource Caption}"
+                                           VerticalOptions="Center" />
+                                    <Grid Grid.Row="3" Grid.Column="1" ColumnDefinitions="Auto" VerticalOptions="Center">
                                         <Label Text="✓" FontSize="20" FontAttributes="Bold"
                                                TextColor="#1F8A2E"
                                                IsVisible="{Binding LiabilityAccepted}" />
@@ -155,7 +166,8 @@
                                         </Label>
                                     </Grid>
 
-                                    <Label Grid.Row="4" Grid.Column="0" Text="Payment" Style="{StaticResource Caption}" />
+                                    <Label Grid.Row="4" Grid.Column="0" Text="Payment" Style="{StaticResource Caption}"
+                                           VerticalOptions="Center" />
                                     <HorizontalStackLayout Grid.Row="4" Grid.Column="1" Spacing="8" VerticalOptions="Center">
                                         <Label Text="✓" FontSize="20" FontAttributes="Bold"
                                                TextColor="#1F8A2E"
@@ -170,67 +182,88 @@
                                 </Grid>
                             </Border>
 
+                            <!-- Activity -->
+                            <Border Margin="16,0,16,0"
+                                    BackgroundColor="{StaticResource CreamSoft}"
+                                    StrokeThickness="0" StrokeShape="RoundRectangle 10"
+                                    Padding="14">
+                                <VerticalStackLayout Spacing="12">
+                                    <Label Text="Activity" Style="{StaticResource H2}" />
+
+                                    <!-- 4-line stat grid (label / value), all vertically centred -->
+                                    <Grid ColumnDefinitions="150,*" RowSpacing="8" ColumnSpacing="10">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+
+                                        <Label Grid.Row="0" Grid.Column="0" Text="Average attendance"
+                                               Style="{StaticResource Caption}" VerticalOptions="Center" />
+                                        <Label Grid.Row="0" Grid.Column="1" Text="{Binding AverageAttendanceText}"
+                                               FontAttributes="Bold" VerticalOptions="Center" />
+
+                                        <Label Grid.Row="1" Grid.Column="0" Text="Most in one month"
+                                               Style="{StaticResource Caption}" VerticalOptions="Center" />
+                                        <Label Grid.Row="1" Grid.Column="1" Text="{Binding MostAttendanceText}"
+                                               FontAttributes="Bold" VerticalOptions="Center" />
+
+                                        <Label Grid.Row="2" Grid.Column="0" Text="1 on 1 received"
+                                               Style="{StaticResource Caption}" VerticalOptions="Center" />
+                                        <Label Grid.Row="2" Grid.Column="1" Text="{Binding OneOnOneReceived}"
+                                               FontAttributes="Bold" VerticalOptions="Center" />
+
+                                        <Label Grid.Row="3" Grid.Column="0" Text="1 on 1 given"
+                                               Style="{StaticResource Caption}" VerticalOptions="Center"
+                                               IsVisible="{Binding ShowOneOnOneGiven}" />
+                                        <Label Grid.Row="3" Grid.Column="1" Text="{Binding OneOnOneGiven}"
+                                               FontAttributes="Bold" VerticalOptions="Center"
+                                               IsVisible="{Binding ShowOneOnOneGiven}" />
+                                    </Grid>
+
+                                    <!-- Active months -->
+                                    <VerticalStackLayout Spacing="2">
+                                        <Label Text="Active months" Style="{StaticResource Caption}" />
+                                        <Label Text="{Binding ActiveMonthsText}" />
+                                    </VerticalStackLayout>
+
+                                    <!-- Recent trainings -->
+                                    <VerticalStackLayout Spacing="6">
+                                        <Label Text="Recent trainings" Style="{StaticResource Caption}" />
+
+                                        <Label Text="No trainings attended yet."
+                                               Style="{StaticResource Caption}"
+                                               IsVisible="{Binding HasRecentSessions, Converter={StaticResource InverseBoolConverter}}" />
+
+                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding RecentSessions}" Spacing="4">
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:FencerSessionRow">
+                                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                                                        <Label Grid.Column="0"
+                                                               Text="{Binding DateText}"
+                                                               FontAttributes="Bold"
+                                                               TextColor="{StaticResource Wine}"
+                                                               VerticalOptions="Center"
+                                                               LineBreakMode="NoWrap" />
+                                                        <Label Grid.Column="1"
+                                                               Text="{Binding Topic}"
+                                                               LineBreakMode="TailTruncation"
+                                                               VerticalOptions="Center" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
+                                        </VerticalStackLayout>
+                                    </VerticalStackLayout>
+                                </VerticalStackLayout>
+                            </Border>
+
+                            <!-- Promote action -->
                             <Button Text="Promote to instructor"
                                     Margin="16,0,16,16"
                                     Style="{StaticResource SecondaryButton}"
                                     Clicked="OnPromoteClicked"
                                     IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FencersViewModel}}, Path=CanPromoteSelected}" />
-                        </VerticalStackLayout>
-                    </Border>
-
-                    <BoxView HeightRequest="1" Color="{StaticResource Muted}" Opacity="0.4" Margin="0,10,0,0"
-                             IsVisible="{Binding IsLoggedInInstructor}" />
-                    <VerticalStackLayout Spacing="2" Padding="0,4,0,0"
-                                         IsVisible="{Binding IsLoggedInInstructor}">
-                        <Label Text="Club-wide compliance" Style="{StaticResource H1}"
-                               TextColor="{StaticResource Wine}" />
-                        <Label Text="These cards summarise all active fencers — not just the selected one."
-                               Style="{StaticResource Caption}" />
-                    </VerticalStackLayout>
-
-                    <Border Style="{StaticResource Card}"
-                            IsVisible="{Binding IsLoggedInInstructor}">
-                        <VerticalStackLayout Spacing="8">
-                            <Grid ColumnDefinitions="*,Auto">
-                                <Label Grid.Column="0" Text="GDPR consent" Style="{StaticResource H2}" />
-                                <Label Grid.Column="1" Text="✓ OK"
-                                       IsVisible="{Binding AllGdprOk}"
-                                       TextColor="#1F8A2E" FontAttributes="Bold" VerticalOptions="Center" />
-                            </Grid>
-                            <Label Text="{Binding GdprSummary}" Style="{StaticResource Caption}" />
-
-                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding MissingGdpr}" Spacing="4">
-                                <BindableLayout.ItemTemplate>
-                                    <DataTemplate x:DataType="m:Fencer">
-                                        <Label Text="{Binding Name}"
-                                               TextColor="{StaticResource DangerRed}"
-                                               FontAttributes="Bold" />
-                                    </DataTemplate>
-                                </BindableLayout.ItemTemplate>
-                            </VerticalStackLayout>
-                        </VerticalStackLayout>
-                    </Border>
-
-                    <Border Style="{StaticResource Card}"
-                            IsVisible="{Binding IsLoggedInInstructor}">
-                        <VerticalStackLayout Spacing="8">
-                            <Grid ColumnDefinitions="*,Auto">
-                                <Label Grid.Column="0" Text="Liability statement" Style="{StaticResource H2}" />
-                                <Label Grid.Column="1" Text="✓ OK"
-                                       IsVisible="{Binding AllLiabilityOk}"
-                                       TextColor="#1F8A2E" FontAttributes="Bold" VerticalOptions="Center" />
-                            </Grid>
-                            <Label Text="{Binding LiabilitySummary}" Style="{StaticResource Caption}" />
-
-                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding MissingLiability}" Spacing="4">
-                                <BindableLayout.ItemTemplate>
-                                    <DataTemplate x:DataType="m:Fencer">
-                                        <Label Text="{Binding Name}"
-                                               TextColor="{StaticResource DangerRed}"
-                                               FontAttributes="Bold" />
-                                    </DataTemplate>
-                                </BindableLayout.ItemTemplate>
-                            </VerticalStackLayout>
                         </VerticalStackLayout>
                     </Border>
 

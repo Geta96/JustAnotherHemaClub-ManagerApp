@@ -3,45 +3,27 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels"
              xmlns:m="clr-namespace:JustAnotherHemaClub.Models"
+             xmlns:sel="clr-namespace:JustAnotherHemaClub.Selectors"
              x:Class="JustAnotherHemaClub.Views.FinancePage"
              x:DataType="vm:FinanceViewModel"
              Title="Finance">
-    <Grid>
-        <ScrollView>
-            <VerticalStackLayout Padding="16" Spacing="14">
 
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalOptions="Center">
-                    <Label Grid.Column="0" Text="Finance by month" Style="{StaticResource H1}"
-                           VerticalOptions="Center" />
-                    <Border Grid.Column="1"
-                            BackgroundColor="{StaticResource CreamSoft}"
-                            Stroke="{StaticResource Wine}" StrokeThickness="1"
-                            StrokeShape="RoundRectangle 10"
-                            Padding="10,6"
-                            HorizontalOptions="End">
-                        <Border.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnRefreshTapped" />
-                        </Border.GestureRecognizers>
-                        <Label Text="↻"
-                               FontSize="22" FontAttributes="Bold"
-                               TextColor="{StaticResource Wine}"
-                               VerticalOptions="Center"
-                               HorizontalOptions="Center" />
-                    </Border>
-                </Grid>
+    <ContentPage.Resources>
 
-                <Label Text="Pricing: 1 session 3 500 · 4 sessions 9 000 · 8 sessions 12 000"
-                       Style="{StaticResource Caption}" />
+        <!-- =================== MONTHLY TAB =================== -->
+        <DataTemplate x:Key="MonthlyTabTemplate"
+                      x:DataType="vm:FinanceTab">
+            <ScrollView>
+                <VerticalStackLayout Padding="16,8,16,16" Spacing="14">
 
-                <VerticalStackLayout Spacing="14"
-                                     IsVisible="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}">
+                    <!-- Personal summary -->
                     <Border Style="{StaticResource Card}"
-                            IsVisible="{Binding ShowPersonalSummary}">
+                            IsVisible="{Binding Vm.ShowPersonalSummary}">
                         <VerticalStackLayout Spacing="6">
                             <Label Text="My payments" Style="{StaticResource H2}" />
 
                             <HorizontalStackLayout Spacing="8" VerticalOptions="Center"
-                                                   IsVisible="{Binding PersonalAllPaid}">
+                                                   IsVisible="{Binding Vm.PersonalAllPaid}">
                                 <Label Text="✓" FontSize="22" FontAttributes="Bold"
                                        TextColor="#1F8A2E" VerticalOptions="Center" />
                                 <Label Text="All payed up. Thank you!"
@@ -53,7 +35,7 @@
                             <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
                                 <HorizontalStackLayout.Triggers>
                                     <DataTrigger TargetType="HorizontalStackLayout"
-                                                 Binding="{Binding PersonalAllPaid}"
+                                                 Binding="{Binding Vm.PersonalAllPaid}"
                                                  Value="True">
                                         <Setter Property="IsVisible" Value="False" />
                                     </DataTrigger>
@@ -61,7 +43,7 @@
                                 <Label Text="✗" FontSize="22" FontAttributes="Bold"
                                        TextColor="{StaticResource DangerRed}"
                                        VerticalOptions="Center" />
-                                <Label Text="{Binding PersonalTotalDue, StringFormat='{0:N0} Ft is due'}"
+                                <Label Text="{Binding Vm.PersonalTotalDue, StringFormat='{0:N0} Ft is due'}"
                                        FontAttributes="Bold"
                                        TextColor="{StaticResource DangerRed}"
                                        VerticalOptions="Center" />
@@ -69,13 +51,14 @@
                         </VerticalStackLayout>
                     </Border>
 
-                    <CollectionView ItemsSource="{Binding Months}">
-                        <CollectionView.ItemTemplate>
+                    <!-- Monthly breakdown (flat) -->
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Vm.Months}" Spacing="10">
+                        <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="vm:MonthFinanceVm">
-                                <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                                <Border Style="{StaticResource Card}">
                                     <VerticalStackLayout Spacing="10">
 
-                                        <!-- Tappable header (always visible) -->
+                                        <!-- Month header -->
                                         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
                                             <Grid.GestureRecognizers>
                                                 <TapGestureRecognizer Command="{Binding ToggleExpandedCommand}" />
@@ -89,10 +72,11 @@
                                             </VerticalStackLayout>
                                         </Grid>
 
-                                        <!-- Collapsible body -->
+                                        <!-- Month body -->
                                         <VerticalStackLayout IsVisible="{Binding IsExpanded}" Spacing="12">
 
                                             <Label Text="Dues" FontAttributes="Bold" TextColor="{StaticResource Wine}" />
+
                                             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Dues}" Spacing="6">
                                                 <BindableLayout.ItemTemplate>
                                                     <DataTemplate x:DataType="vm:FencerDueRow">
@@ -106,8 +90,8 @@
 
                                                                 <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
                                                                         Text="Mark Paid"
-                                                                        IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceViewModel}}, Path=IsLoggedInInstructor}"
-                                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceViewModel}}, Path=MarkPaidCommand}"
+                                                                        IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.IsLoggedInInstructor}"
+                                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.MarkPaidCommand}"
                                                                         CommandParameter="{Binding .}"
                                                                         VerticalOptions="Center">
                                                                     <Button.Triggers>
@@ -125,7 +109,7 @@
                                                                                        IsVisible="{Binding IsNotPaid}">
                                                                     <HorizontalStackLayout.Triggers>
                                                                         <DataTrigger TargetType="HorizontalStackLayout"
-                                                                                     Binding="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceViewModel}}, Path=IsLoggedInInstructor}"
+                                                                                     Binding="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.IsLoggedInInstructor}"
                                                                                      Value="True">
                                                                             <Setter Property="IsVisible" Value="False" />
                                                                         </DataTrigger>
@@ -152,9 +136,10 @@
                                             </VerticalStackLayout>
 
                                             <Label Text="Expenses" FontAttributes="Bold" TextColor="{StaticResource Wine}"
-                                                   IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceViewModel}}, Path=IsLoggedInInstructor}" />
+                                                   IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.IsLoggedInInstructor}" />
+
                                             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Expenses}" Spacing="6"
-                                                                 IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceViewModel}}, Path=IsLoggedInInstructor}">
+                                                                 IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.IsLoggedInInstructor}">
                                                 <BindableLayout.ItemTemplate>
                                                     <DataTemplate x:DataType="m:Expense">
                                                         <Border Style="{StaticResource Card}">
@@ -171,19 +156,15 @@
                                                 </BindableLayout.ItemTemplate>
                                             </VerticalStackLayout>
 
-                                            <!-- Add expense: collapsed by default -->
                                             <Border Style="{StaticResource Card}"
-                                                    IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceViewModel}}, Path=IsLoggedInInstructor}">
+                                                    IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.IsLoggedInInstructor}">
                                                 <VerticalStackLayout Spacing="8">
-
-                                                    <!-- Button (visible when not adding) -->
                                                     <Button Text="Add Expense"
                                                             BackgroundColor="#476FB5"
                                                             TextColor="{StaticResource Cream}"
                                                             IsVisible="{Binding IsAddingExpense, Converter={StaticResource InverseBoolConverter}}"
                                                             Command="{Binding BeginAddExpenseCommand}" />
 
-                                                    <!-- Form (visible while adding) -->
                                                     <VerticalStackLayout Spacing="8" IsVisible="{Binding IsAddingExpense}">
                                                         <Label Text="Add expense" FontAttributes="Bold"
                                                                TextColor="{StaticResource Wine}" />
@@ -199,29 +180,188 @@
                                                             <Button Grid.Column="1" Text="Save"
                                                                     BackgroundColor="#476FB5"
                                                                     TextColor="{StaticResource Cream}"
-                                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceViewModel}}, Path=AddExpenseCommand}"
+                                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.AddExpenseCommand}"
                                                                     CommandParameter="{Binding .}" />
                                                         </Grid>
                                                     </VerticalStackLayout>
-
                                                 </VerticalStackLayout>
                                             </Border>
-
                                         </VerticalStackLayout>
-
                                     </VerticalStackLayout>
                                 </Border>
                             </DataTemplate>
-                        </CollectionView.ItemTemplate>
-                    </CollectionView>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
 
                 </VerticalStackLayout>
+            </ScrollView>
+        </DataTemplate>
 
-            </VerticalStackLayout>
-        </ScrollView>
+        <!-- =================== YEARLY TAB =================== -->
+        <DataTemplate x:Key="YearlyTabTemplate"
+                      x:DataType="vm:FinanceTab">
+            <ScrollView>
+                <VerticalStackLayout Padding="16,8,16,16" Spacing="14">
+                    <Border Style="{StaticResource Card}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="{Binding Vm.Year, StringFormat='{0}'}" Style="{StaticResource H2}" />
+                            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="6">
+                                <VerticalStackLayout Grid.Row="0" Grid.Column="0">
+                                    <Label Text="Income" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding Vm.YearIncome, StringFormat='{0:N0}'}"
+                                           FontSize="18" FontAttributes="Bold" TextColor="{StaticResource Slate}" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Row="0" Grid.Column="1">
+                                    <Label Text="Expenses" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding Vm.YearExpenses, StringFormat='{0:N0}'}"
+                                           FontSize="18" FontAttributes="Bold" TextColor="{StaticResource Wine}" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2">
+                                    <Label Text="Balance" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding Vm.YearBalance, StringFormat='{0:N0}'}"
+                                           FontSize="22" FontAttributes="Bold" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Row="2" Grid.Column="0">
+                                    <Label Text="Sessions" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding Vm.YearSessions}" FontAttributes="Bold" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Row="2" Grid.Column="1">
+                                    <Label Text="Avg attendance" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding Vm.YearAvgAttendance, StringFormat='{0:N2}'}" FontAttributes="Bold" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
+            </ScrollView>
+        </DataTemplate>
 
-        <!-- Screen-centred overlay -->
-        <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="8"
+        <!-- =================== ALL TIME TAB =================== -->
+        <DataTemplate x:Key="AllTimeTabTemplate"
+                      x:DataType="vm:FinanceTab">
+            <ScrollView>
+                <VerticalStackLayout Padding="16,8,16,16" Spacing="14">
+                    <Border Style="{StaticResource Card}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="All time" Style="{StaticResource H2}" />
+                            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="6">
+                                <VerticalStackLayout Grid.Row="0" Grid.Column="0">
+                                    <Label Text="Income" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding Vm.AllTimeIncome, StringFormat='{0:N0}'}"
+                                           FontSize="20" FontAttributes="Bold" TextColor="{StaticResource Slate}" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Row="0" Grid.Column="1">
+                                    <Label Text="Expenses" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding Vm.AllTimeExpenses, StringFormat='{0:N0}'}"
+                                           FontSize="20" FontAttributes="Bold" TextColor="{StaticResource Wine}" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2">
+                                    <Label Text="Balance" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding Vm.AllTimeBalance, StringFormat='{0:N0}'}"
+                                           FontSize="26" FontAttributes="Bold" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Row="2" Grid.Column="0">
+                                    <Label Text="Sessions" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding Vm.AllTimeSessions}" FontAttributes="Bold" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Row="2" Grid.Column="1">
+                                    <Label Text="Avg attendance" Style="{StaticResource Caption}" />
+                                    <Label Text="{Binding Vm.AllTimeAvgAttendance, StringFormat='{0:N2}'}" FontAttributes="Bold" />
+                                </VerticalStackLayout>
+                            </Grid>
+                            <Label Text="{Binding Vm.ActiveFencers, StringFormat='Active fencers: {0}'}"
+                                   Style="{StaticResource Caption}" />
+                        </VerticalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
+            </ScrollView>
+        </DataTemplate>
+
+        <sel:FinanceTabTemplateSelector x:Key="TabSelector"
+                                        MonthlyTemplate="{StaticResource MonthlyTabTemplate}"
+                                        YearlyTemplate="{StaticResource YearlyTabTemplate}"
+                                        AllTimeTemplate="{StaticResource AllTimeTabTemplate}" />
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,Auto,*">
+
+        <!-- Title + refresh -->
+        <Grid Grid.Row="0" Padding="16,16,16,0"
+              ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalOptions="Center">
+            <Label Grid.Column="0" Text="Finance" Style="{StaticResource H1}"
+                   VerticalOptions="Center" />
+            <Border Grid.Column="1"
+                    BackgroundColor="{StaticResource CreamSoft}"
+                    Stroke="{StaticResource Wine}" StrokeThickness="1"
+                    StrokeShape="RoundRectangle 10"
+                    Padding="10,6"
+                    HorizontalOptions="End">
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnRefreshTapped" />
+                </Border.GestureRecognizers>
+                <Label Text="↻"
+                       FontSize="22" FontAttributes="Bold"
+                       TextColor="{StaticResource Wine}"
+                       VerticalOptions="Center"
+                       HorizontalOptions="Center" />
+            </Border>
+        </Grid>
+
+        <!-- Pricing -->
+        <Label Grid.Row="1" Padding="16,8,16,0"
+               Text="Pricing: 1 session 3 500 · 4 sessions 9 000 · 8 sessions 12 000"
+               Style="{StaticResource Caption}" />
+
+        <!-- Tab buttons (instructor-only; member sees only the Monthly carousel page) -->
+        <Grid Grid.Row="2" Padding="16,8" ColumnDefinitions="*,*,*" ColumnSpacing="6"
+              IsVisible="{Binding IsLoggedInInstructor}">
+            <Button Grid.Column="0" Text="Monthly"
+                    Command="{Binding ShowMonthlyTabCommand}"
+                    BackgroundColor="{StaticResource CreamSoft}"
+                    TextColor="{StaticResource Wine}">
+                <Button.Triggers>
+                    <DataTrigger TargetType="Button" Binding="{Binding IsMonthlyTab}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Wine}" />
+                        <Setter Property="TextColor" Value="{StaticResource Cream}" />
+                    </DataTrigger>
+                </Button.Triggers>
+            </Button>
+            <Button Grid.Column="1" Text="Yearly"
+                    Command="{Binding ShowYearlyTabCommand}"
+                    BackgroundColor="{StaticResource CreamSoft}"
+                    TextColor="{StaticResource Wine}">
+                <Button.Triggers>
+                    <DataTrigger TargetType="Button" Binding="{Binding IsYearlyTab}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Wine}" />
+                        <Setter Property="TextColor" Value="{StaticResource Cream}" />
+                    </DataTrigger>
+                </Button.Triggers>
+            </Button>
+            <Button Grid.Column="2" Text="All Time"
+                    Command="{Binding ShowAllTimeTabCommand}"
+                    BackgroundColor="{StaticResource CreamSoft}"
+                    TextColor="{StaticResource Wine}">
+                <Button.Triggers>
+                    <DataTrigger TargetType="Button" Binding="{Binding IsAllTimeTab}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Wine}" />
+                        <Setter Property="TextColor" Value="{StaticResource Cream}" />
+                    </DataTrigger>
+                </Button.Triggers>
+            </Button>
+        </Grid>
+
+        <!-- Swipeable tab content -->
+        <CarouselView Grid.Row="3"
+                      ItemsSource="{Binding Tabs}"
+                      Position="{Binding SelectedTabIndex, Mode=TwoWay}"
+                      Loop="False"
+                      IsSwipeEnabled="True"
+                      ItemTemplate="{StaticResource TabSelector}"
+                      IsVisible="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}" />
+
+        <!-- Loading overlay -->
+        <VerticalStackLayout Grid.RowSpan="4"
+                             HorizontalOptions="Center" VerticalOptions="Center" Spacing="8"
                              InputTransparent="False"
                              IsVisible="{Binding IsLoading}">
             <ActivityIndicator IsRunning="{Binding IsLoading}"

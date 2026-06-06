@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JustAnotherHemaClub.Models;
@@ -12,14 +12,19 @@ public partial class WeeklyRuleRow : ObservableObject
 
     [ObservableProperty] private string topic;
     [ObservableProperty] private TimeSpan timeOfDay;
+    [ObservableProperty] private TimeSpan endTimeOfDay;
     [ObservableProperty] private DateTime startDate;
     [ObservableProperty] private bool hasEndDate;
     [ObservableProperty] private DateTime endDate;
     [ObservableProperty] private bool isDirty;
 
+    // Compact-by-default header; expand to edit / read details.
+    [ObservableProperty] private bool isExpanded;
+    public string ExpandGlyph => IsExpanded ? "▾" : "▸";
+
     public string DayName => Rule.DayOfWeek.ToString();
     public string Summary =>
-        $"Every {Rule.DayOfWeek} at {TimeOfDay:hh\\:mm}" +
+        $"Every {Rule.DayOfWeek} {TimeOfDay:hh\\:mm}–{EndTimeOfDay:hh\\:mm}" +
         (HasEndDate ? $" until {EndDate:yyyy-MM-dd}" : "");
 
     public WeeklyRuleRow(RecurringTrainingRule r)
@@ -27,6 +32,9 @@ public partial class WeeklyRuleRow : ObservableObject
         Rule = r;
         topic = r.Topic;
         timeOfDay = r.TimeOfDay;
+        endTimeOfDay = r.EndTimeOfDay == default
+            ? r.TimeOfDay.Add(TimeSpan.FromMinutes(90))
+            : r.EndTimeOfDay;
         startDate = r.StartDate;
         hasEndDate = r.EndDate.HasValue;
         endDate = r.EndDate ?? DateTime.Today.AddMonths(1);
@@ -34,9 +42,14 @@ public partial class WeeklyRuleRow : ObservableObject
 
     partial void OnTopicChanged(string value) { MarkDirty(); }
     partial void OnTimeOfDayChanged(TimeSpan value) { MarkDirty(); RaiseSummary(); }
+    partial void OnEndTimeOfDayChanged(TimeSpan value) { MarkDirty(); RaiseSummary(); }
     partial void OnStartDateChanged(DateTime value) { MarkDirty(); }
     partial void OnHasEndDateChanged(bool value) { MarkDirty(); RaiseSummary(); }
     partial void OnEndDateChanged(DateTime value) { MarkDirty(); RaiseSummary(); }
+    partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(ExpandGlyph));
+
+    [RelayCommand]
+    private void ToggleExpanded() => IsExpanded = !IsExpanded;
 
     private void MarkDirty() => IsDirty = true;
     private void RaiseSummary() => OnPropertyChanged(nameof(Summary));
@@ -45,6 +58,7 @@ public partial class WeeklyRuleRow : ObservableObject
     {
         Rule.Topic = Topic ?? "";
         Rule.TimeOfDay = TimeOfDay;
+        Rule.EndTimeOfDay = EndTimeOfDay;
         Rule.StartDate = StartDate;
         Rule.EndDate = HasEndDate ? EndDate : null;
         return Rule;

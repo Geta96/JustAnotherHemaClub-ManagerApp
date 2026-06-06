@@ -17,9 +17,6 @@ public partial class AppShell : Shell
         UserLabel.Text = _auth.IsGuest
             ? "Signed in as Guest"
             : $"Signed in as {_auth.CurrentFencer?.Name ?? _auth.CurrentFencer?.Username ?? "user"}";
-
-        // Instructor-only flyout entries
-        Shell.SetFlyoutItemIsVisible(StatisticsFlyout, _auth.IsLoggedInInstructor);
     }
 
     private async void OnLogoutClicked(object? sender, EventArgs e)

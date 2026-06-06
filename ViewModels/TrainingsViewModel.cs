@@ -19,6 +19,8 @@ public partial class TrainingsViewModel : ObservableObject
     public ObservableCollection<FencerToggle> FilteredAttendees { get; } = new();
 
     [ObservableProperty] private DateTime trainingDate = DateTime.Today;
+    [ObservableProperty] private TimeSpan trainingTime = new(18, 0, 0);
+    [ObservableProperty] private TimeSpan trainingEndTime = new(20, 0, 0);
     [ObservableProperty] private string topic = "";
     [ObservableProperty] private string attendeeFilter = "";
     [ObservableProperty] private bool isLoading;
@@ -26,6 +28,7 @@ public partial class TrainingsViewModel : ObservableObject
     // --- Recurring training options for the "New training" form ---
     [ObservableProperty] private bool isRecurring;
     [ObservableProperty] private TimeSpan recurringTime = new(18, 0, 0);
+    [ObservableProperty] private TimeSpan recurringEndTime = new(20, 0, 0);
 
     /// <summary>
     /// The form's weekday is derived from the picked TrainingDate, so instructors
@@ -34,7 +37,7 @@ public partial class TrainingsViewModel : ObservableObject
     public DayOfWeek RecurringDayOfWeek => TrainingDate.DayOfWeek;
     public string RecurringSummary =>
         IsRecurring
-            ? $"Repeats every {RecurringDayOfWeek} at {RecurringTime:hh\\:mm}, starting {TrainingDate:yyyy-MM-dd}."
+            ? $"Repeats every {RecurringDayOfWeek} {RecurringTime:hh\\:mm}–{RecurringEndTime:hh\\:mm}, starting {TrainingDate:yyyy-MM-dd}."
             : "";
 
     public int SelectedCount => NewTrainingAttendees.Count(t => t.IsAttending);
@@ -171,10 +174,14 @@ public partial class TrainingsViewModel : ObservableObject
     [RelayCommand]
     public async Task SaveTrainingAsync()
     {
+        var startDate = TrainingDate.Date + TrainingTime;
+        var endDate   = TrainingDate.Date + TrainingEndTime;
+
         var t = new TrainingSession
         {
-            Date = TrainingDate,
-            Topic = Topic,
+            Date    = startDate,
+            EndDate = endDate,
+            Topic   = Topic,
             AttendeeFencerIds = NewTrainingAttendees
                 .Where(x => x.IsAttending)
                 .Select(x => x.Fencer.Id)
@@ -182,19 +189,30 @@ public partial class TrainingsViewModel : ObservableObject
         };
         await _sheets.UpsertTrainingAsync(t);
 
-        // If the instructor ticked "recurring", also persist a weekly rule so the
-        // materializer will create future sessions automatically.
         if (IsRecurring)
         {
-            var rule = new RecurringTrainingRule
+            try
             {
-                DayOfWeek          = TrainingDate.DayOfWeek,
-                TimeOfDay          = RecurringTime,
-                Topic              = Topic,
-                StartDate          = TrainingDate.Date.AddDays(7), // first auto-created session is next week
-                CreatedByFencerId  = _auth.CurrentFencer?.Id ?? ""
-            };
-            await _sheets.UpsertRecurringTrainingAsync(rule);
+                var rule = new RecurringTrainingRule
+                {
+                    DayOfWeek          = TrainingDate.DayOfWeek,
+                    TimeOfDay          = RecurringTime,
+                    EndTimeOfDay       = RecurringEndTime,
+                    Topic              = Topic,
+                    StartDate          = TrainingDate.Date.AddDays(7),
+                    CreatedByFencerId  = _auth.CurrentFencer?.Id ?? ""
+                };
+                await _sheets.UpsertRecurringTrainingAsync(rule);
+            }
+            catch (Exception ex)
+            {
+                var page = Application.Current?.MainPage;
+                if (page is not null)
+                    await page.DisplayAlert(
+                        "Recurring rule not saved",
+                        $"The training was created, but the weekly rule could not be saved:\n{ex.Message}",
+                        "OK");
+            }
         }
 
         await LoadAsync(showSpinner: false);

@@ -1,36 +1,60 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using JustAnotherHemaClub.Models;
 using JustAnotherHemaClub.Services;
 
 namespace JustAnotherHemaClub.ViewModels;
 
+public class LeaderboardRow
+{
+    public int Rank { get; init; }
+    public string Name { get; init; } = "";
+    public int Count { get; init; }
+    public string RankText => $"#{Rank}";
+    public string CountText { get; init; } = "";
+}
+
 public partial class StatisticsViewModel : ObservableObject
 {
     private readonly IGoogleSheetsService _sheets;
-
-    [ObservableProperty] private int year = DateTime.Today.Year;
-
-    // All-time
-    [ObservableProperty] private decimal allTimeIncome;
-    [ObservableProperty] private decimal allTimeExpenses;
-    [ObservableProperty] private decimal allTimeBalance;
-    [ObservableProperty] private int allTimeSessions;
-    [ObservableProperty] private int activeFencers;
-    [ObservableProperty] private double allTimeAvgAttendance;
-
-    // Current year
-    [ObservableProperty] private decimal yearIncome;
-    [ObservableProperty] private decimal yearExpenses;
-    [ObservableProperty] private decimal yearBalance;
-    [ObservableProperty] private int yearSessions;
-    [ObservableProperty] private double yearAvgAttendance;
+    private readonly AuthService _auth;
 
     public ObservableCollection<MonthStatRow> Months { get; } = new();
 
+    // Leaderboards
+    public ObservableCollection<LeaderboardRow> TopAttendanceRecent { get; } = new();
+    public ObservableCollection<LeaderboardRow> TopAttendanceAllTime { get; } = new();
+    public ObservableCollection<LeaderboardRow> TopOneOnOneGivers { get; } = new();
+    public ObservableCollection<LeaderboardRow> TopOneOnOneReceivers { get; } = new();
+
+    // Club-wide compliance
+    public ObservableCollection<Fencer> MissingGdpr { get; } = new();
+    public ObservableCollection<Fencer> MissingLiability { get; } = new();
+
+    public bool IsLoggedInInstructor => _auth.IsLoggedInInstructor;
+    public bool AllGdprOk => MissingGdpr.Count == 0;
+    public bool AllLiabilityOk => MissingLiability.Count == 0;
+
+    public string GdprSummary =>
+        AllGdprOk
+            ? "All active fencers signed the GDPR statement."
+            : $"{MissingGdpr.Count} fencer(s) missing GDPR consent:";
+
+    public string LiabilitySummary =>
+        AllLiabilityOk
+            ? "All active fencers signed the liability statement."
+            : $"{MissingLiability.Count} fencer(s) missing liability statement:";
+
+    public string RecentAttendanceSubtitle { get; private set; } = "";
+
     [ObservableProperty] private bool isLoading;
 
-    public StatisticsViewModel(IGoogleSheetsService sheets) => _sheets = sheets;
+    public StatisticsViewModel(IGoogleSheetsService sheets, AuthService auth)
+    {
+        _sheets = sheets;
+        _auth = auth;
+    }
 
     [RelayCommand]
     public async Task LoadAsync(bool showSpinner = false)
@@ -38,88 +62,127 @@ public partial class StatisticsViewModel : ObservableObject
         if (showSpinner) IsLoading = true;
         try
         {
-            Months.Clear();
+            // Only the data the Statistics page actually needs now.
+            var fencersTask   = _sheets.GetFencersAsync();
+            var trainingsTask = _sheets.GetTrainingsAsync();
+            var lessonsTask   = _sheets.GetIndividualLessonsAsync();
+            await Task.WhenAll(fencersTask, trainingsTask, lessonsTask);
 
-            var fencers = await _sheets.GetFencersAsync();
-            var trainings = await _sheets.GetTrainingsAsync();
-            var expenses = await _sheets.GetExpensesAsync(DateTime.MinValue.AddYears(1), DateTime.MaxValue.AddYears(-1));
+            var fencers   = fencersTask.Result;
+            var trainings = trainingsTask.Result;
+            var lessons   = lessonsTask.Result;
 
-            // Distinct months from data
-            var months = trainings.Select(s => (s.Date.Year, s.Date.Month))
-                .Concat(expenses.Select(e => (e.Date.Year, e.Date.Month)))
-                .Distinct()
-                .OrderByDescending(t => t.Year).ThenByDescending(t => t.Month)
-                .ToList();
+            // Compliance snapshot.
+            var missingGdpr      = fencers.Where(f => f.Active && !f.GdprAccepted).ToList();
+            var missingLiability = fencers.Where(f => f.Active && !f.LiabilityAccepted).ToList();
 
-            decimal totalIncome = 0, totalExpenses = 0;
-            int totalSessions = 0;
-            double weightedAttendanceSum = 0;
-            int weightedAttendanceCount = 0;
+            MissingGdpr.Clear();
+            foreach (var f in missingGdpr) MissingGdpr.Add(f);
+            MissingLiability.Clear();
+            foreach (var f in missingLiability) MissingLiability.Add(f);
 
-            decimal yIncome = 0, yExpenses = 0;
-            int ySessions = 0;
-            double yWeightedAttSum = 0;
-            int yWeightedAttCount = 0;
+            OnPropertyChanged(nameof(AllGdprOk));
+            OnPropertyChanged(nameof(AllLiabilityOk));
+            OnPropertyChanged(nameof(GdprSummary));
+            OnPropertyChanged(nameof(LiabilitySummary));
+            OnPropertyChanged(nameof(IsLoggedInInstructor));
 
-            foreach (var (y, m) in months)
-            {
-                var payments = await _sheets.GetPaymentsAsync(y, m);
-                var monthIncome = payments.Sum(p => p.Amount);
-
-                var from = new DateTime(y, m, 1);
-                var to = from.AddMonths(1).AddDays(-1);
-                var monthExpenses = expenses.Where(e => e.Date >= from && e.Date <= to).Sum(e => e.Amount);
-
-                var monthTrainings = trainings.Where(s => s.Date.Year == y && s.Date.Month == m).ToList();
-                var avg = monthTrainings.Count == 0
-                    ? 0
-                    : monthTrainings.Average(s => s.AttendeeFencerIds.Count);
-
-                Months.Add(new MonthStatRow
-                {
-                    Year = y,
-                    Month = m,
-                    Income = monthIncome,
-                    Expenses = monthExpenses,
-                    Sessions = monthTrainings.Count,
-                    AvgAttendance = avg
-                });
-
-                totalIncome += monthIncome;
-                totalExpenses += monthExpenses;
-                totalSessions += monthTrainings.Count;
-                if (monthTrainings.Count > 0)
-                {
-                    weightedAttendanceSum += avg * monthTrainings.Count;
-                    weightedAttendanceCount += monthTrainings.Count;
-                }
-
-                if (y == Year)
-                {
-                    yIncome += monthIncome;
-                    yExpenses += monthExpenses;
-                    ySessions += monthTrainings.Count;
-                    if (monthTrainings.Count > 0)
-                    {
-                        yWeightedAttSum += avg * monthTrainings.Count;
-                        yWeightedAttCount += monthTrainings.Count;
-                    }
-                }
-            }
-
-            AllTimeIncome = totalIncome;
-            AllTimeExpenses = totalExpenses;
-            AllTimeBalance = totalIncome - totalExpenses;
-            AllTimeSessions = totalSessions;
-            ActiveFencers = fencers.Count(f => f.Active);
-            AllTimeAvgAttendance = weightedAttendanceCount == 0 ? 0 : weightedAttendanceSum / weightedAttendanceCount;
-
-            YearIncome = yIncome;
-            YearExpenses = yExpenses;
-            YearBalance = yIncome - yExpenses;
-            YearSessions = ySessions;
-            YearAvgAttendance = yWeightedAttCount == 0 ? 0 : yWeightedAttSum / yWeightedAttCount;
+            BuildLeaderboards(fencers, trainings, lessons);
         }
         finally { if (showSpinner) IsLoading = false; }
+    }
+
+    private void BuildLeaderboards(
+        List<Fencer> fencers,
+        List<TrainingSession> trainings,
+        List<IndividualLesson> lessons)
+    {
+        var nameById = fencers.ToDictionary(f => f.Id, f => f.Name);
+        var instructorIds = fencers.Where(f => f.IsInstructor).Select(f => f.Id).ToHashSet();
+
+        var today = DateTime.Today;
+        var cutoff = new DateTime(today.Year, today.Month, 1).AddMonths(-2);
+
+        var recentCounts = trainings
+            .Where(t => t.Date.Date >= cutoff)
+            .SelectMany(t => t.AttendeeFencerIds)
+            .Where(id => !instructorIds.Contains(id) && nameById.ContainsKey(id))
+            .GroupBy(id => id)
+            .Select(g => new { Id = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(5)
+            .ToList();
+
+        RecentAttendanceSubtitle = $"From {cutoff:MMM yyyy} to {today:MMM yyyy}";
+        OnPropertyChanged(nameof(RecentAttendanceSubtitle));
+
+        Replace(TopAttendanceRecent, recentCounts.Select((x, i) => new LeaderboardRow
+        {
+            Rank = i + 1,
+            Name = nameById[x.Id],
+            Count = x.Count,
+            CountText = $"{x.Count} session(s)"
+        }));
+
+        var allTimeCounts = trainings
+            .SelectMany(t => t.AttendeeFencerIds)
+            .Where(id => !instructorIds.Contains(id) && nameById.ContainsKey(id))
+            .GroupBy(id => id)
+            .Select(g => new { Id = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(5)
+            .ToList();
+
+        Replace(TopAttendanceAllTime, allTimeCounts.Select((x, i) => new LeaderboardRow
+        {
+            Rank = i + 1,
+            Name = nameById[x.Id],
+            Count = x.Count,
+            CountText = $"{x.Count} session(s)"
+        }));
+
+        var acceptedLessons = lessons
+            .Where(l => l.Status == IndividualLessonStatus.Accepted)
+            .ToList();
+
+        var giverCounts = acceptedLessons
+            .Where(l => !string.IsNullOrEmpty(l.InstructorId) &&
+                        instructorIds.Contains(l.InstructorId) &&
+                        nameById.ContainsKey(l.InstructorId))
+            .GroupBy(l => l.InstructorId)
+            .Select(g => new { Id = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(5)
+            .ToList();
+
+        Replace(TopOneOnOneGivers, giverCounts.Select((x, i) => new LeaderboardRow
+        {
+            Rank = i + 1,
+            Name = nameById[x.Id],
+            Count = x.Count,
+            CountText = $"{x.Count} lesson(s)"
+        }));
+
+        var receiverCounts = acceptedLessons
+            .Where(l => !string.IsNullOrEmpty(l.StudentId) && nameById.ContainsKey(l.StudentId))
+            .GroupBy(l => l.StudentId)
+            .Select(g => new { Id = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(5)
+            .ToList();
+
+        Replace(TopOneOnOneReceivers, receiverCounts.Select((x, i) => new LeaderboardRow
+        {
+            Rank = i + 1,
+            Name = nameById[x.Id],
+            Count = x.Count,
+            CountText = $"{x.Count} lesson(s)"
+        }));
+    }
+
+    private static void Replace<T>(ObservableCollection<T> target, IEnumerable<T> source)
+    {
+        target.Clear();
+        foreach (var item in source) target.Add(item);
     }
 }

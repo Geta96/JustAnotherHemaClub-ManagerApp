@@ -41,12 +41,12 @@ public static class MauiProgram
         builder.Services.AddTransient<ProfileViewModel>();
         builder.Services.AddTransient<IndividualLessonsViewModel>();
         builder.Services.AddTransient<WeeklyViewModel>();
+        builder.Services.AddTransient<TrainingsHubViewModel>();
 
         // Pages
         builder.Services.AddTransient<LoginPage>();
         builder.Services.AddTransient<RegisterPage>();
         builder.Services.AddTransient<HomePage>();
-        builder.Services.AddTransient<TrainingsPage>();
         builder.Services.AddTransient<NewTrainingPage>();
         builder.Services.AddTransient<FinancePage>();
         builder.Services.AddTransient<StatisticsPage>();
@@ -54,8 +54,7 @@ public static class MauiProgram
         builder.Services.AddTransient<ProfilePage>();
         builder.Services.AddTransient<GdprPage>();
         builder.Services.AddTransient<LiabilityPage>();
-        builder.Services.AddTransient<IndividualLessonsPage>();
-        builder.Services.AddTransient<WeeklyPage>();
+        builder.Services.AddTransient<TrainingsHubPage>();
 
         // Shell
         builder.Services.AddTransient<AppShell>();

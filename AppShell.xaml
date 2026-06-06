@@ -66,12 +66,6 @@
                         <DataTrigger TargetType="Label" Binding="{Binding Title}" Value="My Profile">
                             <Setter Property="Text" Value="◉" />
                         </DataTrigger>
-                        <DataTrigger TargetType="Label" Binding="{Binding Title}" Value="1 on 1 Lessons">
-                            <Setter Property="Text" Value="✶" />
-                        </DataTrigger>
-                        <DataTrigger TargetType="Label" Binding="{Binding Title}" Value="Weekly">
-                            <Setter Property="Text" Value="⟳" />
-                        </DataTrigger>
                     </Label.Triggers>
                 </Label>
 
@@ -117,21 +111,8 @@
         <ShellContent ContentTemplate="{DataTemplate views:HomePage}" />
     </FlyoutItem>
 
-    <FlyoutItem Title="Trainings" FlyoutDisplayOptions="AsMultipleItems">
-        <Tab Title="Trainings" Route="trainingstab">
-            <ShellContent Title="Trainings"
-                          Route="trainings"
-                          Icon="tab_trainings.png"
-                          ContentTemplate="{DataTemplate views:TrainingsPage}" />
-            <ShellContent Title="Weekly"
-                          Route="weekly"
-                          Icon="tab_trainings.png"
-                          ContentTemplate="{DataTemplate views:WeeklyPage}" />
-            <ShellContent Title="1 on 1 Lessons"
-                          Route="individuallessons"
-                          Icon="tab_oneonone.png"
-                          ContentTemplate="{DataTemplate views:IndividualLessonsPage}" />
-        </Tab>
+    <FlyoutItem Title="Trainings" Route="trainings">
+        <ShellContent ContentTemplate="{DataTemplate views:TrainingsHubPage}" />
     </FlyoutItem>
 
     <FlyoutItem Title="Fencers" Route="fencers">

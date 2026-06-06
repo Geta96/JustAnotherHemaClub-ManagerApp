@@ -73,9 +73,10 @@ public class RecurringTrainingMaterializer
 
                 await _sheets.UpsertTrainingAsync(new TrainingSession
                 {
-                    Id    = id,
-                    Date  = d.Date + rule.TimeOfDay,
-                    Topic = rule.Topic,
+                    Id      = id,
+                    Date    = d.Date + rule.TimeOfDay,
+                    EndDate = d.Date + rule.EndTimeOfDay,
+                    Topic   = rule.Topic,
                 });
                 existingIds.Add(id); // guard against the same run creating duplicates
                 created = true;

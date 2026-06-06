@@ -14,6 +14,17 @@
             <Label Text="Date" Style="{StaticResource Caption}" />
             <DatePicker Date="{Binding TrainingDate}" />
 
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                <VerticalStackLayout Grid.Column="0" Spacing="4">
+                    <Label Text="Start time" Style="{StaticResource Caption}" />
+                    <TimePicker Time="{Binding TrainingTime}" />
+                </VerticalStackLayout>
+                <VerticalStackLayout Grid.Column="1" Spacing="4">
+                    <Label Text="End time" Style="{StaticResource Caption}" />
+                    <TimePicker Time="{Binding TrainingEndTime}" />
+                </VerticalStackLayout>
+            </Grid>
+
             <Label Text="Topic" Style="{StaticResource Caption}" />
             <Entry Placeholder="Topic" Text="{Binding Topic}" />
 
@@ -29,8 +40,16 @@
                     </Grid>
 
                     <VerticalStackLayout Spacing="6" IsVisible="{Binding IsRecurring}">
-                        <Label Text="Time of day for future sessions" Style="{StaticResource Caption}" />
-                        <TimePicker Time="{Binding RecurringTime}" />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <VerticalStackLayout Grid.Column="0" Spacing="4">
+                                <Label Text="Weekly start" Style="{StaticResource Caption}" />
+                                <TimePicker Time="{Binding RecurringTime}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Column="1" Spacing="4">
+                                <Label Text="Weekly end" Style="{StaticResource Caption}" />
+                                <TimePicker Time="{Binding RecurringEndTime}" />
+                            </VerticalStackLayout>
+                        </Grid>
                         <Label Text="{Binding RecurringSummary}" Style="{StaticResource Caption}" />
                     </VerticalStackLayout>
                 </VerticalStackLayout>

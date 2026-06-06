@@ -10,6 +10,7 @@ public partial class EditableTrainingRow : ObservableObject
     public TrainingSession Training { get; }
 
     [ObservableProperty] private string topic;
+    [ObservableProperty] private TimeSpan endTime;
     public ObservableCollection<FencerToggle> Fencers { get; }
 
     [ObservableProperty] private bool isDirty;
@@ -25,12 +26,17 @@ public partial class EditableTrainingRow : ObservableObject
     /// <summary>True when there is a logged-in non-instructor who could still attend this session.</summary>
     public bool CanCurrentUserAttend => !string.IsNullOrEmpty(_currentUserFencerId) && !CurrentUserAttending;
 
+    public string TimeRangeText =>
+        $"{Training.Date:HH\\:mm}–{EndTime:hh\\:mm}";
+
     private readonly string? _currentUserFencerId;
 
     public EditableTrainingRow(TrainingSession training, IEnumerable<Fencer> allFencers, string? currentUserFencerId = null)
     {
         Training = training;
         topic = training.Topic;
+        endTime = training.EndDate == default ? training.Date.TimeOfDay.Add(TimeSpan.FromMinutes(90))
+                                              : training.EndDate.TimeOfDay;
         _currentUserFencerId = currentUserFencerId;
         currentUserAttending = !string.IsNullOrEmpty(currentUserFencerId) &&
                                training.AttendeeFencerIds.Contains(currentUserFencerId);
@@ -48,10 +54,15 @@ public partial class EditableTrainingRow : ObservableObject
             }));
     }
 
-    [RelayCommand]
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
     private void ToggleExpanded() => IsExpanded = !IsExpanded;
 
     partial void OnTopicChanged(string value) => IsDirty = true;
+    partial void OnEndTimeChanged(TimeSpan value)
+    {
+        IsDirty = true;
+        OnPropertyChanged(nameof(TimeRangeText));
+    }
 
     partial void OnCurrentUserAttendingChanged(bool value)
         => OnPropertyChanged(nameof(CanCurrentUserAttend));
@@ -61,8 +72,9 @@ public partial class EditableTrainingRow : ObservableObject
 
     public TrainingSession ToUpdatedTraining() => new()
     {
-        Id = Training.Id,
-        Date = Training.Date,
+        Id    = Training.Id,
+        Date  = Training.Date,
+        EndDate = Training.Date.Date + EndTime,
         Topic = Topic,
         AttendeeFencerIds = Fencers.Where(f => f.IsAttending).Select(f => f.Fencer.Id).ToList()
     };

@@ -3,13 +3,13 @@ using JustAnotherHemaClub.ViewModels;
 
 namespace JustAnotherHemaClub.Views;
 
-public partial class TrainingsPage : ContentPage
+public partial class TrainingsHubPage : ContentPage
 {
-    private readonly TrainingsViewModel _vm;
+    private readonly TrainingsHubViewModel _vm;
     private readonly ICacheControl _cache;
     private readonly IServiceProvider _services;
 
-    public TrainingsPage(TrainingsViewModel vm, ICacheControl cache, IServiceProvider services)
+    public TrainingsHubPage(TrainingsHubViewModel vm, ICacheControl cache, IServiceProvider services)
     {
         InitializeComponent();
         BindingContext = _vm = vm;
@@ -20,7 +20,9 @@ public partial class TrainingsPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await _vm.LoadAsync(showSpinner: false);
+        // Let Shell finish its transition before hitting the cache layer.
+        await Task.Yield();
+        await _vm.LoadAllAsync(showSpinner: false);
     }
 
     private async void OnRefreshTapped(object? sender, TappedEventArgs e)
@@ -28,19 +30,23 @@ public partial class TrainingsPage : ContentPage
         _cache.InvalidateTrainings();
         _cache.InvalidateFencers();
         _cache.InvalidateMonthNotes();
-        await _vm.LoadAsync(showSpinner: true);
+        _cache.InvalidateRecurringTrainings();
+        _cache.InvalidateIndividualLessons();
+        await _vm.LoadAllAsync(showSpinner: true);
+    }
+
+    // ----- Trainings tab handlers -----
+
+    private async void OnNewTrainingClicked(object? sender, EventArgs e)
+    {
+        var page = _services.GetRequiredService<NewTrainingPage>();
+        await Navigation.PushAsync(page);
     }
 
     private void OnAttendeeRowTapped(object? sender, TappedEventArgs e)
     {
         if (sender is BindableObject bo && bo.BindingContext is FencerToggle t)
             t.IsAttending = !t.IsAttending;
-    }
-
-    private async void OnNewTrainingClicked(object? sender, EventArgs e)
-    {
-        var page = _services.GetRequiredService<NewTrainingPage>();
-        await Navigation.PushAsync(page);
     }
 
     private async void OnDeleteTrainingClicked(object? sender, EventArgs e)
@@ -56,6 +62,15 @@ public partial class TrainingsPage : ContentPage
 
         if (!confirm) return;
 
-        await _vm.DeleteTrainingCommand.ExecuteAsync(row);
+        await _vm.TrainingsVm.DeleteTrainingCommand.ExecuteAsync(row);
+    }
+
+    // ----- Weekly tab handler -----
+
+    private async void OnAddWeeklyTrainingClicked(object? sender, EventArgs e)
+    {
+        var page = _services.GetRequiredService<NewTrainingPage>();
+        page.PrepareForWeekly();
+        await Navigation.PushAsync(page);
     }
 }

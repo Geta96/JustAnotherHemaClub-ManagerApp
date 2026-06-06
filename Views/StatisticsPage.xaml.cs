@@ -23,7 +23,12 @@ public partial class StatisticsPage : ContentPage
 
     private async void OnRefreshTapped(object? sender, TappedEventArgs e)
     {
-        _cache.InvalidateAll();
+        _cache.InvalidateFencers();
+        _cache.InvalidateTrainings();
+        _cache.InvalidateExpenses();
+        _cache.InvalidateMonthNotes();
+        _cache.InvalidateIndividualLessons();
+        _cache.InvalidatePayments();
         await _vm.LoadAsync(showSpinner: true);
     }
 }
