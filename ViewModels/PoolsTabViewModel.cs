@@ -88,7 +88,9 @@ public partial class PoolsTabViewModel : ObservableObject, IDisposable
         var nameById       = _session.Current.Fencers.ToDictionary(f => f.Id, f => f.Name);
         var canEdit        = _session.CanEdit;
         var bracketStarted = _session.Current.Bracket is not null;
-        foreach (var pool in _session.Current.Pools.OrderBy(p => p.Index))
+        foreach (var pool in _session.Current.Pools
+                                .Where(p => p.FencerIds.Count > 0)
+                                .OrderBy(p => p.Index))
         {
             // Roster shown at the top of the pool card, in seeded order.
             var fencerNames = pool.FencerIds
@@ -194,6 +196,16 @@ public partial class PoolsTabViewModel : ObservableObject, IDisposable
             }
         }
         catch (Exception ex) { ErrorMessage = $"Update failed: {ex.Message}"; }
+    }
+
+    /// <summary>
+    /// Rebuild the pool/match rows from the in-memory session without re-fetching
+    /// from the backend. Used by the hub after it mutated matches itself
+    /// (e.g. the withdraw-cascade walkovers).
+    /// </summary>
+    public void RefreshAfterExternalChange()
+    {
+        BuildRows();
     }
 
     public void Dispose() => _refresh.MatchUpdated -= OnRemoteMatchUpdated;

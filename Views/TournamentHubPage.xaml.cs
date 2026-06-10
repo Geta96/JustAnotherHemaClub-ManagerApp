@@ -21,6 +21,7 @@ public partial class TournamentHubPage : ContentPage
 
         _vm.PoolsVm.MatchSelected += OnPoolMatchSelected;
         _vm.ElimVm.MatchSelected  += OnElimMatchSelected;
+        _vm.PickFencerToWithdrawAsync = PickFencerAsync;
     }
 
     protected override async void OnAppearing()
@@ -33,7 +34,6 @@ public partial class TournamentHubPage : ContentPage
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
-        // Stop the polling timer when the hub is not visible — Match page will start its own.
         _vm.PoolsVm.StopPolling();
     }
 
@@ -62,5 +62,29 @@ public partial class TournamentHubPage : ContentPage
         var page = _services.GetRequiredService<MatchPage>();
         await page.PrepareForMatchAsync(match.Id);
         await Navigation.PushAsync(page);
+    }
+
+    private async Task<TournamentFencer?> PickFencerAsync(IReadOnlyList<TournamentFencer> candidates)
+    {
+        if (candidates is null || candidates.Count == 0) return null;
+
+        var labels = candidates.Select(c => c.Name).ToArray();
+        var choice = await DisplayActionSheet(
+            "Withdraw which fencer?",
+            "Cancel",
+            null,
+            labels);
+        if (string.IsNullOrEmpty(choice) || choice == "Cancel") return null;
+
+        var picked = candidates.FirstOrDefault(c => c.Name == choice);
+        if (picked is null) return null;
+
+        var confirm = await DisplayAlert(
+            "Withdraw fencer",
+            $"Withdraw {picked.Name}?\n\n" +
+            "All of their remaining matches will end as 0–0 walkovers and their opponents will win automatically. " +
+            "Already-finished matches keep their scores.",
+            "Withdraw", "Cancel");
+        return confirm ? picked : null;
     }
 }

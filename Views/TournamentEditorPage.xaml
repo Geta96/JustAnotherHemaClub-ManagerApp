@@ -3,21 +3,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels"
              x:Class="JustAnotherHemaClub.Views.TournamentEditorPage"
+             x:Name="EditorPage"
              x:DataType="vm:TournamentEditorVm"
              Title="Tournament">
 
     <ScrollView>
         <VerticalStackLayout Padding="16" Spacing="14">
-
-            <!-- Error banner -->
-            <Border BackgroundColor="#FFE2E2"
-                    Stroke="{StaticResource DangerRed}" StrokeThickness="1"
-                    StrokeShape="RoundRectangle 8"
-                    Padding="12"
-                    IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}, FallbackValue=False}">
-                <Label Text="{Binding ErrorMessage}"
-                       TextColor="{StaticResource DangerRed}" />
-            </Border>
 
             <!-- Header / details -->
             <Border Style="{StaticResource Card}">
@@ -48,13 +39,6 @@
                 </VerticalStackLayout>
             </Border>
 
-            <!-- Initial save (new only) -->
-            <Button Text="Save Tournament"
-                    BackgroundColor="#476FB5"
-                    TextColor="{StaticResource Cream}"
-                    Command="{Binding SaveNewCommand}"
-                    IsVisible="{Binding IsNew}" />
-
             <!-- Roster -->
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="10">
@@ -79,9 +63,9 @@
                                 Command="{Binding AddFencerCommand}" />
                     </Grid>
 
-                    <Label Text="Roster is locked once the tournament starts."
+                    <Label Text="Roster is locked once the tournament starts. Use Withdraw to remove a fencer mid-tournament — their remaining matches become walkovers."
                            Style="{StaticResource Caption}"
-                           IsVisible="{Binding IsSetupState, Converter={StaticResource InverseBoolConverter}}" />
+                           IsVisible="{Binding ShowLiveWithdrawHint}" />
 
                     <!-- Fencer list -->
                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding Fencers}" Spacing="6">
@@ -106,16 +90,15 @@
                                                 HeightRequest="34" Padding="10,0"
                                                 BackgroundColor="{StaticResource Wine}"
                                                 TextColor="{StaticResource Cream}"
-                                                IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:TournamentEditorVm}}, Path=IsExisting}"
-                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TournamentEditorVm}}, Path=WithdrawFencerCommand}"
-                                                CommandParameter="{Binding .}" />
+                                                IsVisible="{Binding Source={x:Reference EditorPage}, Path=BindingContext.IsExisting}"
+                                                Clicked="OnWithdrawFencerClicked" />
                                         <Button Grid.Column="2"
                                                 Text="&#x2715;"
                                                 HeightRequest="34" WidthRequest="40"
                                                 BackgroundColor="{StaticResource DangerRed}"
                                                 TextColor="{StaticResource Cream}"
-                                                IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:TournamentEditorVm}}, Path=CanRemoveFencers}"
-                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TournamentEditorVm}}, Path=RemoveFencerCommand}"
+                                                IsVisible="{Binding Source={x:Reference EditorPage}, Path=BindingContext.CanRemoveFencers}"
+                                                Command="{Binding Source={x:Reference EditorPage}, Path=BindingContext.RemoveFencerCommand}"
                                                 CommandParameter="{Binding .}" />
                                     </Grid>
                                 </Border>
@@ -123,6 +106,124 @@
                         </BindableLayout.ItemTemplate>
                     </VerticalStackLayout>
                 </VerticalStackLayout>
+            </Border>
+
+            <Button Text="Create Tournament"
+                    BackgroundColor="#476FB5"
+                    TextColor="{StaticResource Cream}"
+                    Command="{Binding SaveNewCommand}"
+                    IsVisible="{Binding IsNew}" />
+
+            <!-- Pool allocation (Setup only) -->
+            <Border Style="{StaticResource Card}"
+                    IsVisible="{Binding ShowPoolAllocation}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Pool allocation" Style="{StaticResource H2}" />
+                    <Label Text="Place fencers into pools before starting. Auto-distribute fills empty pools with the active roster; tap a fencer to move them to another pool."
+                           Style="{StaticResource Caption}" />
+
+                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                        <Button Grid.Column="0" Text="Auto-distribute"
+                                BackgroundColor="#476FB5"
+                                TextColor="{StaticResource Cream}"
+                                Command="{Binding AutoDistributePoolsCommand}" />
+                        <Button Grid.Column="1" Text="+ Pool"
+                                BackgroundColor="{StaticResource Wine}"
+                                TextColor="{StaticResource Cream}"
+                                Command="{Binding AddPoolCommand}" />
+                        <Label Grid.Column="2" Text=""
+                               VerticalOptions="Center" HorizontalTextAlignment="End" />
+                    </Grid>
+
+                    <!-- Unassigned fencers -->
+                    <Border Stroke="{StaticResource Wine}" StrokeThickness="1"
+                            StrokeShape="RoundRectangle 6"
+                            BackgroundColor="{StaticResource CreamSoft}"
+                            Padding="10,8"
+                            IsVisible="{Binding HasUnassignedFencers}">
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="Unassigned"
+                                   FontAttributes="Bold"
+                                   TextColor="{StaticResource DangerRed}" />
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding UnassignedFencers}" Spacing="4">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:EditorPoolFencerVm">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <Label Grid.Column="0" Text="{Binding Name}"
+                                                   TextColor="{StaticResource Wine}"
+                                                   VerticalOptions="Center" />
+                                            <Button Grid.Column="1" Text="Assign…"
+                                                    HeightRequest="34" Padding="10,0"
+                                                    BackgroundColor="#476FB5"
+                                                    TextColor="{StaticResource Cream}"
+                                                    Clicked="OnAssignFencerClicked" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Per-pool draft cards -->
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding DraftPools}" Spacing="10">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="vm:EditorPoolVm">
+                                <Border Stroke="{StaticResource Wine}" StrokeThickness="1"
+                                        StrokeShape="RoundRectangle 8"
+                                        BackgroundColor="{StaticResource CreamSoft}"
+                                        Padding="10,8">
+                                    <VerticalStackLayout Spacing="6">
+                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                            <VerticalStackLayout Grid.Column="0" Spacing="0">
+                                                <Label Text="{Binding Title}"
+                                                       FontAttributes="Bold"
+                                                       TextColor="{StaticResource Wine}" />
+                                                <Label Text="{Binding CountText}"
+                                                       Style="{StaticResource Caption}" />
+                                            </VerticalStackLayout>
+                                            <Button Grid.Column="1" Text="− Pool"
+                                                    HeightRequest="34" Padding="10,0"
+                                                    BackgroundColor="{StaticResource DangerRed}"
+                                                    TextColor="{StaticResource Cream}"
+                                                    IsVisible="{Binding IsEmpty}"
+                                                    Command="{Binding Source={x:Reference EditorPage}, Path=BindingContext.RemovePoolCommand}"
+                                                    CommandParameter="{Binding .}" />
+                                        </Grid>
+
+                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Members}" Spacing="4">
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:EditorPoolFencerVm">
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <Label Grid.Column="0" Text="{Binding Name}"
+                                                               TextColor="{StaticResource Wine}"
+                                                               VerticalOptions="Center" />
+                                                        <Button Grid.Column="1" Text="Move…"
+                                                                HeightRequest="32" Padding="10,0"
+                                                                BackgroundColor="{StaticResource Wine}"
+                                                                TextColor="{StaticResource Cream}"
+                                                                Clicked="OnMoveFencerClicked" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
+                                        </VerticalStackLayout>
+                                    </VerticalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Error banner: sits right above the Start card so messages from
+                 Start Tournament (and every other action) are visible without
+                 scrolling back to the top of the page. -->
+            <Border BackgroundColor="#FFE2E2"
+                    Stroke="{StaticResource DangerRed}" StrokeThickness="1"
+                    StrokeShape="RoundRectangle 8"
+                    Padding="12"
+                    IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}, FallbackValue=False}">
+                <Label Text="{Binding ErrorMessage}"
+                       TextColor="{StaticResource DangerRed}" />
             </Border>
 
             <!-- Start -->

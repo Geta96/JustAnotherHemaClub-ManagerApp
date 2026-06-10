@@ -58,7 +58,9 @@ public partial class PoolStandingsTabViewModel : ObservableObject, IDisposable
         var qualifiedIds = new HashSet<string>(
             TournamentEngine.ComputeQualifyingFencerIds(_session.Current));
 
-        foreach (var pool in _session.Current.Pools.OrderBy(p => p.Index))
+        foreach (var pool in _session.Current.Pools
+                                .Where(p => p.FencerIds.Count > 0)
+                                .OrderBy(p => p.Index))
         {
             var group = new PoolStandingsGroupVm(pool);
             FillGroup(group, pool, nameById, qualifiedIds);

@@ -7,7 +7,7 @@ namespace JustAnotherHemaClub.ViewModels;
 
 /// <summary>
 /// Owns the four-tab tournament hub (Pools / Pool Standings / Elimination / Final Standings)
-/// and the End/Reopen tournament actions in the header.
+/// and the End/Reopen/Withdraw tournament actions in the header.
 /// </summary>
 public partial class TournamentHubViewModel : ObservableObject
 {
@@ -29,6 +29,13 @@ public partial class TournamentHubViewModel : ObservableObject
     [ObservableProperty] private int selectedTabIndex;
     [ObservableProperty] private bool isLoading;
     [ObservableProperty] private string errorMessage = "";
+
+    /// <summary>
+    /// Set by the page so the VM can ask for a fencer to withdraw.
+    /// Returns the picked fencer, or null if the user cancelled.
+    /// (Plain property, not an event — there's only ever one subscriber.)
+    /// </summary>
+    public Func<IReadOnlyList<TournamentFencer>, Task<TournamentFencer?>>? PickFencerToWithdrawAsync { get; set; }
 
     public bool IsPoolsTab          => SelectedTabIndex == 0;
     public bool IsPoolStandingsTab  => SelectedTabIndex == 1;
@@ -86,6 +93,13 @@ public partial class TournamentHubViewModel : ObservableObject
         _session.IsOrganiser &&
         Tournament?.State == TournamentState.Finished;
 
+    /// <summary>Live-withdraw button: organiser, tournament is running (not Setup, not Finished).</summary>
+    public bool CanWithdrawFencer =>
+        _session.IsOrganiser &&
+        Tournament is not null &&
+        Tournament.State is not TournamentState.Setup and not TournamentState.Finished &&
+        Tournament.Fencers.Any(f => !f.IsWithdrawn);
+
     public TournamentHubViewModel(TournamentSession session,
                                   IGoogleSheetsService sheets,
                                   PoolsTabViewModel poolsVm,
@@ -100,7 +114,6 @@ public partial class TournamentHubViewModel : ObservableObject
         ElimVm            = elimVm;
         FinalStandingsVm  = finalStandingsVm;
 
-        // Tab order: Pools → Pool Standings → Elimination → Final Standings.
         Tabs = new[]
         {
             new TournamentHubTab(TabPools,          this),
@@ -118,7 +131,6 @@ public partial class TournamentHubViewModel : ObservableObject
             PoolsVm.AttachTo(_session);
             await PoolsVm.LoadAsync();
 
-            // Standings + bracket derive from what PoolsVm just loaded into the session.
             PoolStandingsVm.AttachTo(_session);
             PoolStandingsVm.Recompute();
 
@@ -178,6 +190,58 @@ public partial class TournamentHubViewModel : ObservableObject
         finally { IsLoading = false; }
     }
 
+    /// <summary>
+    /// Prompts the page for a fencer, then walks-over every unfinished match they're
+    /// in (0–0, opponent wins). Refreshes every tab so the cascade is visible.
+    /// </summary>
+    [RelayCommand]
+    private async Task WithdrawFencerPromptAsync()
+    {
+        if (!CanWithdrawFencer || PickFencerToWithdrawAsync is null || _session.Current is null) return;
+
+        var candidates = _session.Current.Fencers
+            .Where(f => !f.IsWithdrawn)
+            .OrderBy(f => f.Name)
+            .ToList();
+        if (candidates.Count == 0) return;
+
+        var picked = await PickFencerToWithdrawAsync.Invoke(candidates);
+        if (picked is null) return;
+
+        await WithdrawFencerAsync(picked);
+    }
+
+    /// <summary>Performs the actual withdraw + persist + refresh.</summary>
+    public async Task WithdrawFencerAsync(TournamentFencer fencer)
+    {
+        var t = _session.Current;
+        if (t is null || fencer is null) return;
+        if (t.State is TournamentState.Setup or TournamentState.Finished) return;
+
+        IsLoading = true;
+        ErrorMessage = "";
+        try
+        {
+            fencer.IsWithdrawn = true;
+            await _sheets.UpsertTournamentFencerAsync(t.Id, fencer);
+
+            var cascade = TournamentEngine.ApplyWithdrawalCascade(t, fencer.Id);
+            foreach (var m in cascade.ChangedPoolMatches)
+                await _sheets.UpsertMatchAsync(t.Id, m);
+            foreach (var m in cascade.ChangedBracketMatches)
+                await _sheets.UpsertMatchAsync(t.Id, m);
+
+            // Refresh every read-model so the new walkovers and propagation are visible.
+            PoolsVm.RefreshAfterExternalChange();
+            PoolStandingsVm.Recompute();
+            ElimVm.Recompute();
+            FinalStandingsVm.Recompute();
+            RaiseHeaderPropertiesChanged();
+        }
+        catch (Exception ex) { ErrorMessage = $"Withdraw failed: {ex.Message}"; }
+        finally { IsLoading = false; }
+    }
+
     public void RaiseHeaderPropertiesChanged()
     {
         OnPropertyChanged(nameof(Tournament));
@@ -189,6 +253,7 @@ public partial class TournamentHubViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowSetupHint));
         OnPropertyChanged(nameof(CanEndTournament));
         OnPropertyChanged(nameof(CanReopenTournament));
+        OnPropertyChanged(nameof(CanWithdrawFencer));
     }
 }
 

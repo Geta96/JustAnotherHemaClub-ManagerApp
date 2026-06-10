@@ -130,6 +130,56 @@ public static class TournamentEngine
         return pools;
     }
 
+    // ---------- Draft pools (Setup state, before matches are generated) ----------
+
+    /// <summary>
+    /// Builds DRAFT pools that contain only fencer assignments — no matches yet.
+    /// Used in the editor's Setup state so the organiser can rearrange fencers
+    /// before <see cref="GeneratePoolMatches"/> creates the actual fight list.
+    /// </summary>
+    public static List<Pool> BuildDraftPools(IReadOnlyList<TournamentFencer> fencers, Random? rng = null)
+    {
+        var partitions = PartitionIntoPools(fencers.Count, rng);
+        var pools = new List<Pool>(partitions.Count);
+        for (int p = 0; p < partitions.Count; p++)
+        {
+            pools.Add(new Pool
+            {
+                Index = p,
+                FencerIds = partitions[p].Select(i => fencers[i].Id).ToList()
+            });
+        }
+        return pools;
+    }
+
+    /// <summary>
+    /// Populates each pool's match list (round-robin) from its current
+    /// <see cref="Pool.FencerIds"/>. Pools with fewer than 2 fencers get no matches.
+    /// Existing matches are replaced.
+    /// </summary>
+    public static void GeneratePoolMatches(IList<Pool> pools)
+    {
+        foreach (var pool in pools)
+        {
+            pool.Matches.Clear();
+            int n = pool.FencerIds.Count;
+            if (n < 2) continue;
+
+            int order = 0;
+            foreach (var (l, r) in OrderPoolFights(n))
+            {
+                pool.Matches.Add(new Match
+                {
+                    PoolId = pool.Id,
+                    OrderInPool = order++,
+                    LeftFencerId  = pool.FencerIds[l],
+                    RightFencerId = pool.FencerIds[r],
+                    RemainingTimeSeconds = DefaultMatchSeconds
+                });
+            }
+        }
+    }
+
     // ---------- Pool standings ----------
 
     public sealed class PoolStandingRow
@@ -140,7 +190,7 @@ public static class TournamentEngine
         public int PointsFor { get; set; }
         public int PointsAgainst { get; set; }
 
-        public double WinRatio         => MatchesPlayed > 0 ? (double)MatchesWon    / MatchesPlayed : 0;
+        public double Windicator         => MatchesPlayed > 0 ? (double)MatchesWon    / MatchesPlayed : 0;
         public double AvgPointsFor     => MatchesPlayed > 0 ? (double)PointsFor     / MatchesPlayed : 0;
         public double AvgPointsAgainst => MatchesPlayed > 0 ? (double)PointsAgainst / MatchesPlayed : 0;
     }
@@ -174,7 +224,7 @@ public static class TournamentEngine
     }
 
     private static List<PoolStandingRow> SortStandings(IEnumerable<PoolStandingRow> rows) =>
-        rows.OrderByDescending(r => r.WinRatio)
+        rows.OrderByDescending(r => r.Windicator)
             .ThenByDescending(r => r.AvgPointsFor)
             .ThenBy(r => r.AvgPointsAgainst)
             .ToList();
@@ -632,5 +682,102 @@ public static class TournamentEngine
         if (bracket.BronzeMatch is not null && bracket.BronzeMatch.Status != MatchStatus.Finished)
             return false;
         return true;
+    }
+
+    // ---------- Mid-tournament withdrawal cascade ----------
+
+    /// <summary>
+    /// Side-effect summary of <see cref="ApplyWithdrawalCascade"/>: lists of
+    /// matches that the caller must persist.
+    /// </summary>
+    public sealed class WithdrawalCascade
+    {
+        public List<Match> ChangedPoolMatches { get; } = new();
+        public List<Match> ChangedBracketMatches { get; } = new();
+    }
+
+    /// <summary>
+    /// Walks every UNFINISHED pool match and bracket match the withdrawn fencer
+    /// is in, marks them <see cref="MatchStatus.Finished"/> with the opponent as
+    /// winner and a 0–0 scoreline (so the walkover doesn't affect averages), then
+    /// propagates winners through the bracket. Returns the list of mutated matches
+    /// so the caller can persist them.
+    ///
+    /// Already-finished matches are left untouched — historical results stand.
+    /// </summary>
+    public static WithdrawalCascade ApplyWithdrawalCascade(Tournament t, string withdrawnFencerId)
+    {
+        var result = new WithdrawalCascade();
+        if (string.IsNullOrEmpty(withdrawnFencerId)) return result;
+
+        // Pools: every pending/in-progress match involving the fencer becomes a
+        // 0–0 walkover for the opponent.
+        foreach (var pool in t.Pools)
+        {
+            foreach (var m in pool.Matches)
+            {
+                if (m.Status == MatchStatus.Finished) continue;
+                bool isLeft  = m.LeftFencerId  == withdrawnFencerId;
+                bool isRight = m.RightFencerId == withdrawnFencerId;
+                if (!isLeft && !isRight) continue;
+
+                m.Status        = MatchStatus.Finished;
+                m.LeftScore     = 0;
+                m.RightScore    = 0;
+                m.WinnerFencerId = isLeft ? m.RightFencerId : m.LeftFencerId;
+                m.FinishedAtUtc = DateTime.UtcNow;
+                // If the opponent slot is empty (defensive), there's no winner;
+                // leave the match finished with no winner so it doesn't block.
+                if (string.IsNullOrEmpty(m.WinnerFencerId)) m.WinnerFencerId = null;
+
+                result.ChangedPoolMatches.Add(m);
+            }
+        }
+
+        // Bracket: same rule, then propagate winners.
+        if (t.Bracket is not null)
+        {
+            void TryWalkover(Match m)
+            {
+                if (m.Status == MatchStatus.Finished) return;
+                bool isLeft  = m.LeftFencerId  == withdrawnFencerId;
+                bool isRight = m.RightFencerId == withdrawnFencerId;
+                if (!isLeft && !isRight) return;
+
+                // Need an opponent in the slot to award the walkover.
+                var opponent = isLeft ? m.RightFencerId : m.LeftFencerId;
+                if (string.IsNullOrEmpty(opponent))
+                {
+                    // No opponent yet — clear the withdrawn fencer's slot; propagation
+                    // will treat the other feeder's winner as a bye when it arrives.
+                    if (isLeft)  m.LeftFencerId  = "";
+                    if (isRight) m.RightFencerId = "";
+                    result.ChangedBracketMatches.Add(m);
+                    return;
+                }
+
+                m.Status         = MatchStatus.Finished;
+                m.LeftScore      = 0;
+                m.RightScore     = 0;
+                m.WinnerFencerId = opponent;
+                m.FinishedAtUtc  = DateTime.UtcNow;
+                result.ChangedBracketMatches.Add(m);
+            }
+
+            foreach (var round in t.Bracket.Rounds)
+                foreach (var m in round.Matches)
+                    TryWalkover(m);
+            if (t.Bracket.BronzeMatch is not null)
+                TryWalkover(t.Bracket.BronzeMatch);
+
+            // Propagate the walkovers downstream. Anything PropagateAdvancements
+            // additionally touches (e.g. auto-bye-through) also needs persisting.
+            var propagated = PropagateAndCollectChanges(t.Bracket);
+            foreach (var m in propagated)
+                if (!result.ChangedBracketMatches.Contains(m))
+                    result.ChangedBracketMatches.Add(m);
+        }
+
+        return result;
     }
 }

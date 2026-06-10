@@ -34,8 +34,6 @@ public partial class TournamentEditorPage : ContentPage
 
     private async void OnStartTournamentClicked(object? sender, EventArgs e)
     {
-        // Hard guard: if there aren't enough active fencers, tell the user up-front
-        // instead of silently disabling the button.
         if (_vm.ActiveFencerCount < TournamentEditorVm.MinFencersToStart)
         {
             await DisplayAlert(
@@ -48,7 +46,7 @@ public partial class TournamentEditorPage : ContentPage
 
         var confirm = await DisplayAlert(
             "Start tournament",
-            $"This will create the pools and lock the roster. Continue?",
+            $"This will lock the roster and create the matches. Continue?",
             "Start", "Cancel");
         if (!confirm) return;
 
@@ -56,8 +54,6 @@ public partial class TournamentEditorPage : ContentPage
 
         if (_vm.Tournament?.State == TournamentState.PoolsInProgress)
         {
-            // We're the organiser by definition (we just started it). Open the hub
-            // and remove ourselves from the stack so 'back' returns to the list.
             _session.Open(_vm.Tournament, TournamentRole.Organiser);
 
             var hub = _services.GetRequiredService<TournamentHubPage>();
@@ -77,5 +73,67 @@ public partial class TournamentEditorPage : ContentPage
 
         await _vm.DeleteTournamentCommand.ExecuteAsync(null);
         await Navigation.PopAsync();
+    }
+
+    /// <summary>
+    /// Roster Withdraw / Reinstate button. During an active tournament, withdrawing
+    /// walks-over every unfinished match this fencer is in, so we confirm first.
+    /// </summary>
+    private async void OnWithdrawFencerClicked(object? sender, EventArgs e)
+    {
+        if (sender is not BindableObject bo || bo.BindingContext is not TournamentFencerRow row) return;
+
+        bool willBeWithdrawn = !row.IsWithdrawn;
+        if (willBeWithdrawn && _vm.Tournament is not null &&
+            _vm.Tournament.State is not TournamentState.Setup and not TournamentState.Finished)
+        {
+            var confirm = await DisplayAlert(
+                "Withdraw fencer",
+                $"Withdraw {row.Name}?\n\n" +
+                "All of their remaining matches will end as 0–0 walkovers and their opponents will win automatically. " +
+                "Already-finished matches keep their scores.",
+                "Withdraw", "Cancel");
+            if (!confirm) return;
+        }
+
+        await _vm.WithdrawFencerCommand.ExecuteAsync(row);
+    }
+
+    /// <summary>"Assign…" button on an unassigned fencer chip.</summary>
+    private async void OnAssignFencerClicked(object? sender, EventArgs e)
+    {
+        if (sender is not BindableObject bo || bo.BindingContext is not EditorPoolFencerVm chip) return;
+        await ShowMovePickerAsync(chip);
+    }
+
+    /// <summary>"Move…" button on a fencer chip inside a draft pool.</summary>
+    private async void OnMoveFencerClicked(object? sender, EventArgs e)
+    {
+        if (sender is not BindableObject bo || bo.BindingContext is not EditorPoolFencerVm chip) return;
+        await ShowMovePickerAsync(chip);
+    }
+
+    private async Task ShowMovePickerAsync(EditorPoolFencerVm chip)
+    {
+        if (_vm.Tournament is null) return;
+
+        // Build the action sheet: every existing pool + Unassigned + Cancel.
+        var pools = _vm.DraftPools.ToList();
+        var labels = new List<string>(pools.Count + 1);
+        foreach (var p in pools) labels.Add(p.Title);
+        labels.Add("Unassigned");
+
+        var choice = await DisplayActionSheet(
+            $"Move {chip.Name} to…",
+            "Cancel",
+            null,
+            labels.ToArray());
+        if (string.IsNullOrEmpty(choice) || choice == "Cancel") return;
+
+        string targetPoolId = choice == "Unassigned"
+            ? ""
+            : pools.First(p => p.Title == choice).PoolId;
+
+        await _vm.MoveFencerToPoolAsync(chip.FencerId, targetPoolId);
     }
 }
