@@ -7,7 +7,7 @@ using JustAnotherHemaClub.Models;
 
 namespace JustAnotherHemaClub.Services;
 
-public class GoogleSheetsService : IGoogleSheetsService
+public partial class GoogleSheetsService : IGoogleSheetsService
 {
     private readonly string _spreadsheetId;
     private SheetsService? _service;

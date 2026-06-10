@@ -1,0 +1,559 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels"
+             xmlns:sel="clr-namespace:JustAnotherHemaClub.Selectors"
+             x:Class="JustAnotherHemaClub.Views.TournamentHubPage"
+             x:Name="HubPage"
+             x:DataType="vm:TournamentHubViewModel"
+             Title="Tournament">
+
+    <ContentPage.Resources>
+
+        <!-- ===== Pools tab ===== -->
+        <DataTemplate x:Key="PoolsTabTemplate" x:DataType="vm:TournamentHubTab">
+            <ScrollView>
+                <VerticalStackLayout Padding="16,8,16,16" Spacing="14">
+
+                    <Label Text="{Binding Vm.PoolsVm.ErrorMessage}"
+                           TextColor="{StaticResource DangerRed}"
+                           IsVisible="{Binding Vm.PoolsVm.ErrorMessage, Converter={StaticResource StringNotEmptyConverter}, FallbackValue=False}" />
+
+                    <Label Text="No pools yet. Start the tournament from the editor."
+                           Style="{StaticResource Caption}"
+                           HorizontalOptions="Center"
+                           IsVisible="{Binding Vm.PoolsVm.HasNoPools}" />
+
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Vm.PoolsVm.Pools}" Spacing="12">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="vm:PoolRowVm">
+                                <Border Style="{StaticResource Card}">
+                                    <VerticalStackLayout Spacing="10">
+
+                                        <!-- Pool header: tap anywhere on this row to expand/collapse -->
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8"
+                                              BackgroundColor="Transparent">
+                                            <Grid.GestureRecognizers>
+                                                <TapGestureRecognizer
+                                                    Command="{Binding Source={x:Reference HubPage}, Path=BindingContext.PoolsVm.ToggleExpandedCommand}"
+                                                    CommandParameter="{Binding .}" />
+                                            </Grid.GestureRecognizers>
+                                            <Label Grid.Column="0" Text="{Binding ExpandGlyph}"
+                                                   FontSize="20" TextColor="{StaticResource Wine}"
+                                                   VerticalOptions="Center" />
+                                            <VerticalStackLayout Grid.Column="1" Spacing="0">
+                                                <Label Text="{Binding Title}" Style="{StaticResource H2}" />
+                                                <Label Text="{Binding ProgressText}" Style="{StaticResource Caption}" />
+                                            </VerticalStackLayout>
+                                            <Label Grid.Column="2" Text="{Binding ClosedLabel}"
+                                                   Style="{StaticResource Caption}" VerticalOptions="Center"
+                                                   IsVisible="{Binding IsClosed}" />
+                                        </Grid>
+
+                                        <!-- Roster shown when the card is collapsed -->
+                                        <Label Text="{Binding FencerNamesText}"
+                                               Style="{StaticResource Caption}"
+                                               TextColor="{StaticResource Wine}"
+                                               LineBreakMode="WordWrap"
+                                               IsVisible="{Binding IsCollapsed}" />
+
+                                        <Label Text="{Binding NextMatchText}"
+                                               Style="{StaticResource Caption}"
+                                               TextColor="{StaticResource Wine}"
+                                               IsVisible="{Binding IsExpanded}" />
+
+                                        <!-- Matches -->
+                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Matches}"
+                                                             Spacing="6"
+                                                             IsVisible="{Binding IsExpanded}">
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:PoolMatchRowVm">
+                                                    <Border Stroke="{StaticResource Wine}" StrokeThickness="1"
+                                                            StrokeShape="RoundRectangle 8"
+                                                            BackgroundColor="{StaticResource CreamSoft}"
+                                                            Padding="10,8">
+                                                        <Border.GestureRecognizers>
+                                                            <TapGestureRecognizer
+                                                                Command="{Binding Source={x:Reference HubPage}, Path=BindingContext.PoolsVm.OpenMatchCommand}"
+                                                                CommandParameter="{Binding .}" />
+                                                        </Border.GestureRecognizers>
+                                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                                            <Label Grid.Column="0" Text="{Binding Title}"
+                                                                   FontAttributes="Bold"
+                                                                   TextColor="{StaticResource Wine}"
+                                                                   VerticalOptions="Center" />
+                                                            <Label Grid.Column="1" Text="{Binding ScoreText}"
+                                                                   FontAttributes="Bold"
+                                                                   TextColor="{StaticResource Wine}"
+                                                                   VerticalOptions="Center" />
+                                                            <VerticalStackLayout Grid.Column="2" Spacing="0">
+                                                                <Label Text="{Binding StatusText}"
+                                                                       Style="{StaticResource Caption}"
+                                                                       TextColor="{Binding StatusColor}" />
+                                                                <Label Text="{Binding LockText}"
+                                                                       Style="{StaticResource Caption}"
+                                                                       TextColor="{StaticResource DangerRed}"
+                                                                       IsVisible="{Binding IsLockedByOther}" />
+                                                            </VerticalStackLayout>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
+                                        </VerticalStackLayout>
+
+                                        <!-- Close / reopen pool: only when the user can edit AND the toggle is actually allowed -->
+                                        <Button Text="{Binding CloseButtonText}"
+                                                BackgroundColor="#476FB5"
+                                                TextColor="{StaticResource Cream}"
+                                                IsVisible="{Binding CanShowCloseButton}"
+                                                Command="{Binding Source={x:Reference HubPage}, Path=BindingContext.PoolsVm.TogglePoolClosedCommand}"
+                                                CommandParameter="{Binding .}" />
+                                    </VerticalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+
+                </VerticalStackLayout>
+            </ScrollView>
+        </DataTemplate>
+
+        <!-- ===== Elimination tab ===== -->
+        <DataTemplate x:Key="ElimTabTemplate" x:DataType="vm:TournamentHubTab">
+            <ScrollView>
+                <VerticalStackLayout Padding="16,8,16,16" Spacing="12">
+
+                    <Label Text="{Binding Vm.ElimVm.ErrorMessage}"
+                           TextColor="{StaticResource DangerRed}"
+                           IsVisible="{Binding Vm.ElimVm.ErrorMessage, Converter={StaticResource StringNotEmptyConverter}, FallbackValue=False}" />
+
+                    <!-- Pre-bracket: generate-bracket card -->
+                    <Border Style="{StaticResource Card}"
+                            IsVisible="{Binding Vm.ElimVm.HasNoBracket}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Elimination bracket" Style="{StaticResource H2}" />
+                            <Label Text="{Binding Vm.ElimVm.GenerateHint}" Style="{StaticResource Caption}" />
+                            <Button Text="Generate bracket"
+                                    BackgroundColor="#476FB5"
+                                    TextColor="{StaticResource Cream}"
+                                    IsVisible="{Binding Vm.ElimVm.CanGenerateBracket}"
+                                    IsEnabled="{Binding Vm.ElimVm.CanGenerateBracket}"
+                                    Command="{Binding Vm.ElimVm.GenerateBracketCommand}" />
+                            <ActivityIndicator IsRunning="{Binding Vm.ElimVm.IsBusy}"
+                                               IsVisible="{Binding Vm.ElimVm.IsBusy}"
+                                               Color="{StaticResource Wine}"
+                                               HeightRequest="24" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Bracket tree: one column per round, cards sized so feeders line up. -->
+                    <ScrollView Orientation="Horizontal"
+                                IsVisible="{Binding Vm.ElimVm.HasBracket}">
+                        <HorizontalStackLayout Spacing="0"
+                                               BindableLayout.ItemsSource="{Binding Vm.ElimVm.Columns}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ElimRoundColumnVm">
+                                    <VerticalStackLayout Spacing="0" WidthRequest="220">
+                                        <Label Text="{Binding Title}"
+                                               Style="{StaticResource H2}"
+                                               HorizontalOptions="Center"
+                                               Padding="0,0,0,8" />
+
+                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Matches}"
+                                                             Spacing="12">
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:ElimMatchRowVm">
+                                                    <Grid HeightRequest="{Binding CardHeight}"
+                                                          ColumnDefinitions="2,8,*,8"
+                                                          RowDefinitions="*,Auto,*">
+
+                                                        <!-- LEFT vertical spine: joins the two feeder cards' centers. -->
+                                                        <BoxView Grid.Column="0" Grid.RowSpan="3"
+                                                                 WidthRequest="2"
+                                                                 Color="{StaticResource Wine}"
+                                                                 Margin="{Binding SpineMargin}"
+                                                                 IsVisible="{Binding HasLeftConnector}" />
+
+                                                        <!-- LEFT horizontal stub: spine → card content. -->
+                                                        <BoxView Grid.Column="1" Grid.Row="1"
+                                                                 HeightRequest="2"
+                                                                 Color="{StaticResource Wine}"
+                                                                 VerticalOptions="Center"
+                                                                 IsVisible="{Binding HasLeftConnector}" />
+
+                                                        <!-- Match card content -->
+                                                        <Border Grid.Column="2" Grid.Row="1"
+                                                                VerticalOptions="Center"
+                                                                Stroke="{StaticResource Wine}" StrokeThickness="1"
+                                                                StrokeShape="RoundRectangle 8"
+                                                                BackgroundColor="{StaticResource CreamSoft}"
+                                                                Padding="10,8">
+                                                            <Border.GestureRecognizers>
+                                                                <TapGestureRecognizer
+                                                                    Command="{Binding Source={x:Reference HubPage}, Path=BindingContext.ElimVm.OpenMatchCommand}"
+                                                                    CommandParameter="{Binding .}" />
+                                                            </Border.GestureRecognizers>
+                                                            <VerticalStackLayout Spacing="4">
+                                                                <Label Text="{Binding Tag}"
+                                                                       Style="{StaticResource Caption}"
+                                                                       TextColor="{StaticResource Wine}"
+                                                                       FontAttributes="Bold"
+                                                                       IsVisible="{Binding HasTag}" />
+                                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                                                    <Label Grid.Column="0" Text="{Binding LeftName}"
+                                                                           LineBreakMode="TailTruncation"
+                                                                           FontAttributes="Bold"
+                                                                           TextColor="{StaticResource Wine}" />
+                                                                    <Label Grid.Column="1" Text="✓"
+                                                                           TextColor="#1F8A2E"
+                                                                           FontAttributes="Bold"
+                                                                           IsVisible="{Binding LeftWon}" />
+                                                                </Grid>
+                                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                                                    <Label Grid.Column="0" Text="{Binding RightName}"
+                                                                           LineBreakMode="TailTruncation"
+                                                                           FontAttributes="Bold"
+                                                                           TextColor="{StaticResource Wine}" />
+                                                                    <Label Grid.Column="1" Text="✓"
+                                                                           TextColor="#1F8A2E"
+                                                                           FontAttributes="Bold"
+                                                                           IsVisible="{Binding RightWon}" />
+                                                                </Grid>
+                                                                <Grid ColumnDefinitions="*,Auto">
+                                                                    <Label Grid.Column="0" Text="{Binding ScoreText}"
+                                                                           FontAttributes="Bold"
+                                                                           TextColor="{StaticResource Wine}" />
+                                                                    <Label Grid.Column="1" Text="{Binding StatusText}"
+                                                                           Style="{StaticResource Caption}"
+                                                                           TextColor="{Binding StatusColor}" />
+                                                                </Grid>
+                                                            </VerticalStackLayout>
+                                                        </Border>
+
+                                                        <!-- RIGHT horizontal tick: outgoing toward the next round. -->
+                                                        <BoxView Grid.Column="3" Grid.Row="1"
+                                                                 HeightRequest="2"
+                                                                 Color="{StaticResource Wine}"
+                                                                 VerticalOptions="Center"
+                                                                 IsVisible="{Binding HasRightConnector}" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
+                                        </VerticalStackLayout>
+                                    </VerticalStackLayout>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </HorizontalStackLayout>
+                    </ScrollView>
+
+                </VerticalStackLayout>
+            </ScrollView>
+        </DataTemplate>
+
+        <DataTemplate x:Key="PoolStandingsTabTemplate" x:DataType="vm:TournamentHubTab">
+            <ScrollView>
+                <VerticalStackLayout Padding="16,8,16,16" Spacing="14">
+
+                    <Label Text="No pools yet."
+                           Style="{StaticResource Caption}"
+                           HorizontalOptions="Center"
+                           IsVisible="{Binding Vm.PoolStandingsVm.HasNoPools}" />
+
+                    <!-- ===== Overall standings (all pools combined) ===== -->
+                    <Border Style="{StaticResource Card}"
+                            IsVisible="{Binding Vm.PoolStandingsVm.HasOverall}">
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="Overall standings" Style="{StaticResource H2}" />
+
+                            <!-- Column headers (mirror the per-pool table) -->
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto"
+                                  ColumnSpacing="8">
+                                <Label Grid.Column="0" Text="#"      Style="{StaticResource Caption}" />
+                                <Label Grid.Column="1" Text="Fencer" Style="{StaticResource Caption}" />
+                                <Label Grid.Column="2" Text="W/M"    Style="{StaticResource Caption}"
+                                       HorizontalTextAlignment="End" />
+                                <Label Grid.Column="3" Text="Win%"   Style="{StaticResource Caption}"
+                                       HorizontalTextAlignment="End" />
+                                <Label Grid.Column="4" Text="Avg+"   Style="{StaticResource Caption}"
+                                       HorizontalTextAlignment="End" />
+                                <Label Grid.Column="5" Text="Avg−"   Style="{StaticResource Caption}"
+                                       HorizontalTextAlignment="End" />
+                                <Label Grid.Column="6" Text="R"      Style="{StaticResource Caption}"
+                                       HorizontalTextAlignment="End" />
+                            </Grid>
+
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Vm.PoolStandingsVm.OverallRows}"
+                                                 Spacing="2">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:PoolStandingRowVm">
+                                        <VerticalStackLayout Spacing="2">
+                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto"
+                                                  ColumnSpacing="8" Padding="0,4">
+                                                <Label Grid.Column="0" Text="{Binding RankText}"
+                                                       FontAttributes="Bold"
+                                                       TextColor="{StaticResource Wine}" />
+                                                <Label Grid.Column="1" Text="{Binding Name}" />
+                                                <Label Grid.Column="2" Text="{Binding WinsText}"
+                                                       HorizontalTextAlignment="End" />
+                                                <Label Grid.Column="3" Text="{Binding WinPctText}"
+                                                       FontAttributes="Bold"
+                                                       HorizontalTextAlignment="End" />
+                                                <Label Grid.Column="4" Text="{Binding AvgForText}"
+                                                       HorizontalTextAlignment="End" />
+                                                <Label Grid.Column="5" Text="{Binding AvgAgainstText}"
+                                                       HorizontalTextAlignment="End" />
+                                                <Label Grid.Column="6" Text="{Binding RedCardsText}"
+                                                       HorizontalTextAlignment="End" />
+                                            </Grid>
+
+                                            <!-- Cut-off line under the last fencer who qualifies for the elim. -->
+                                            <BoxView HeightRequest="2"
+                                                     Color="{StaticResource Wine}"
+                                                     IsVisible="{Binding ShowQualificationSeparator}" />
+                                            <Label Text="↑ Last fencer entering elimination"
+                                                   Style="{StaticResource Caption}"
+                                                   TextColor="{StaticResource Wine}"
+                                                   HorizontalOptions="Center"
+                                                   IsVisible="{Binding ShowQualificationSeparator}" />
+                                        </VerticalStackLayout>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- ===== Per-pool cards (unchanged) ===== -->
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Vm.PoolStandingsVm.Groups}"
+                                         Spacing="12">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="vm:PoolStandingsGroupVm">
+                                <Border Style="{StaticResource Card}">
+                                    <VerticalStackLayout Spacing="6">
+                                        <Label Text="{Binding Title}" Style="{StaticResource H2}" />
+
+                                        <!-- Column headers -->
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto"
+                                              ColumnSpacing="8">
+                                            <Label Grid.Column="0" Text="#"      Style="{StaticResource Caption}" />
+                                            <Label Grid.Column="1" Text="Fencer" Style="{StaticResource Caption}" />
+                                            <Label Grid.Column="2" Text="W/M"    Style="{StaticResource Caption}"
+                                                   HorizontalTextAlignment="End" />
+                                            <Label Grid.Column="3" Text="Win%"   Style="{StaticResource Caption}"
+                                                   HorizontalTextAlignment="End" />
+                                            <Label Grid.Column="4" Text="Avg+"   Style="{StaticResource Caption}"
+                                                   HorizontalTextAlignment="End" />
+                                            <Label Grid.Column="5" Text="Avg−"   Style="{StaticResource Caption}"
+                                                   HorizontalTextAlignment="End" />
+                                            <Label Grid.Column="6" Text="R"      Style="{StaticResource Caption}"
+                                                   HorizontalTextAlignment="End" />
+                                        </Grid>
+
+                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rows}"
+                                                             Spacing="2">
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:PoolStandingRowVm">
+                                                    <VerticalStackLayout Spacing="2">
+                                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto"
+                                                              ColumnSpacing="8" Padding="0,4">
+                                                            <Label Grid.Column="0" Text="{Binding RankText}"
+                                                                   FontAttributes="Bold"
+                                                                   TextColor="{StaticResource Wine}" />
+                                                            <Label Grid.Column="1" Text="{Binding Name}" />
+                                                            <Label Grid.Column="2" Text="{Binding WinsText}"
+                                                                   HorizontalTextAlignment="End" />
+                                                            <Label Grid.Column="3" Text="{Binding WinPctText}"
+                                                                   FontAttributes="Bold"
+                                                                   HorizontalTextAlignment="End" />
+                                                            <Label Grid.Column="4" Text="{Binding AvgForText}"
+                                                                   HorizontalTextAlignment="End" />
+                                                            <Label Grid.Column="5" Text="{Binding AvgAgainstText}"
+                                                                   HorizontalTextAlignment="End" />
+                                                            <Label Grid.Column="6" Text="{Binding RedCardsText}"
+                                                                   HorizontalTextAlignment="End" />
+                                                        </Grid>
+
+                                                        <!-- Qualification cut-off line -->
+                                                        <BoxView HeightRequest="2"
+                                                                 Color="{StaticResource Wine}"
+                                                                 IsVisible="{Binding ShowQualificationSeparator}" />
+                                                        <Label Text="↑ Qualified for elimination"
+                                                               Style="{StaticResource Caption}"
+                                                               TextColor="{StaticResource Wine}"
+                                                               HorizontalOptions="Center"
+                                                               IsVisible="{Binding ShowQualificationSeparator}" />
+                                                    </VerticalStackLayout>
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
+                                        </VerticalStackLayout>
+                                    </VerticalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+
+                </VerticalStackLayout>
+            </ScrollView>
+        </DataTemplate>
+
+        <!-- ===== Final standings tab ===== -->
+        <DataTemplate x:Key="FinalStandingsTabTemplate" x:DataType="vm:TournamentHubTab">
+            <ScrollView>
+                <VerticalStackLayout Padding="16,8,16,16" Spacing="14">
+
+                    <Label Text="{Binding Vm.FinalStandingsVm.EmptyHint}"
+                           Style="{StaticResource Caption}"
+                           HorizontalOptions="Center"
+                           IsVisible="{Binding Vm.FinalStandingsVm.HasNoRows}" />
+
+                    <Border Style="{StaticResource Card}"
+                            IsVisible="{Binding Vm.FinalStandingsVm.HasRows}">
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="Final standings" Style="{StaticResource H2}" />
+
+                            <!-- Column headers -->
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto"
+                                  ColumnSpacing="10">
+                                <Label Grid.Column="0" Text="#"              Style="{StaticResource Caption}" />
+                                <Label Grid.Column="1" Text="Fencer"         Style="{StaticResource Caption}" />
+                                <Label Grid.Column="2" Text="Eliminated in"  Style="{StaticResource Caption}"
+                                       HorizontalTextAlignment="End" />
+                                <Label Grid.Column="3" Text="Lost to"        Style="{StaticResource Caption}"
+                                       HorizontalTextAlignment="End" />
+                            </Grid>
+
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Vm.FinalStandingsVm.Rows}"
+                                                 Spacing="2">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:FinalStandingRowVm">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto"
+                                              ColumnSpacing="10" Padding="0,4">
+                                            <Label Grid.Column="0" Text="{Binding PlaceText}"
+                                                   FontAttributes="Bold"
+                                                   TextColor="{StaticResource Wine}" />
+                                            <Label Grid.Column="1" Text="{Binding Name}"
+                                                   LineBreakMode="TailTruncation" />
+                                            <Label Grid.Column="2" Text="{Binding EliminatedAt}"
+                                                   Style="{StaticResource Caption}"
+                                                   HorizontalTextAlignment="End" />
+                                            <Label Grid.Column="3" Text="{Binding DefeatedByText}"
+                                                   Style="{StaticResource Caption}"
+                                                   HorizontalTextAlignment="End" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
+                </VerticalStackLayout>
+            </ScrollView>
+        </DataTemplate>
+
+        <sel:TournamentHubTabTemplateSelector x:Key="TabSelector"
+            PoolsTemplate="{StaticResource PoolsTabTemplate}"
+            ElimTemplate="{StaticResource ElimTabTemplate}"
+            PoolStandingsTemplate="{StaticResource PoolStandingsTabTemplate}"
+            FinalStandingsTemplate="{StaticResource FinalStandingsTabTemplate}" />
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,Auto,*">
+
+        <!-- Header -->
+        <Border Grid.Row="0" Style="{StaticResource Card}" Margin="16,16,16,0">
+            <VerticalStackLayout Spacing="2">
+                <Label Text="{Binding TournamentName}" Style="{StaticResource H1}" />
+                <Label Style="{StaticResource Caption}">
+                    <Label.FormattedText>
+                        <FormattedString>
+                            <Span Text="{Binding StateText}" />
+                            <Span Text=" &#183; " />
+                            <Span Text="{Binding RoleText}" />
+                        </FormattedString>
+                    </Label.FormattedText>
+                </Label>
+                <Label Text="{Binding ErrorMessage}"
+                       TextColor="{StaticResource DangerRed}"
+                       IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}, FallbackValue=False}" />
+                <Button Text="Manage Roster / Start"
+                        BackgroundColor="#476FB5"
+                        TextColor="{StaticResource Cream}"
+                        IsVisible="{Binding ShowSetupHint}"
+                        Clicked="OnManageRosterClicked"
+                        Margin="0,8,0,0" />
+                <Button Text="End Tournament"
+                        BackgroundColor="#1F8A2E"
+                        TextColor="{StaticResource Cream}"
+                        IsVisible="{Binding CanEndTournament}"
+                        Command="{Binding EndTournamentCommand}"
+                        Margin="0,8,0,0" />
+                <Button Text="Reopen Tournament"
+                        BackgroundColor="#476FB5"
+                        TextColor="{StaticResource Cream}"
+                        IsVisible="{Binding CanReopenTournament}"
+                        Command="{Binding ReopenTournamentCommand}"
+                        Margin="0,8,0,0" />
+            </VerticalStackLayout>
+        </Border>
+
+        <!-- Tab buttons -->
+        <Grid Grid.Row="1" Padding="16,8" ColumnDefinitions="*,*,*,*" ColumnSpacing="6">
+            <Button Grid.Column="0" Text="Pools"
+                    Command="{Binding ShowPoolsTabCommand}"
+                    BackgroundColor="{StaticResource CreamSoft}"
+                    TextColor="{StaticResource Wine}">
+                <Button.Triggers>
+                    <DataTrigger TargetType="Button" Binding="{Binding IsPoolsTab}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Wine}" />
+                        <Setter Property="TextColor"       Value="{StaticResource Cream}" />
+                    </DataTrigger>
+                </Button.Triggers>
+            </Button>
+            <Button Grid.Column="1" Text="Pool Std"
+                    Command="{Binding ShowPoolStandingsTabCommand}"
+                    BackgroundColor="{StaticResource CreamSoft}"
+                    TextColor="{StaticResource Wine}">
+                <Button.Triggers>
+                    <DataTrigger TargetType="Button" Binding="{Binding IsPoolStandingsTab}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Wine}" />
+                        <Setter Property="TextColor"       Value="{StaticResource Cream}" />
+                    </DataTrigger>
+                </Button.Triggers>
+            </Button>
+            <Button Grid.Column="2" Text="Elim"
+                    Command="{Binding ShowElimTabCommand}"
+                    BackgroundColor="{StaticResource CreamSoft}"
+                    TextColor="{StaticResource Wine}">
+                <Button.Triggers>
+                    <DataTrigger TargetType="Button" Binding="{Binding IsElimTab}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Wine}" />
+                        <Setter Property="TextColor"       Value="{StaticResource Cream}" />
+                    </DataTrigger>
+                </Button.Triggers>
+            </Button>
+            <Button Grid.Column="3" Text="Final"
+                    Command="{Binding ShowFinalStandingsTabCommand}"
+                    BackgroundColor="{StaticResource CreamSoft}"
+                    TextColor="{StaticResource Wine}">
+                <Button.Triggers>
+                    <DataTrigger TargetType="Button" Binding="{Binding IsFinalStandingsTab}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Wine}" />
+                        <Setter Property="TextColor"       Value="{StaticResource Cream}" />
+                    </DataTrigger>
+                </Button.Triggers>
+            </Button>
+        </Grid>
+
+        <ActivityIndicator Grid.Row="2"
+                           IsRunning="{Binding IsLoading}"
+                           IsVisible="{Binding IsLoading}"
+                           Color="{StaticResource Wine}"
+                           HeightRequest="28" Margin="0,4" />
+
+        <CarouselView Grid.Row="3"
+                      ItemsSource="{Binding Tabs}"
+                      Position="{Binding SelectedTabIndex, Mode=TwoWay}"
+                      Loop="False"
+                      IsSwipeEnabled="False"
+                      ItemTemplate="{StaticResource TabSelector}" />
+    </Grid>
+</ContentPage>

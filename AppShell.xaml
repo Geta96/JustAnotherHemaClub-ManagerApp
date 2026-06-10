@@ -66,6 +66,9 @@
                         <DataTrigger TargetType="Label" Binding="{Binding Title}" Value="My Profile">
                             <Setter Property="Text" Value="◉" />
                         </DataTrigger>
+                        <DataTrigger TargetType="Label" Binding="{Binding Title}" Value="Tournaments">
+                            <Setter Property="Text" Value="⚑" />
+                        </DataTrigger>
                     </Label.Triggers>
                 </Label>
 
@@ -113,6 +116,10 @@
 
     <FlyoutItem Title="Trainings" Route="trainings">
         <ShellContent ContentTemplate="{DataTemplate views:TrainingsHubPage}" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Tournaments" Route="tournaments">
+        <ShellContent ContentTemplate="{DataTemplate views:TournamentsPage}" />
     </FlyoutItem>
 
     <FlyoutItem Title="Fencers" Route="fencers">

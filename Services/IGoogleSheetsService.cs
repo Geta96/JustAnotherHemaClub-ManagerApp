@@ -27,4 +27,27 @@ public interface IGoogleSheetsService
     Task<List<RecurringTrainingRule>> GetRecurringTrainingsAsync();
     Task UpsertRecurringTrainingAsync(RecurringTrainingRule rule);
     Task DeleteRecurringTrainingAsync(string ruleId);
+
+    // ---- Tournaments (normalised + versioned) ----
+
+    Task<List<Tournament>> GetTournamentHeadersAsync();
+    Task<Tournament?> GetTournamentAsync(string tournamentId);
+    Task<List<Match>> GetMatchesAsync(string tournamentId);
+
+    Task UpsertTournamentHeaderAsync(Tournament tournament);
+    Task DeleteTournamentAsync(string tournamentId);
+
+    Task UpsertTournamentFencerAsync(string tournamentId, TournamentFencer fencer);
+    Task DeleteTournamentFencerAsync(string tournamentId, string fencerId);
+
+    Task UpsertPoolAsync(string tournamentId, Pool pool);
+    Task UpsertMatchAsync(string tournamentId, Match match);
+
+    /// <summary>One HTTP call regardless of how many pools — used by Start Tournament.</summary>
+    Task AppendPoolsAsync(string tournamentId, IList<Pool> pools);
+
+    /// <summary>One HTTP call regardless of how many matches — used by Start Tournament.</summary>
+    Task AppendMatchesAsync(string tournamentId, IList<Match> matches);
+
+    Task SaveFinalStandingsAsync(string tournamentId, IList<string> orderedFencerIds);
 }

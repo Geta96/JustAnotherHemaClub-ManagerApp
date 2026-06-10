@@ -1,0 +1,120 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels"
+             x:Class="JustAnotherHemaClub.Views.TournamentsPage"
+             x:DataType="vm:TournamentsViewModel"
+             Title="Tournaments">
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+        <!-- Title + refresh -->
+        <Grid Grid.Row="0" Padding="16,16,16,0"
+              ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalOptions="Center">
+            <Label Grid.Column="0" Text="Tournaments" Style="{StaticResource H1}"
+                   VerticalOptions="Center" />
+            <Border Grid.Column="1"
+                    BackgroundColor="{StaticResource CreamSoft}"
+                    Stroke="{StaticResource Wine}" StrokeThickness="1"
+                    StrokeShape="RoundRectangle 10"
+                    Padding="10,6">
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnRefreshTapped" />
+                </Border.GestureRecognizers>
+                <Label Text="↻" FontSize="22" FontAttributes="Bold"
+                       TextColor="{StaticResource Wine}"
+                       HorizontalOptions="Center" VerticalOptions="Center" />
+            </Border>
+        </Grid>
+
+        <!-- Filter -->
+        <Border Grid.Row="1" Margin="16,12,16,0"
+                BackgroundColor="{StaticResource CreamSoft}"
+                Stroke="{StaticResource Wine}" StrokeThickness="1"
+                StrokeShape="RoundRectangle 8"
+                Padding="10,2">
+            <Entry Placeholder="Filter by name..." Text="{Binding Filter}" />
+        </Border>
+
+        <!-- List -->
+        <ScrollView Grid.Row="2"
+                    IsVisible="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}">
+            <VerticalStackLayout Padding="16,12,16,16" Spacing="10"
+                                 BindableLayout.ItemsSource="{Binding FilteredTournaments}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TournamentRow">
+                        <Border Style="{StaticResource Card}">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnTournamentTapped" />
+                            </Border.GestureRecognizers>
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                <VerticalStackLayout Grid.Column="0" Spacing="2">
+                                    <Label Text="{Binding Name}"
+                                           FontAttributes="Bold" FontSize="17"
+                                           TextColor="{StaticResource Wine}" />
+                                    <Label Style="{StaticResource Caption}">
+                                        <Label.FormattedText>
+                                            <FormattedString>
+                                                <Span Text="{Binding StateText}" />
+                                                <Span Text=" · " />
+                                                <Span Text="{Binding FencerCountText}" />
+                                                <Span Text=" · " />
+                                                <Span Text="{Binding CreatedAtText}" />
+                                            </FormattedString>
+                                        </Label.FormattedText>
+                                    </Label>
+                                </VerticalStackLayout>
+
+                                <!-- Trash icon: own gesture so it doesn't trigger the card's open-handler. -->
+                                <Border Grid.Column="1"
+                                        BackgroundColor="{StaticResource CreamSoft}"
+                                        Stroke="{StaticResource DangerRed}" StrokeThickness="1"
+                                        StrokeShape="RoundRectangle 8"
+                                        Padding="10,4"
+                                        VerticalOptions="Center">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnDeleteTapped" />
+                                    </Border.GestureRecognizers>
+                                    <Label Text="🗑"
+                                           FontSize="18"
+                                           TextColor="{StaticResource DangerRed}"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center" />
+                                </Border>
+
+                                <Label Grid.Column="2" Text="›"
+                                       FontSize="24" FontAttributes="Bold"
+                                       TextColor="{StaticResource Wine}"
+                                       VerticalOptions="Center" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <!-- Empty hint -->
+        <Label Grid.Row="2"
+               Text="No tournaments yet. Tap '+ New Tournament' to create one."
+               Style="{StaticResource Caption}"
+               HorizontalOptions="Center" VerticalOptions="Center"
+               IsVisible="{Binding HasNoTournaments}" />
+
+        <!-- New button -->
+        <Button Grid.Row="3" Text="+ New Tournament"
+                BackgroundColor="#476FB5"
+                TextColor="{StaticResource Cream}"
+                Margin="16,8,16,16"
+                Clicked="OnNewTournamentClicked" />
+
+        <!-- Loading overlay -->
+        <VerticalStackLayout Grid.RowSpan="4"
+                             HorizontalOptions="Center" VerticalOptions="Center" Spacing="8"
+                             IsVisible="{Binding IsLoading}">
+            <ActivityIndicator IsRunning="{Binding IsLoading}"
+                               Color="{StaticResource Wine}"
+                               WidthRequest="48" HeightRequest="48" />
+            <Label Text="Loading..." TextColor="{StaticResource Wine}" FontAttributes="Bold" />
+        </VerticalStackLayout>
+    </Grid>
+</ContentPage>
