@@ -196,7 +196,16 @@ public partial class TournamentEditorVm : ObservableObject
     [RelayCommand]
     public async Task StartTournamentAsync()
     {
-        if (Tournament is null || !CanStart) return;
+        if (Tournament is null || !IsExisting || !IsSetupState) return;
+
+        // Always re-check; the page also alerts, but the banner is the source of truth.
+        if (ActiveFencerCount < MinFencersToStart)
+        {
+            ErrorMessage =
+                $"Cannot start: need at least {MinFencersToStart} active fencers " +
+                $"(currently {ActiveFencerCount}).";
+            return;
+        }
 
         ErrorMessage = "";
         IsStarting = true;

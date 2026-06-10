@@ -12,8 +12,10 @@ namespace JustAnotherHemaClub.ViewModels;
 ///   2. Average points for / match               — higher is better
 ///   3. Average points against / match           — lower is better
 ///   4. Red card count                           — lower is better
-/// Top 60% of each pool's roster qualify for the elimination round; a visual
-/// separator is drawn after the last qualifying fencer.
+/// Qualification for the elimination is decided by <see cref="TournamentEngine.ComputeQualifyingFencerIds"/>
+/// (per-pool top 60%, topped up to a minimum of 8, or everyone if fewer than 8 fencers exist).
+/// The cut-off separator in each pool and in the overall card is drawn directly under the last
+/// fencer who is in that authoritative set.
 /// </summary>
 public partial class PoolStandingsTabViewModel : ObservableObject, IDisposable
 {
@@ -51,21 +53,29 @@ public partial class PoolStandingsTabViewModel : ObservableObject, IDisposable
 
         var nameById = _session.Current.Fencers.ToDictionary(f => f.Id, f => f.Name);
 
+        // Single source of truth — the engine decides who actually enters the elimination.
+        // This drives every separator on this page (per-pool AND overall).
+        var qualifiedIds = new HashSet<string>(
+            TournamentEngine.ComputeQualifyingFencerIds(_session.Current));
+
         foreach (var pool in _session.Current.Pools.OrderBy(p => p.Index))
         {
             var group = new PoolStandingsGroupVm(pool);
-            FillGroup(group, pool, nameById);
+            FillGroup(group, pool, nameById, qualifiedIds);
             Groups.Add(group);
         }
 
-        RebuildOverall(nameById);
+        RebuildOverall(nameById, qualifiedIds);
 
         OnPropertyChanged(nameof(HasNoPools));
         OnPropertyChanged(nameof(HasOverall));
     }
 
     private static void FillGroup(
-        PoolStandingsGroupVm group, Pool pool, IReadOnlyDictionary<string, string> nameById)
+        PoolStandingsGroupVm group,
+        Pool pool,
+        IReadOnlyDictionary<string, string> nameById,
+        IReadOnlySet<string> qualifiedIds)
     {
         // Aggregate per-fencer stats across this pool's finished matches.
         var stats = pool.FencerIds.ToDictionary(
@@ -87,11 +97,13 @@ public partial class PoolStandingsTabViewModel : ObservableObject, IDisposable
 
         var ordered = SortStats(stats.Values);
 
-        // Top 60% qualify; separator only when there's actually somebody below the cut.
-        int qualifyCount = (int)Math.Round(ordered.Count * 0.6, MidpointRounding.AwayFromZero);
-        if (qualifyCount < 1 && ordered.Count > 0) qualifyCount = 1;
-        if (qualifyCount > ordered.Count)          qualifyCount = ordered.Count;
-        bool showSeparator = qualifyCount > 0 && qualifyCount < ordered.Count;
+        // Separator goes under the LAST fencer in this pool who actually qualifies.
+        // The qualifier set is decided globally, so we just look each fencer up.
+        int lastQualifierIndex = -1;
+        for (int i = 0; i < ordered.Count; i++)
+            if (qualifiedIds.Contains(ordered[i].FencerId))
+                lastQualifierIndex = i;
+        bool showSeparator = lastQualifierIndex >= 0 && lastQualifierIndex < ordered.Count - 1;
 
         group.Rows.Clear();
         for (int i = 0; i < ordered.Count; i++)
@@ -101,19 +113,17 @@ public partial class PoolStandingsTabViewModel : ObservableObject, IDisposable
             group.Rows.Add(new PoolStandingRowVm(
                 s.FencerId, name, i + 1,
                 s.MatchesDone, s.Wins, s.PointsFor, s.PointsAgainst, s.RedCards,
-                showQualificationSeparator: showSeparator && i == qualifyCount - 1));
+                showQualificationSeparator: showSeparator && i == lastQualifierIndex));
         }
     }
 
     /// <summary>Rebuild the aggregated "Overall" card from every pool's finished matches.</summary>
-    private void RebuildOverall(IReadOnlyDictionary<string, string> nameById)
+    private void RebuildOverall(
+        IReadOnlyDictionary<string, string> nameById,
+        IReadOnlySet<string> qualifiedIds)
     {
         OverallRows.Clear();
         if (_session?.Current is null) return;
-
-        // Single source of truth — the engine decides who qualifies.
-        var qualifiedIds = new HashSet<string>(
-            TournamentEngine.ComputeQualifyingFencerIds(_session.Current));
 
         // Global per-fencer stats, used purely for ranking and display in this card.
         var stats = new Dictionary<string, MutableStats>();
@@ -175,22 +185,33 @@ public partial class PoolStandingsTabViewModel : ObservableObject, IDisposable
 
             // PoolsTabViewModel also patches the session, but be defensive and
             // patch here too — idempotent if it already happened.
+            bool patched = false;
             foreach (var pool in _session.Current.Pools)
             {
                 var idx = pool.Matches.FindIndex(m => m.Id == remote.Id);
                 if (idx < 0) continue;
                 pool.Matches[idx] = remote;
-
-                var nameById = _session.Current.Fencers.ToDictionary(f => f.Id, f => f.Name);
-
-                var group = Groups.FirstOrDefault(g => g.PoolId == pool.Id);
-                if (group is null) { Recompute(); return; }
-
-                FillGroup(group, pool, nameById);
-                RebuildOverall(nameById);              // also refresh the aggregated card
-                OnPropertyChanged(nameof(HasOverall));
-                return;
+                patched = true;
+                break;
             }
+            if (!patched) return;
+
+            // A match in ANY pool can shift the global qualifier set (e.g. a
+            // top-up beyond 60% may pick a different fencer when stats change),
+            // so refill every group + the overall card with a freshly computed set.
+            var nameById = _session.Current.Fencers.ToDictionary(f => f.Id, f => f.Name);
+            var qualifiedIds = new HashSet<string>(
+                TournamentEngine.ComputeQualifyingFencerIds(_session.Current));
+
+            foreach (var group in Groups)
+            {
+                var pool = _session.Current.Pools.FirstOrDefault(p => p.Id == group.PoolId);
+                if (pool is null) continue;
+                FillGroup(group, pool, nameById, qualifiedIds);
+            }
+
+            RebuildOverall(nameById, qualifiedIds);
+            OnPropertyChanged(nameof(HasOverall));
         });
     }
 

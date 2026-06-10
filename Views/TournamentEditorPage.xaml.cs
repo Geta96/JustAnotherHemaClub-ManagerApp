@@ -34,6 +34,18 @@ public partial class TournamentEditorPage : ContentPage
 
     private async void OnStartTournamentClicked(object? sender, EventArgs e)
     {
+        // Hard guard: if there aren't enough active fencers, tell the user up-front
+        // instead of silently disabling the button.
+        if (_vm.ActiveFencerCount < TournamentEditorVm.MinFencersToStart)
+        {
+            await DisplayAlert(
+                "Cannot start tournament",
+                $"You need at least {TournamentEditorVm.MinFencersToStart} active fencers to start.\n\n" +
+                $"Currently {_vm.ActiveFencerCount} active.",
+                "OK");
+            return;
+        }
+
         var confirm = await DisplayAlert(
             "Start tournament",
             $"This will create the pools and lock the roster. Continue?",

@@ -136,7 +136,6 @@
                     <Button Text="Start Tournament"
                             BackgroundColor="#1F8A2E"
                             TextColor="{StaticResource Cream}"
-                            IsEnabled="{Binding CanStart}"
                             IsVisible="{Binding IsSetupState}"
                             Clicked="OnStartTournamentClicked" />
                 </VerticalStackLayout>
