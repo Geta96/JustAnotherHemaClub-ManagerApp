@@ -25,5 +25,8 @@ public sealed class FinalStandingRowVm
     };
 
     public bool HasDefeatedBy => !string.IsNullOrEmpty(DefeatedByName);
-    public string DefeatedByText => HasDefeatedBy ? $"Lost to {DefeatedByName}" : "Champion";
+    public string DefeatedByText =>
+        HasDefeatedBy ? $"Lost to {DefeatedByName}"
+        : Place == 1   ? "Champion"
+        : "";
 }

@@ -390,67 +390,107 @@ public static class TournamentEngine
     // ---------- Final standings ----------
 
     /// <summary>
-    /// Final placement (best first) for every fencer who entered the bracket.
-    /// 1 = gold, 2 = silver, 3 = bronze winner, 4 = bronze loser.
-    /// Then, recursively per round (QF → R16 → R32 → R64 → R128):
-    ///   the losers of that round are placed after all earlier-eliminated rounds,
+    /// Final placement (best first) for every fencer in the tournament.
+    ///
+    /// Bracket portion:
+    ///   1 = gold, 2 = silver, 3 = bronze winner, 4 = bronze loser. Then per
+    ///   earlier round (QF → R16 → R32 → R64 → R128) the losers are placed,
     ///   ordered by the FINAL position of the fencer who knocked them out.
-    ///   So in QF: the QF-loser whose conqueror finished 1st → 5th place,
-    ///   conqueror finished 2nd → 6th, 3rd → 7th, 4th → 8th. The same logic
-    ///   places 9–16, 17–32, 33–64, 65–128. Byes (no opponent) are skipped.
+    ///
+    /// After every bracket entrant is placed, fencers who never made it into
+    /// the elimination are appended in pool-rating order (same Win% / AvgFor /
+    /// AvgAgainst / RedCards used by the Pool Standings tab and bracket
+    /// seeding) so the final standings list every participant.
     /// </summary>
     public static List<string> ComputeFinalStandings(Tournament tournament)
     {
         var placement = new List<string>();
         var bracket = tournament.Bracket;
-        if (bracket is null || bracket.Rounds.Count == 0) return placement;
 
-        var final  = bracket.Rounds[^1].Matches.FirstOrDefault();
-        var bronze = bracket.BronzeMatch;
-
-        // Slots 1..4 are explicit.
-        AddPlace(placement, final?.WinnerFencerId);
-        AddPlace(placement, final is not null ? LoserOf(final) : null);
-        AddPlace(placement, bronze?.WinnerFencerId);
-        AddPlace(placement, bronze is not null ? LoserOf(bronze) : null);
-
-        var placeOf = new Dictionary<string, int>();
-        for (int i = 0; i < placement.Count; i++) placeOf[placement[i]] = i + 1;
-
-        // Walk earlier rounds, latest-first (semis → QF → R16 → R32 → ...).
-        // Skip the final round; skip the semis too — semi-finalists are 3rd/4th via the bronze.
-        for (int r = bracket.Rounds.Count - 2; r >= 0; r--)
+        if (bracket is not null && bracket.Rounds.Count > 0)
         {
-            // Semi-final losers are already placed via the bronze match.
-            if (r == bracket.Rounds.Count - 2) continue;
+            var final  = bracket.Rounds[^1].Matches.FirstOrDefault();
+            var bronze = bracket.BronzeMatch;
 
-            var losers = new List<(string Loser, string Conqueror)>();
-            foreach (var m in bracket.Rounds[r].Matches)
+            // Slots 1..4 are explicit.
+            AddPlace(placement, final?.WinnerFencerId);
+            AddPlace(placement, final is not null ? LoserOf(final) : null);
+            AddPlace(placement, bronze?.WinnerFencerId);
+            AddPlace(placement, bronze is not null ? LoserOf(bronze) : null);
+
+            var placeOf = new Dictionary<string, int>();
+            for (int i = 0; i < placement.Count; i++) placeOf[placement[i]] = i + 1;
+
+            // Walk earlier rounds, latest-first (semis → QF → R16 → R32 → ...).
+            // Skip the final round; skip the semis too — semi-finalists are 3rd/4th via the bronze.
+            for (int r = bracket.Rounds.Count - 2; r >= 0; r--)
             {
-                if (m.Status != MatchStatus.Finished) continue;
-                if (string.IsNullOrEmpty(m.WinnerFencerId)) continue;
+                if (r == bracket.Rounds.Count - 2) continue;
 
-                var loser = LoserOf(m);
-                if (string.IsNullOrEmpty(loser)) continue;             // bye / unresolved
-                if (placeOf.ContainsKey(loser!))  continue;             // already placed (defensive)
+                var losers = new List<(string Loser, string Conqueror)>();
+                foreach (var m in bracket.Rounds[r].Matches)
+                {
+                    if (m.Status != MatchStatus.Finished) continue;
+                    if (string.IsNullOrEmpty(m.WinnerFencerId)) continue;
 
-                losers.Add((loser!, m.WinnerFencerId!));
-            }
+                    var loser = LoserOf(m);
+                    if (string.IsNullOrEmpty(loser)) continue;
+                    if (placeOf.ContainsKey(loser!))  continue;
 
-            // Order purely by how well the conqueror finished:
-            //  - smaller PlaceOf is better (1 > 2 > 3 …)
-            //  - unknown placements (shouldn't happen on a complete bracket) sort last
-            //  - stable tiebreaker on the fencer id keeps the result deterministic
-            var ordered = losers
-                .OrderBy(x => placeOf.TryGetValue(x.Conqueror, out var p) ? p : int.MaxValue)
-                .ThenBy(x => x.Loser, StringComparer.Ordinal);
+                    losers.Add((loser!, m.WinnerFencerId!));
+                }
 
-            foreach (var (loser, _) in ordered)
-            {
-                placement.Add(loser);
-                placeOf[loser] = placement.Count;
+                var ordered = losers
+                    .OrderBy(x => placeOf.TryGetValue(x.Conqueror, out var p) ? p : int.MaxValue)
+                    .ThenBy(x => x.Loser, StringComparer.Ordinal);
+
+                foreach (var (loser, _) in ordered)
+                {
+                    placement.Add(loser);
+                    placeOf[loser] = placement.Count;
+                }
             }
         }
+
+        // Append every fencer who never entered the bracket, ranked by their
+        // pool stats. Reuses ElimSeedStats / SortSeedStats so the order matches
+        // the Pool Standings tab and bracket seeding criteria exactly.
+        var placedSet = new HashSet<string>(placement, StringComparer.Ordinal);
+        var poolOnlyIds = tournament.Fencers
+            .Where(f => !placedSet.Contains(f.Id))
+            .Select(f => f.Id)
+            .ToList();
+
+        if (poolOnlyIds.Count > 0)
+        {
+            var stats = poolOnlyIds.ToDictionary(id => id, id => new ElimSeedStats { FencerId = id });
+            foreach (var pool in tournament.Pools)
+            {
+                foreach (var m in pool.Matches.Where(m => m.Status == MatchStatus.Finished))
+                {
+                    if (stats.TryGetValue(m.LeftFencerId, out var ls))
+                    {
+                        ls.MatchesDone++;
+                        ls.PointsFor     += m.LeftScore;
+                        ls.PointsAgainst += m.RightScore;
+                        ls.RedCards      += m.LeftRedCards;
+                        if (m.WinnerFencerId == m.LeftFencerId) ls.Wins++;
+                    }
+                    if (stats.TryGetValue(m.RightFencerId, out var rs))
+                    {
+                        rs.MatchesDone++;
+                        rs.PointsFor     += m.RightScore;
+                        rs.PointsAgainst += m.LeftScore;
+                        rs.RedCards      += m.RightRedCards;
+                        if (m.WinnerFencerId == m.RightFencerId) rs.Wins++;
+                    }
+                }
+            }
+
+            foreach (var s in SortSeedStats(stats.Values))
+                placement.Add(s.FencerId);
+        }
+
         return placement;
     }
 

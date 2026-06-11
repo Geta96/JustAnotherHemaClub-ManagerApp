@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using JustAnotherHemaClub.Models;
 using JustAnotherHemaClub.Services;
@@ -52,11 +52,19 @@ public partial class FinalStandingsTabViewModel : ObservableObject, IDisposable
             var name = nameById.TryGetValue(id, out var n) ? n : "?";
             lossInfo.TryGetValue(id, out var info);
 
+            // Bracket fencer:    info.RoundLabel is set          → "Quarter-finals" / "Bronze" / etc.
+            // Champion (1st):    no loss info, but Place == 1    → "Champion"
+            // Pool-only fencer:  no loss info, Place > 1         → "Pools"
+            string eliminatedLabel =
+                info.RoundLabel is not null ? info.RoundLabel
+                : i == 0                     ? "Champion"
+                :                              "Pools";
+
             Rows.Add(new FinalStandingRowVm(
                 place: i + 1,
                 name: name,
                 defeatedByName: info.DefeatedBy ?? "",
-                eliminatedAt:   info.RoundLabel ?? "Champion"));
+                eliminatedAt:   eliminatedLabel));
         }
 
         RaiseStateChanged();
