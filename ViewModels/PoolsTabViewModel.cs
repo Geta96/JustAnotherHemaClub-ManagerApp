@@ -208,5 +208,17 @@ public partial class PoolsTabViewModel : ObservableObject, IDisposable
         BuildRows();
     }
 
+    /// <summary>
+    /// Resume polling with the given matches priming the version map. Used by
+    /// the hub's fast reload path so the next polling tick doesn't fire a
+    /// MatchUpdated for every match we just refreshed.
+    /// </summary>
+    public void ResumePolling(IEnumerable<Match> primeWith)
+    {
+        if (_session?.Current is null) return;
+        _refresh.Start(_session.Current.Id);
+        _refresh.Prime(primeWith);
+    }
+
     public void Dispose() => _refresh.MatchUpdated -= OnRemoteMatchUpdated;
 }

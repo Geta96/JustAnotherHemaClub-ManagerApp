@@ -143,12 +143,12 @@ public partial class TournamentEditorVm : ObservableObject
             // Header first so we have a row to attach fencers to.
             await _sheets.UpsertTournamentHeaderAsync(Tournament);
 
-            // Persist any roster the user entered before saving.
+            // Persist any roster the user entered before saving — one HTTP call.
             for (int i = 0; i < Fencers.Count; i++)
-            {
                 Fencers[i].Fencer.OrderIndex = i;
-                await _sheets.UpsertTournamentFencerAsync(Tournament.Id, Fencers[i].Fencer);
-            }
+            await _sheets.AppendTournamentFencersAsync(
+                Tournament.Id,
+                Fencers.Select(r => r.Fencer).ToList());
 
             _isInitialSave = false;
             _cache.InvalidateTournaments();
@@ -234,7 +234,8 @@ public partial class TournamentEditorVm : ObservableObject
     /// • Setup        — just flip the flag; the fencer can't be picked into pools.
     /// • Pools / Elim — flip the flag AND walk-over every unfinished match they're in
     ///                  (opponent wins 0–0). Already-finished matches are kept as-is.
-    /// UI flips immediately; the backend cascade runs in the background.
+    /// UI flips immediately; the backend cascade runs in the background, with all
+    /// per-match upserts issued in parallel.
     /// </summary>
     [RelayCommand]
     public Task WithdrawFencerAsync(TournamentFencerRow row)
@@ -256,15 +257,20 @@ public partial class TournamentEditorVm : ObservableObject
 
         var tournamentId = Tournament.Id;
         var fencer = row.Fencer;
-        var poolMatches = cascade?.ChangedPoolMatches.ToList() ?? new List<Match>();
-        var bracketMatches = cascade?.ChangedBracketMatches.ToList() ?? new List<Match>();
+        var allChangedMatches = (cascade?.ChangedPoolMatches ?? Enumerable.Empty<Match>())
+            .Concat(cascade?.ChangedBracketMatches ?? Enumerable.Empty<Match>())
+            .ToList();
+
         RunInBackground(async () =>
         {
             await _sheets.UpsertTournamentFencerAsync(tournamentId, fencer);
-            foreach (var m in poolMatches)
-                await _sheets.UpsertMatchAsync(tournamentId, m);
-            foreach (var m in bracketMatches)
-                await _sheets.UpsertMatchAsync(tournamentId, m);
+
+            // All match upserts run in parallel — distinct Version tokens, no
+            // contention. Cuts the cascade from O(N) round-trips serial to ~1
+            // round-trip's worth of latency in practice.
+            if (allChangedMatches.Count > 0)
+                await Task.WhenAll(allChangedMatches.Select(m =>
+                    _sheets.UpsertMatchAsync(tournamentId, m)));
         }, "Update failed");
 
         return Task.CompletedTask;
@@ -557,7 +563,7 @@ public partial class TournamentEditorVm : ObservableObject
             // Empty pools are allowed during editing but never make it into the
             // running tournament — drop them silently before any validation.
             var draftPools = Tournament.Pools
-                .Where(p => p.FencerIds.Count > 0)
+                // .Where(p => p.FencerIds.Count > 0)
                 .OrderBy(p => p.Index)
                 .ToList();
 

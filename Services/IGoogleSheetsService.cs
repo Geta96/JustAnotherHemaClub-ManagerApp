@@ -50,4 +50,7 @@ public interface IGoogleSheetsService
     Task AppendMatchesAsync(string tournamentId, IList<Match> matches);
 
     Task SaveFinalStandingsAsync(string tournamentId, IList<string> orderedFencerIds);
+
+    /// <summary>One HTTP call regardless of how many fencers — used by Save Tournament for new tournaments.</summary>
+    Task AppendTournamentFencersAsync(string tournamentId, IList<TournamentFencer> fencers);
 }

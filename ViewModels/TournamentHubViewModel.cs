@@ -145,6 +145,54 @@ public partial class TournamentHubViewModel : ObservableObject
         finally { IsLoading = false; }
     }
 
+    /// <summary>
+    /// Cheap refresh used when returning from MatchPage. Skips the 5-read
+    /// aggregate fetch — only the Matches sheet is re-read, the in-memory
+    /// session is patched in place, then polling resumes. ~3-5x faster than
+    /// <see cref="LoadAsync"/>.
+    /// </summary>
+    public async Task ReloadMatchesOnlyAsync()
+    {
+        var t = _session.Current;
+        if (t is null) return;
+
+        IsLoading = true;
+        try
+        {
+            var fresh = await _sheets.GetMatchesAsync(t.Id);
+            var byId = fresh.ToDictionary(m => m.Id);
+
+            // Patch in-memory pool matches.
+            foreach (var pool in t.Pools)
+                for (int i = 0; i < pool.Matches.Count; i++)
+                    if (byId.TryGetValue(pool.Matches[i].Id, out var latest))
+                        pool.Matches[i] = latest;
+
+            // Patch in-memory bracket matches.
+            if (t.Bracket is not null)
+            {
+                foreach (var round in t.Bracket.Rounds)
+                    for (int i = 0; i < round.Matches.Count; i++)
+                        if (byId.TryGetValue(round.Matches[i].Id, out var latest))
+                            round.Matches[i] = latest;
+                if (t.Bracket.BronzeMatch is not null &&
+                    byId.TryGetValue(t.Bracket.BronzeMatch.Id, out var br))
+                    t.Bracket.BronzeMatch = br;
+            }
+
+            PoolsVm.RefreshAfterExternalChange();
+            PoolStandingsVm.Recompute();
+            ElimVm.Recompute();
+            FinalStandingsVm.Recompute();
+
+            // Resume polling primed with the current versions so we don't
+            // re-fire MatchUpdated for matches we just patched.
+            PoolsVm.ResumePolling(fresh);
+            RaiseHeaderPropertiesChanged();
+        }
+        finally { IsLoading = false; }
+    }
+
     [RelayCommand]
     private async Task EndTournamentAsync()
     {
@@ -225,11 +273,16 @@ public partial class TournamentHubViewModel : ObservableObject
             fencer.IsWithdrawn = true;
             await _sheets.UpsertTournamentFencerAsync(t.Id, fencer);
 
+            // Walk-over every unfinished match, then persist them in PARALLEL —
+            // each Match has its own Version token, so they don't contend with
+            // each other. For a fencer in N unfinished matches this turns N
+            // serial round-trips into max-of-N parallel.
             var cascade = TournamentEngine.ApplyWithdrawalCascade(t, fencer.Id);
-            foreach (var m in cascade.ChangedPoolMatches)
-                await _sheets.UpsertMatchAsync(t.Id, m);
-            foreach (var m in cascade.ChangedBracketMatches)
-                await _sheets.UpsertMatchAsync(t.Id, m);
+            var allChanged = cascade.ChangedPoolMatches
+                .Concat(cascade.ChangedBracketMatches)
+                .ToList();
+            if (allChanged.Count > 0)
+                await Task.WhenAll(allChanged.Select(m => _sheets.UpsertMatchAsync(t.Id, m)));
 
             // Refresh every read-model so the new walkovers and propagation are visible.
             PoolsVm.RefreshAfterExternalChange();

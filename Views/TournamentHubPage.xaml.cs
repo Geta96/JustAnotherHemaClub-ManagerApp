@@ -24,11 +24,22 @@ public partial class TournamentHubPage : ContentPage
         _vm.PickFencerToWithdrawAsync = PickFencerAsync;
     }
 
+    private bool _returningFromMatch;
+
     protected override async void OnAppearing()
     {
         base.OnAppearing();
         if (_session.Current is null) { await Navigation.PopAsync(); return; }
-        await _vm.LoadAsync();
+
+        if (_returningFromMatch)
+        {
+            _returningFromMatch = false;
+            await _vm.ReloadMatchesOnlyAsync();
+        }
+        else
+        {
+            await _vm.LoadAsync();
+        }
     }
 
     protected override void OnDisappearing()
@@ -61,6 +72,7 @@ public partial class TournamentHubPage : ContentPage
     {
         var page = _services.GetRequiredService<MatchPage>();
         await page.PrepareForMatchAsync(match.Id);
+        _returningFromMatch = true;     // OnAppearing will use the fast path on return
         await Navigation.PushAsync(page);
     }
 

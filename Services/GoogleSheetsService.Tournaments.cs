@@ -168,11 +168,15 @@ public partial class GoogleSheetsService
     public async Task DeleteTournamentAsync(string tournamentId)
     {
         if (string.IsNullOrWhiteSpace(tournamentId)) return;
-        await ClearRowsAsync(TournamentsRange,    "Tournaments!A{0}:F{0}",        0, tournamentId);
-        await ClearRowsAsync(FencersRangeT,       "TournamentFencers!A{0}:E{0}",  0, tournamentId);
-        await ClearRowsAsync(PoolsRange,          "Pools!A{0}:F{0}",              0, tournamentId);
-        await ClearRowsAsync(MatchesRange,        "Matches!A{0}:Y{0}",            0, tournamentId);
-        await ClearRowsAsync(FinalStandingsRange, "FinalStandings!A{0}:C{0}",     0, tournamentId);
+
+        // Five sheet clears in parallel — each is now ONE batched HTTP call regardless
+        // of how many rows match, so total wall-time is roughly the slowest sheet.
+        await Task.WhenAll(
+            ClearRowsAsync(TournamentsRange,    "Tournaments!A{0}:F{0}",        0, tournamentId),
+            ClearRowsAsync(FencersRangeT,       "TournamentFencers!A{0}:E{0}",  0, tournamentId),
+            ClearRowsAsync(PoolsRange,          "Pools!A{0}:F{0}",              0, tournamentId),
+            ClearRowsAsync(MatchesRange,        "Matches!A{0}:Y{0}",            0, tournamentId),
+            ClearRowsAsync(FinalStandingsRange, "FinalStandings!A{0}:C{0}",     0, tournamentId));
     }
 
     public async Task UpsertTournamentFencerAsync(string tournamentId, TournamentFencer f)
@@ -193,15 +197,15 @@ public partial class GoogleSheetsService
     public async Task DeleteTournamentFencerAsync(string tournamentId, string fencerId)
     {
         var rows = await ReadAsync(FencersRangeT);
-        var svc = await GetServiceAsync();
+        var rangesToClear = new List<string>();
         for (int i = 0; i < rows.Count; i++)
-        {
-            if (S(rows[i], 0) != tournamentId || S(rows[i], 1) != fencerId) continue;
-            await svc.Spreadsheets.Values
-                .Clear(new ClearValuesRequest(), _spreadsheetId,
-                       $"TournamentFencers!A{i + 2}:E{i + 2}")
-                .ExecuteAsync();
-        }
+            if (S(rows[i], 0) == tournamentId && S(rows[i], 1) == fencerId)
+                rangesToClear.Add($"TournamentFencers!A{i + 2}:E{i + 2}");
+        if (rangesToClear.Count == 0) return;
+
+        var svc = await GetServiceAsync();
+        var batch = new BatchClearValuesRequest { Ranges = rangesToClear };
+        await svc.Spreadsheets.Values.BatchClear(batch, _spreadsheetId).ExecuteAsync();
     }
 
     public async Task UpsertPoolAsync(string tournamentId, Pool pool)
@@ -368,6 +372,25 @@ public partial class GoogleSheetsService
         await req.ExecuteAsync();
     }
 
+    public async Task AppendTournamentFencersAsync(string tournamentId, IList<TournamentFencer> fencers)
+    {
+        if (fencers is null || fencers.Count == 0) return;
+        var svc = await GetServiceAsync();
+
+        var rows = new List<IList<object>>(fencers.Count);
+        foreach (var f in fencers)
+            rows.Add(new List<object>
+            {
+                tournamentId, f.Id, f.Name ?? "", f.IsWithdrawn, f.OrderIndex
+            });
+
+        var body = new ValueRange { Values = rows };
+        var req  = svc.Spreadsheets.Values.Append(body, _spreadsheetId, "TournamentFencers!A:E");
+        req.ValueInputOption =
+            SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.USERENTERED;
+        await req.ExecuteAsync();
+    }
+
     // ---------- Row parsers ----------
 
     private static Tournament ParseTournamentHeader(IList<object> r) => new()
@@ -434,14 +457,15 @@ public partial class GoogleSheetsService
                                       int matchColumn, string matchValue)
     {
         var rows = await ReadAsync(readRange);
-        var svc  = await GetServiceAsync();
+        var rangesToClear = new List<string>();
         for (int i = 0; i < rows.Count; i++)
-        {
-            if (S(rows[i], matchColumn) != matchValue) continue;
-            await svc.Spreadsheets.Values
-                .Clear(new ClearValuesRequest(), _spreadsheetId,
-                       string.Format(CultureInfo.InvariantCulture, rowRangeFormat, i + 2))
-                .ExecuteAsync();
-        }
+            if (S(rows[i], matchColumn) == matchValue)
+                rangesToClear.Add(string.Format(CultureInfo.InvariantCulture, rowRangeFormat, i + 2));
+        if (rangesToClear.Count == 0) return;
+
+        // One HTTP call regardless of row count.
+        var svc = await GetServiceAsync();
+        var batch = new BatchClearValuesRequest { Ranges = rangesToClear };
+        await svc.Spreadsheets.Values.BatchClear(batch, _spreadsheetId).ExecuteAsync();
     }
 }

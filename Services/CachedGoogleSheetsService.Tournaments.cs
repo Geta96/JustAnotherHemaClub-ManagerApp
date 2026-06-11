@@ -133,4 +133,11 @@ public sealed partial class CachedGoogleSheetsService
         _tournamentHeaders = null;
         _tournamentById.Clear();
     }
+
+    public async Task AppendTournamentFencersAsync(string tournamentId, IList<TournamentFencer> fencers)
+    {
+        await _inner.AppendTournamentFencersAsync(tournamentId, fencers);
+        if (_tournamentById.TryGetValue(tournamentId, out var t))
+            foreach (var f in fencers) t.Fencers.Add(f);
+    }
 }
