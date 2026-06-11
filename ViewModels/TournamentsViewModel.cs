@@ -73,14 +73,21 @@ public partial class TournamentsViewModel : ObservableObject
             if (entered.Length == 0 || entered != expected)
                 return (DeleteOutcome.WrongPassword, null);
 
-            await _sheets.DeleteTournamentAsync(tournamentId);
-            _cache.InvalidateTournaments();
-
-            // Drop the row locally so the UI updates without a full refresh round-trip.
+            // Drop the row locally so the list updates immediately, and invalidate
+            // the cache so other surfaces (HomePage etc.) won't show it either.
             var row = Tournaments.FirstOrDefault(r => r.Id == tournamentId);
             if (row is not null) Tournaments.Remove(row);
             ApplyFilter();
             OnPropertyChanged(nameof(HasNoTournaments));
+            _cache.InvalidateTournaments();
+
+            // Persist in background. The user already sees "Deleted"; if the
+            // backend call fails the tournament will reappear on the next refresh.
+            _ = Task.Run(async () =>
+            {
+                try { await _sheets.DeleteTournamentAsync(tournamentId); }
+                catch { /* Reconciled by the next refresh / cache miss. */ }
+            });
 
             return (DeleteOutcome.Deleted, null);
         }

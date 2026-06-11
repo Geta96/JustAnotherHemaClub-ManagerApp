@@ -15,6 +15,13 @@ public partial class TournamentEditorVm : ObservableObject
     private readonly TournamentAutoSaveService _autoSave;
     private readonly ICacheControl _cache;
 
+    /// <summary>
+    /// Serialises every fire-and-forget backend write started by this VM so the
+    /// sheet sees them in the order the user triggered them. Without this, two
+    /// quick taps on the same pool can race and trip <see cref="ConcurrencyConflictException"/>.
+    /// </summary>
+    private readonly SemaphoreSlim _backgroundQueue = new(1, 1);
+
     private bool _isInitialSave;
     private bool _suppressAutoSave;
 
@@ -154,53 +161,72 @@ public partial class TournamentEditorVm : ObservableObject
 
     // -------- Roster operations --------
 
+    /// <summary>
+    /// Optimistic add: shows the new fencer instantly and persists it in the
+    /// background. Failures surface in the error banner.
+    /// </summary>
     [RelayCommand]
-    public async Task AddFencerAsync()
+    public Task AddFencerAsync()
     {
-        if (Tournament is null || !CanAddFencers) return;
+        if (Tournament is null || !CanAddFencers) return Task.CompletedTask;
         var n = (NewFencerName ?? "").Trim();
-        if (n.Length == 0) return;
+        if (n.Length == 0) return Task.CompletedTask;
 
         var fencer = new TournamentFencer { Name = n, OrderIndex = Fencers.Count };
         Fencers.Add(new TournamentFencerRow(fencer));
         NewFencerName = "";
 
-        if (!_isInitialSave)
-        {
-            try { await _sheets.UpsertTournamentFencerAsync(Tournament.Id, fencer); }
-            catch (Exception ex) { ErrorMessage = $"Add failed: {ex.Message}"; }
-        }
-
-        // New fencer is unassigned in the draft pools until the organiser places them.
+        // UI first.
         RebuildDraftPools();
         NotifyStateChanged();
+
+        // Persist in background (skip if we haven't saved the tournament yet —
+        // SaveNewAsync will upsert the whole roster then).
+        if (!_isInitialSave)
+        {
+            var tournamentId = Tournament.Id;
+            RunInBackground(
+                () => _sheets.UpsertTournamentFencerAsync(tournamentId, fencer),
+                "Add failed");
+        }
+
+        return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Optimistic remove: the fencer disappears from the roster + draft pools
+    /// instantly; the delete + per-pool upserts run in the background.
+    /// </summary>
     [RelayCommand]
-    public async Task RemoveFencerAsync(TournamentFencerRow row)
+    public Task RemoveFencerAsync(TournamentFencerRow row)
     {
-        if (Tournament is null || row is null || !CanRemoveFencers) return;
+        if (Tournament is null || row is null || !CanRemoveFencers) return Task.CompletedTask;
 
         Fencers.Remove(row);
 
         // Drop them from any draft pool they were placed in.
+        var affectedPools = new List<Pool>();
         foreach (var pool in Tournament.Pools)
-            pool.FencerIds.Remove(row.Fencer.Id);
-
-        if (!_isInitialSave)
-        {
-            try
-            {
-                await _sheets.DeleteTournamentFencerAsync(Tournament.Id, row.Fencer.Id);
-                // Persist the new pool memberships (the fencer might have been in one).
-                foreach (var pool in Tournament.Pools)
-                    await _sheets.UpsertPoolAsync(Tournament.Id, pool);
-            }
-            catch (Exception ex) { ErrorMessage = $"Remove failed: {ex.Message}"; }
-        }
+            if (pool.FencerIds.Remove(row.Fencer.Id))
+                affectedPools.Add(pool);
 
         RebuildDraftPools();
         NotifyStateChanged();
+
+        if (!_isInitialSave)
+        {
+            var tournamentId = Tournament.Id;
+            var fencerId = row.Fencer.Id;
+            var poolSnapshot = affectedPools.ToList();
+            RunInBackground(async () =>
+            {
+                await _sheets.DeleteTournamentFencerAsync(tournamentId, fencerId);
+                foreach (var pool in poolSnapshot)
+                    await _sheets.UpsertPoolAsync(tournamentId, pool);
+            }, "Remove failed");
+        }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -208,86 +234,104 @@ public partial class TournamentEditorVm : ObservableObject
     /// • Setup        — just flip the flag; the fencer can't be picked into pools.
     /// • Pools / Elim — flip the flag AND walk-over every unfinished match they're in
     ///                  (opponent wins 0–0). Already-finished matches are kept as-is.
+    /// UI flips immediately; the backend cascade runs in the background.
     /// </summary>
     [RelayCommand]
-    public async Task WithdrawFencerAsync(TournamentFencerRow row)
+    public Task WithdrawFencerAsync(TournamentFencerRow row)
     {
-        if (Tournament is null || row is null || _isInitialSave) return;
+        if (Tournament is null || row is null || _isInitialSave) return Task.CompletedTask;
 
         bool willBeWithdrawn = !row.Fencer.IsWithdrawn;
         row.Fencer.IsWithdrawn = willBeWithdrawn;
         row.RaiseStatusChanged();
 
-        try
+        // Compute the cascade synchronously so the model is consistent before we
+        // hand the changed Match list off to the background queue.
+        TournamentEngine.WithdrawalCascade? cascade = null;
+        if (willBeWithdrawn && Tournament.State is not TournamentState.Setup and not TournamentState.Finished)
+            cascade = TournamentEngine.ApplyWithdrawalCascade(Tournament, row.Fencer.Id);
+
+        if (IsSetupState) RebuildDraftPools();
+        NotifyStateChanged();
+
+        var tournamentId = Tournament.Id;
+        var fencer = row.Fencer;
+        var poolMatches = cascade?.ChangedPoolMatches.ToList() ?? new List<Match>();
+        var bracketMatches = cascade?.ChangedBracketMatches.ToList() ?? new List<Match>();
+        RunInBackground(async () =>
         {
-            await _sheets.UpsertTournamentFencerAsync(Tournament.Id, row.Fencer);
+            await _sheets.UpsertTournamentFencerAsync(tournamentId, fencer);
+            foreach (var m in poolMatches)
+                await _sheets.UpsertMatchAsync(tournamentId, m);
+            foreach (var m in bracketMatches)
+                await _sheets.UpsertMatchAsync(tournamentId, m);
+        }, "Update failed");
 
-            // Only cascade walkovers when WITHDRAWING in an active tournament.
-            // Reinstating doesn't resurrect already-walked-over matches.
-            if (willBeWithdrawn && Tournament.State is not TournamentState.Setup and not TournamentState.Finished)
-            {
-                var cascade = TournamentEngine.ApplyWithdrawalCascade(Tournament, row.Fencer.Id);
-                foreach (var m in cascade.ChangedPoolMatches)
-                    await _sheets.UpsertMatchAsync(Tournament.Id, m);
-                foreach (var m in cascade.ChangedBracketMatches)
-                    await _sheets.UpsertMatchAsync(Tournament.Id, m);
-            }
-
-            // In Setup, the unassigned-fencer panel reflects withdrawal too.
-            if (IsSetupState) RebuildDraftPools();
-            NotifyStateChanged();
-        }
-        catch (Exception ex) { ErrorMessage = $"Update failed: {ex.Message}"; }
+        return Task.CompletedTask;
     }
 
     // -------- Pool allocation (Setup state only) --------
 
     /// <summary>Auto-distribute every active, unassigned fencer into draft pools.</summary>
     [RelayCommand]
-    public async Task AutoDistributePoolsAsync()
+    public Task AutoDistributePoolsAsync()
     {
-        if (Tournament is null || !IsSetupState) return;
+        if (Tournament is null || !IsSetupState) return Task.CompletedTask;
         ErrorMessage = "";
 
         var active = Fencers.Where(f => !f.Fencer.IsWithdrawn).Select(f => f.Fencer).ToList();
         if (active.Count < MinFencersToStart)
         {
             ErrorMessage = $"Need at least {MinFencersToStart} active fencers to build pools.";
-            return;
+            return Task.CompletedTask;
         }
 
-        try
+        var draft = TournamentEngine.BuildDraftPools(active, new Random());
+        var toPersist = ApplyPoolReplacementLocal(draft);
+        RebuildDraftPools();
+        NotifyStateChanged();
+
+        var tournamentId = Tournament.Id;
+        var snapshot = toPersist.ToList();
+        RunInBackground(async () =>
         {
-            var draft = TournamentEngine.BuildDraftPools(active, new Random());
-            await ReplacePoolsAsync(draft);
-            RebuildDraftPools();
-            NotifyStateChanged();
-        }
-        catch (Exception ex) { ErrorMessage = $"Auto-distribute failed: {ex.Message}"; }
+            foreach (var pool in snapshot)
+                await _sheets.UpsertPoolAsync(tournamentId, pool);
+        }, "Auto-distribute failed");
+
+        return Task.CompletedTask;
     }
 
     /// <summary>Add one more empty pool to the draft.</summary>
     [RelayCommand]
-    public async Task AddPoolAsync()
+    public Task AddPoolAsync()
     {
-        if (Tournament is null || !IsSetupState) return;
+        if (Tournament is null || !IsSetupState) return Task.CompletedTask;
         ErrorMessage = "";
 
         var pools = Tournament.Pools.OrderBy(p => p.Index).ToList();
         pools.Add(new Pool { Index = pools.Count });
 
-        try { await ReplacePoolsAsync(pools); }
-        catch (Exception ex) { ErrorMessage = $"Add pool failed: {ex.Message}"; return; }
-
+        var toPersist = ApplyPoolReplacementLocal(pools);
         RebuildDraftPools();
         NotifyStateChanged();
+
+        var tournamentId = Tournament.Id;
+        var snapshot = toPersist.ToList();
+        RunInBackground(async () =>
+        {
+            foreach (var pool in snapshot)
+                await _sheets.UpsertPoolAsync(tournamentId, pool);
+        }, "Add pool failed");
+
+        return Task.CompletedTask;
     }
 
     /// <summary>Remove the given pool; its fencers fall back to the unassigned list.</summary>
     [RelayCommand]
-    public async Task RemovePoolAsync(EditorPoolVm poolVm)
+    public Task RemovePoolAsync(EditorPoolVm poolVm)
     {
-        if (Tournament is null || poolVm is null || !IsSetupState) return;
+        if (Tournament is null || poolVm is null || !IsSetupState) return Task.CompletedTask;
         ErrorMessage = "";
 
         var pools = Tournament.Pools
@@ -298,17 +342,25 @@ public partial class TournamentEditorVm : ObservableObject
         // Re-index so they're contiguous 0..n-1.
         for (int i = 0; i < pools.Count; i++) pools[i].Index = i;
 
-        try { await ReplacePoolsAsync(pools); }
-        catch (Exception ex) { ErrorMessage = $"Remove pool failed: {ex.Message}"; return; }
-
+        var toPersist = ApplyPoolReplacementLocal(pools);
         RebuildDraftPools();
         NotifyStateChanged();
+
+        var tournamentId = Tournament.Id;
+        var snapshot = toPersist.ToList();
+        RunInBackground(async () =>
+        {
+            foreach (var pool in snapshot)
+                await _sheets.UpsertPoolAsync(tournamentId, pool);
+        }, "Remove pool failed");
+
+        return Task.CompletedTask;
     }
 
     /// <summary>Move a fencer to <paramref name="targetPoolId"/> (empty string = unassigned).</summary>
-    public async Task MoveFencerToPoolAsync(string fencerId, string targetPoolId)
+    public Task MoveFencerToPoolAsync(string fencerId, string targetPoolId)
     {
-        if (Tournament is null || !IsSetupState || string.IsNullOrEmpty(fencerId)) return;
+        if (Tournament is null || !IsSetupState || string.IsNullOrEmpty(fencerId)) return Task.CompletedTask;
         ErrorMessage = "";
 
         var affected = new List<Pool>();
@@ -318,10 +370,9 @@ public partial class TournamentEditorVm : ObservableObject
             if (removed) affected.Add(pool);
         }
 
-        Pool? target = null;
         if (!string.IsNullOrEmpty(targetPoolId))
         {
-            target = Tournament.Pools.FirstOrDefault(p => p.Id == targetPoolId);
+            var target = Tournament.Pools.FirstOrDefault(p => p.Id == targetPoolId);
             if (target is not null && !target.FencerIds.Contains(fencerId))
             {
                 target.FencerIds.Add(fencerId);
@@ -329,57 +380,88 @@ public partial class TournamentEditorVm : ObservableObject
             }
         }
 
-        try
-        {
-            foreach (var pool in affected)
-                await _sheets.UpsertPoolAsync(Tournament.Id, pool);
-        }
-        catch (Exception ex) { ErrorMessage = $"Move failed: {ex.Message}"; }
-
+        // UI first — the chip jumps to its new card instantly.
         RebuildDraftPools();
         NotifyStateChanged();
+
+        if (affected.Count > 0)
+        {
+            var tournamentId = Tournament.Id;
+            var snapshot = affected.ToList();
+            RunInBackground(async () =>
+            {
+                foreach (var pool in snapshot)
+                    await _sheets.UpsertPoolAsync(tournamentId, pool);
+            }, "Move failed");
+        }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>
-    /// Persist a brand-new pool set, deleting every existing pool first. Used by
-    /// auto-distribute and add/remove pool. Matches are NOT generated here — that
-    /// only happens on Start.
+    /// Synchronous half of the old <c>ReplacePoolsAsync</c>: mutate
+    /// <see cref="Tournament.Pools"/> to reflect the new draft set and return the
+    /// list of pools the caller must upsert (in any order — the background queue
+    /// serialises them).
+    ///
+    /// Pools that the new set drops keep their backend row but get their
+    /// <see cref="Pool.FencerIds"/> cleared, so the sheet stops associating
+    /// fencers with a pool the user just removed.
     /// </summary>
-    private async Task ReplacePoolsAsync(IList<Pool> newPools)
+    private List<Pool> ApplyPoolReplacementLocal(IList<Pool> newPools)
     {
-        if (Tournament is null) return;
+        if (Tournament is null) return new List<Pool>();
 
-        // Wipe existing pools server-side. There's no "delete pool" API, but
-        // UpsertPoolAsync overwriting + clearing FencerIds isn't enough; deleting
-        // the whole tournament's child rows would be too much. We compromise:
-        //  - For pools that survive, upsert them.
-        //  - For pools that disappear, clear their FencerIds and upsert so they
-        //    stop hoarding fencers; the organiser can fully remove via "− Pool".
         var keptIds = new HashSet<string>(newPools.Select(p => p.Id), StringComparer.Ordinal);
+        var toUpsert = new List<Pool>();
 
         foreach (var old in Tournament.Pools)
         {
             if (!keptIds.Contains(old.Id))
             {
                 old.FencerIds.Clear();
-                await _sheets.UpsertPoolAsync(Tournament.Id, old);
+                toUpsert.Add(old);
             }
         }
 
-        // Upsert the surviving / new pools.
         for (int i = 0; i < newPools.Count; i++)
         {
             newPools[i].Index = i;
-            await _sheets.UpsertPoolAsync(Tournament.Id, newPools[i]);
+            toUpsert.Add(newPools[i]);
         }
 
-        // Refresh local list — combine new pools with the "stale" hidden ones
-        // (now empty) so re-adding a fresh pool gets a fresh Id.
         var local = new List<Pool>(newPools);
         foreach (var old in Tournament.Pools)
             if (!keptIds.Contains(old.Id))
                 local.Add(old);
         Tournament.Pools = local;
+
+        return toUpsert;
+    }
+
+    /// <summary>
+    /// Fire-and-forget helper. Captures exceptions and surfaces them via
+    /// <see cref="ErrorMessage"/> on the UI thread. Writes are serialised by
+    /// <see cref="_backgroundQueue"/> so two quick taps can't race.
+    /// </summary>
+    private void RunInBackground(Func<Task> work, string errorPrefix)
+    {
+        _ = Task.Run(async () =>
+        {
+            await _backgroundQueue.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                await work().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                MainThread.BeginInvokeOnMainThread(() => ErrorMessage = $"{errorPrefix}: {ex.Message}");
+            }
+            finally
+            {
+                _backgroundQueue.Release();
+            }
+        });
     }
 
     /// <summary>Rebuild the <see cref="DraftPools"/> + unassigned view from the model.</summary>
@@ -392,7 +474,7 @@ public partial class TournamentEditorVm : ObservableObject
 
         // Only show pools that have non-empty content OR have never been emptied
         // (i.e. those the user is currently editing). The "hidden" empty pools
-        // from ReplacePoolsAsync stay out of the UI but remain Ids we can reuse.
+        // from ApplyPoolReplacementLocal stay out of the UI but remain Ids we can reuse.
         var visiblePools = Tournament.Pools
             .OrderBy(p => p.Index)
             .Where(p => p.FencerIds.Count > 0 || ContainsId(Tournament.Pools, p.Id))
@@ -400,8 +482,8 @@ public partial class TournamentEditorVm : ObservableObject
 
         // Heuristic: a pool is "visible" if it's in the current top-level set
         // (i.e. its Index is contiguous from 0..n-1 in OrderBy). Otherwise it's
-        // a leftover from ReplacePoolsAsync. We just take the first PoolCount
-        // by ordering and trust the caller to maintain contiguous indexes.
+        // a leftover from ApplyPoolReplacementLocal. We just take the first
+        // PoolCount by ordering and trust the caller to maintain contiguous indexes.
         var contiguous = Tournament.Pools.OrderBy(p => p.Index).ToList();
         int validCount = 0;
         for (int i = 0; i < contiguous.Count; i++)
@@ -464,6 +546,11 @@ public partial class TournamentEditorVm : ObservableObject
         IsStarting = true;
         try
         {
+            // Flush any in-flight background writes (Move / Add pool / etc.) so the
+            // sheet reflects the latest draft before we generate matches from it.
+            await _backgroundQueue.WaitAsync();
+            _backgroundQueue.Release();
+
             const int minPoolSize = 4;
             const int maxPoolSize = 8;
 
