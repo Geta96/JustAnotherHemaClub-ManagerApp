@@ -6,7 +6,7 @@ namespace JustAnotherHemaClub.Services;
 /// In-memory caching decorator over <see cref="IGoogleSheetsService"/>.
 /// Reads return cached lists; writes hit the backend and patch the cache.
 /// </summary>
-public sealed class CachedGoogleSheetsService : IGoogleSheetsService, ICacheControl
+public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, ICacheControl
 {
     private readonly GoogleSheetsService _inner;
     private readonly SemaphoreSlim _gate = new(1, 1);

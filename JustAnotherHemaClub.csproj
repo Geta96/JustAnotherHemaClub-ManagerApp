@@ -53,6 +53,9 @@
         <MauiXaml Update="Views\LiabilityPage.xaml">
             <Generator>MSBuild:Compile</Generator>
         </MauiXaml>
+        <MauiXaml Update="Views\MatchPage.xaml">
+          <Generator>MSBuild:Compile</Generator>
+        </MauiXaml>
         <MauiXaml Update="Views\NewTrainingPage.xaml">
             <Generator>MSBuild:Compile</Generator>
         </MauiXaml>
@@ -64,6 +67,18 @@
         </MauiXaml>
         <MauiXaml Update="Views\StatisticsPage.xaml">
             <Generator>MSBuild:Compile</Generator>
+        </MauiXaml>
+        <MauiXaml Update="Views\TournamentAccessPage.xaml">
+          <Generator>MSBuild:Compile</Generator>
+        </MauiXaml>
+        <MauiXaml Update="Views\TournamentEditorPage.xaml">
+          <Generator>MSBuild:Compile</Generator>
+        </MauiXaml>
+        <MauiXaml Update="Views\TournamentHubPage.xaml">
+          <Generator>MSBuild:Compile</Generator>
+        </MauiXaml>
+        <MauiXaml Update="Views\TournamentsPage.xaml">
+          <Generator>MSBuild:Compile</Generator>
         </MauiXaml>
         <MauiXaml Update="Views\TrainingsHubPage.xaml">
           <Generator>MSBuild:Compile</Generator>

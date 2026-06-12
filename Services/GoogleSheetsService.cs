@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Services;
 using Google.Apis.Sheets.v4;
@@ -7,7 +7,7 @@ using JustAnotherHemaClub.Models;
 
 namespace JustAnotherHemaClub.Services;
 
-public class GoogleSheetsService : IGoogleSheetsService
+public partial class GoogleSheetsService : IGoogleSheetsService
 {
     private readonly string _spreadsheetId;
     private SheetsService? _service;
@@ -59,6 +59,14 @@ public class GoogleSheetsService : IGoogleSheetsService
         req.ValueInputOption = SpreadsheetsResource.ValuesResource.UpdateRequest.ValueInputOptionEnum.USERENTERED;
         await req.ExecuteAsync();
     }
+
+    /// <summary>
+    /// (sheet, key1, key2) → 0-based row index inside the data range.
+    /// Populated whenever an upsert successfully resolves a row, dropped on
+    /// concurrency-conflict refetch. Halves round-trips for repeat edits to
+    /// the same match / pool / fencer in one app session.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<(string sheet, string a, string b), int> _rowIndexCache = new();
 
     // --- Fencers ---
     // Columns: A=Id, B=Username, C=PasswordHash, D=Name, E=Email,

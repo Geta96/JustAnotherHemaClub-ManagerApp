@@ -15,4 +15,5 @@ public interface ICacheControl
     void InvalidateMonthNotes();
     void InvalidateIndividualLessons();
     void InvalidateRecurringTrainings();
+    void InvalidateTournaments();
 }

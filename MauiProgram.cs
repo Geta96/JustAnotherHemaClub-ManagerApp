@@ -43,6 +43,17 @@ public static class MauiProgram
         builder.Services.AddTransient<WeeklyViewModel>();
         builder.Services.AddTransient<TrainingsHubViewModel>();
 
+        // Tournament view-models
+        builder.Services.AddTransient<TournamentsViewModel>();
+        builder.Services.AddTransient<TournamentEditorVm>();
+        builder.Services.AddTransient<TournamentAccessVm>();
+        builder.Services.AddTransient<TournamentHubViewModel>();
+        builder.Services.AddTransient<PoolsTabViewModel>();
+        builder.Services.AddTransient<PoolStandingsTabViewModel>();
+        builder.Services.AddTransient<ElimTabViewModel>();
+        builder.Services.AddTransient<FinalStandingsTabViewModel>();
+        builder.Services.AddTransient<MatchViewModel>();
+
         // Pages
         builder.Services.AddTransient<LoginPage>();
         builder.Services.AddTransient<RegisterPage>();
@@ -56,8 +67,20 @@ public static class MauiProgram
         builder.Services.AddTransient<LiabilityPage>();
         builder.Services.AddTransient<TrainingsHubPage>();
 
+        // Tournament pages
+        builder.Services.AddTransient<TournamentsPage>();
+        builder.Services.AddTransient<TournamentEditorPage>();
+        builder.Services.AddTransient<TournamentAccessPage>();
+        builder.Services.AddTransient<TournamentHubPage>();
+        builder.Services.AddTransient<MatchPage>();
+
         // Shell
         builder.Services.AddTransient<AppShell>();
+
+        // Tournament services
+        builder.Services.AddSingleton<TournamentAutoSaveService>();
+        builder.Services.AddSingleton<TournamentSession>();
+        builder.Services.AddSingleton<TournamentRefreshService>();
 
 #if DEBUG
         builder.Logging.AddDebug();

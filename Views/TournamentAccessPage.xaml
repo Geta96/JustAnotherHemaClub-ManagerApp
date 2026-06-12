@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels"
+             x:Class="JustAnotherHemaClub.Views.TournamentAccessPage"
+             x:DataType="vm:TournamentAccessVm"
+             Title="Enter tournament">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="16" VerticalOptions="Center">
+
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="{Binding TournamentName}"
+                           Style="{StaticResource H1}"
+                           HorizontalOptions="Center" />
+                    <Label Text="{Binding TournamentInfo}"
+                           Style="{StaticResource Caption}"
+                           HorizontalOptions="Center" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Role choice -->
+            <Border Style="{StaticResource Card}"
+                    IsVisible="{Binding IsPasswordPromptVisible, Converter={StaticResource InverseBoolConverter}}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="How do you want to enter?" Style="{StaticResource H2}" />
+                    <Button Text="Enter as Fencer (view only)"
+                            BackgroundColor="{StaticResource Wine}"
+                            TextColor="{StaticResource Cream}"
+                            Command="{Binding EnterAsFencerCommand}" />
+                    <Button Text="Enter as Organiser"
+                            BackgroundColor="#476FB5"
+                            TextColor="{StaticResource Cream}"
+                            Command="{Binding ShowOrganiserPromptCommand}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Password prompt -->
+            <Border Style="{StaticResource Card}"
+                    IsVisible="{Binding IsPasswordPromptVisible}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Organiser password" Style="{StaticResource H2}" />
+                    <Entry Placeholder="Password"
+                           IsPassword="True"
+                           Text="{Binding Password}" />
+                    <Label Text="{Binding ErrorMessage}"
+                           TextColor="{StaticResource DangerRed}"
+                           IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}, FallbackValue=False}" />
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                        <Button Grid.Column="0" Text="Cancel"
+                                BackgroundColor="{StaticResource Wine}"
+                                TextColor="{StaticResource Cream}"
+                                Command="{Binding CancelOrganiserPromptCommand}" />
+                        <Button Grid.Column="1" Text="Enter"
+                                BackgroundColor="#476FB5"
+                                TextColor="{StaticResource Cream}"
+                                Command="{Binding ConfirmOrganiserCommand}" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
