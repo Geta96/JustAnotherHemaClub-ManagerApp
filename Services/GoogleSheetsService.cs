@@ -122,7 +122,14 @@ public partial class GoogleSheetsService : IGoogleSheetsService
     public async Task<List<TrainingSession>> GetTrainingsAsync()
     {
         var rows = await ReadAsync("Trainings!A2:E");
-        var list = new List<TrainingSession>();
+
+        // Keyed by Id so historical duplicate rows (created before
+        // UpsertTrainingAsync became a real upsert) are merged into a single
+        // session instead of being shown twice. Later rows win for scalar
+        // fields; attendee lists are unioned so anyone who attended either
+        // copy keeps their attendance.
+        var byId = new Dictionary<string, TrainingSession>(StringComparer.Ordinal);
+
         foreach (var r in rows)
         {
             var id = S(r, 0);
@@ -139,27 +146,56 @@ public partial class GoogleSheetsService : IGoogleSheetsService
             else
                 end = date.AddMinutes(90); // legacy rows default to a 90-minute session
 
-            list.Add(new TrainingSession
+            var attendees = S(r, 3)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .ToList();
+
+            if (byId.TryGetValue(id, out var existing))
             {
-                Id = id,
-                Date = date,
-                EndDate = end,
-                Topic = S(r, 2),
-                AttendeeFencerIds = S(r, 3).Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
-            });
+                existing.Date    = date;
+                existing.EndDate = end;
+                existing.Topic   = S(r, 2);
+                foreach (var fid in attendees)
+                    if (!existing.AttendeeFencerIds.Contains(fid))
+                        existing.AttendeeFencerIds.Add(fid);
+            }
+            else
+            {
+                byId[id] = new TrainingSession
+                {
+                    Id = id,
+                    Date = date,
+                    EndDate = end,
+                    Topic = S(r, 2),
+                    AttendeeFencerIds = attendees
+                };
+            }
         }
-        return list;
+
+        return byId.Values.ToList();
     }
 
-    public Task UpsertTrainingAsync(TrainingSession t) =>
-        AppendAsync("Trainings!A:E", new List<object>
+    public async Task UpsertTrainingAsync(TrainingSession t)
+    {
+        var rows = await ReadAsync("Trainings!A2:E");
+        int rowIndex = -1;
+        for (int i = 0; i < rows.Count; i++)
+            if (S(rows[i], 0) == t.Id) { rowIndex = i; break; }
+
+        var values = new List<object>
         {
             t.Id,
             t.Date.ToString("o", CultureInfo.InvariantCulture),
             t.Topic,
             string.Join(",", t.AttendeeFencerIds),
             t.EndDate.ToString("o", CultureInfo.InvariantCulture)
-        });
+        };
+
+        if (rowIndex >= 0)
+            await UpdateAsync($"Trainings!A{rowIndex + 2}:E{rowIndex + 2}", values);
+        else
+            await AppendAsync("Trainings!A:E", values);
+    }
 
     public async Task DeleteTrainingAsync(string trainingId)
     {

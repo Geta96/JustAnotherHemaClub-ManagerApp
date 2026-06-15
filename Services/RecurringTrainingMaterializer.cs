@@ -20,7 +20,9 @@ public class RecurringTrainingMaterializer
     ///     <see cref="MaxBackfillDays"/> days, and
     ///   - creates the next upcoming occurrence(s) up to <paramref name="lookAheadDays"/>
     ///     (default 1 = "the day before the session").
-    /// Idempotent: re-running never duplicates rows, thanks to deterministic ids.
+    /// Idempotent: re-running never duplicates rows, thanks to deterministic ids,
+    /// and a look-alike check on (date, start time, topic) prevents duplicating
+    /// sessions that were created manually for the same slot.
     /// </summary>
     public async Task MaterializeDueAsync(int lookAheadDays = 1)
     {
@@ -31,7 +33,16 @@ public class RecurringTrainingMaterializer
         static string IdFor(RecurringTrainingRule r, DateTime d) =>
             $"rec_{r.Id}_{d:yyyyMMdd}";
 
+        static string TopicKey(string? s) => (s ?? "").Trim().ToLowerInvariant();
+
         var existingIds = existing.Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
+
+        // Look-alike index: any session already on (date, start time, topic) is
+        // treated as covering that slot, even if its id isn't our rec_* one
+        // (e.g. a manually-created "first" training).
+        var existingSlots = existing
+            .Select(t => (Date: t.Date.Date, Time: t.Date.TimeOfDay, Topic: TopicKey(t.Topic)))
+            .ToHashSet();
 
         // Precompute, per rule, the date of the latest session we already created for it.
         // Lets us start the backfill loop right after that date instead of from StartDate.
@@ -71,6 +82,11 @@ public class RecurringTrainingMaterializer
                 var id = IdFor(rule, d);
                 if (existingIds.Contains(id)) continue;
 
+                // A session already exists for this date+start-time+topic even
+                // though its id isn't ours. Don't pile a duplicate on top of it.
+                var slot = (Date: d.Date, Time: rule.TimeOfDay, Topic: TopicKey(rule.Topic));
+                if (existingSlots.Contains(slot)) continue;
+
                 await _sheets.UpsertTrainingAsync(new TrainingSession
                 {
                     Id      = id,
@@ -78,7 +94,8 @@ public class RecurringTrainingMaterializer
                     EndDate = d.Date + rule.EndTimeOfDay,
                     Topic   = rule.Topic,
                 });
-                existingIds.Add(id); // guard against the same run creating duplicates
+                existingIds.Add(id);     // guard against the same run creating duplicates
+                existingSlots.Add(slot);
                 created = true;
             }
         }

@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JustAnotherHemaClub.Services;
 
@@ -11,6 +11,7 @@ public partial class LoginViewModel : ObservableObject
     private readonly IBiometricService _biometrics;
     private readonly ICacheControl _cache;
     private readonly IServiceProvider _services;
+    private readonly RecurringTrainingMaterializer _materializer;
 
     [ObservableProperty] private string username = "";
     [ObservableProperty] private string password = "";
@@ -29,13 +30,15 @@ public partial class LoginViewModel : ObservableObject
 
     public LoginViewModel(AuthService auth, IGoogleSheetsService sheets,
                           IBiometricService biometrics, ICacheControl cache,
-                          IServiceProvider services)
+                          IServiceProvider services,
+                          RecurringTrainingMaterializer materializer)
     {
         _auth = auth;
         _sheets = sheets;
         _biometrics = biometrics;
         _cache = cache;
         _services = services;
+        _materializer = materializer;
     }
 
     partial void OnErrorChanged(string? value) => OnPropertyChanged(nameof(HasError));
@@ -259,5 +262,10 @@ public partial class LoginViewModel : ObservableObject
     {
         try { await _cache.WarmAsync(); }
         catch { /* warm-up is best-effort; pages will fall back to the network */ }
+
+        // Backfill missed occurrences and create the upcoming one (default look-ahead = 1 day).
+        // Best-effort: a failure here just means the rec_* rows will be tried again on next launch.
+        try { await _materializer.MaterializeDueAsync(); }
+        catch { /* ignored on purpose */ }
     }
 }

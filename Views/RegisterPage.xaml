@@ -21,6 +21,13 @@
                     <Label Text="Email *" Style="{StaticResource Caption}" />
                     <Entry Placeholder="email@example.com" Keyboard="Email" Text="{Binding Email}" />
 
+                    <Label Text="Confirm email *" Style="{StaticResource Caption}" />
+                    <Entry Placeholder="Repeat email" Keyboard="Email" Text="{Binding ConfirmEmail}" />
+                    <Label Text="Email addresses do not match."
+                           TextColor="{StaticResource DangerRed}"
+                           FontSize="12"
+                           IsVisible="{Binding EmailMismatch}" />
+
                     <BoxView HeightRequest="1" Color="{StaticResource Muted}" Opacity="0.3" Margin="0,8" />
 
                     <Label Text="Login credentials" Style="{StaticResource H2}" />
@@ -30,11 +37,15 @@
                     <Label Text="Login username *" Style="{StaticResource Caption}" />
                     <Entry Placeholder="e.g. alice.sword" Text="{Binding LoginUsername}" />
 
-                    <Label Text="Password (min. 4 characters) *" Style="{StaticResource Caption}" />
+                    <Label Text="Password (min. 6 characters, must include a number) *" Style="{StaticResource Caption}" />
                     <Entry Placeholder="Password" IsPassword="True" Text="{Binding Password}" />
 
                     <Label Text="Confirm password *" Style="{StaticResource Caption}" />
                     <Entry Placeholder="Repeat password" IsPassword="True" Text="{Binding ConfirmPassword}" />
+                    <Label Text="Passwords do not match."
+                           TextColor="{StaticResource DangerRed}"
+                           FontSize="12"
+                           IsVisible="{Binding PasswordMismatch}" />
 
                     <BoxView HeightRequest="1" Color="{StaticResource Muted}" Opacity="0.3" />
 

@@ -26,6 +26,9 @@ public static class MauiProgram
         builder.Services.AddSingleton<IGoogleSheetsService>(sp => sp.GetRequiredService<CachedGoogleSheetsService>());
         builder.Services.AddSingleton<ICacheControl>(sp => sp.GetRequiredService<CachedGoogleSheetsService>());
 
+        // Recurring training materialization (runs after login warm-up)
+        builder.Services.AddSingleton<RecurringTrainingMaterializer>();
+
         // Auth + proxy
         builder.Services.AddSingleton<AuthService>();
         builder.Services.AddSingleton<IBiometricService, BiometricService>();
