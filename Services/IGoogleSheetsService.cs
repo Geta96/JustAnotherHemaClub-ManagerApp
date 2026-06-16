@@ -1,4 +1,4 @@
-using JustAnotherHemaClub.Models;
+ï»¿using JustAnotherHemaClub.Models;
 
 namespace JustAnotherHemaClub.Services;
 
@@ -17,6 +17,9 @@ public interface IGoogleSheetsService
 
     Task<List<Expense>> GetExpensesAsync(DateTime from, DateTime to);
     Task AddExpenseAsync(Expense expense);
+
+    Task<List<Income>> GetIncomesAsync(DateTime from, DateTime to);
+    Task AddIncomeAsync(Income income);
 
     Task<List<MonthNote>> GetMonthNotesAsync();
     Task UpsertMonthNoteAsync(MonthNote note);
@@ -48,14 +51,14 @@ public interface IGoogleSheetsService
     Task UpsertPoolAsync(string tournamentId, Pool pool);
     Task UpsertMatchAsync(string tournamentId, Match match);
 
-    /// <summary>One HTTP call regardless of how many pools — used by Start Tournament.</summary>
+    /// <summary>One HTTP call regardless of how many pools ï¿½ used by Start Tournament.</summary>
     Task AppendPoolsAsync(string tournamentId, IList<Pool> pools);
 
-    /// <summary>One HTTP call regardless of how many matches — used by Start Tournament.</summary>
+    /// <summary>One HTTP call regardless of how many matches ï¿½ used by Start Tournament.</summary>
     Task AppendMatchesAsync(string tournamentId, IList<Match> matches);
 
     Task SaveFinalStandingsAsync(string tournamentId, IList<string> orderedFencerIds);
 
-    /// <summary>One HTTP call regardless of how many fencers — used by Save Tournament for new tournaments.</summary>
+    /// <summary>One HTTP call regardless of how many fencers ï¿½ used by Save Tournament for new tournaments.</summary>
     Task AppendTournamentFencersAsync(string tournamentId, IList<TournamentFencer> fencers);
 }

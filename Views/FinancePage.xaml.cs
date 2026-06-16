@@ -26,6 +26,7 @@ public partial class FinancePage : ContentPage
         _cache.InvalidateFencers();
         _cache.InvalidateTrainings();
         _cache.InvalidateExpenses();
+        _cache.InvalidateIncomes();
         _cache.InvalidatePayments();
         _cache.InvalidatePrices();
         await _vm.LoadAsync(showSpinner: true);

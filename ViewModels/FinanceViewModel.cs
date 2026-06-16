@@ -104,12 +104,14 @@ public partial class FinanceViewModel : ObservableObject
             var fencersTask   = _sheets.GetFencersAsync();
             var trainingsTask = _sheets.GetTrainingsAsync();
             var expensesTask  = _sheets.GetExpensesAsync(rangeFrom, rangeTo);
+            var incomesTask   = _sheets.GetIncomesAsync(rangeFrom, rangeTo);
             var rulesTask     = _sheets.GetPriceRulesAsync();
-            await Task.WhenAll(fencersTask, trainingsTask, expensesTask, rulesTask);
+            await Task.WhenAll(fencersTask, trainingsTask, expensesTask, incomesTask, rulesTask);
 
             var fencers     = fencersTask.Result;
             var trainings   = trainingsTask.Result;
             var expensesAll = expensesTask.Result;
+            var incomesAll  = incomesTask.Result;
             var allRules    = rulesTask.Result;
 
             PricingSummary = BuildPricingSummary(allRules);
@@ -122,6 +124,7 @@ public partial class FinanceViewModel : ObservableObject
             var monthsSet = new HashSet<(int Y, int M)> { (today.Year, today.Month) };
             foreach (var s in trainings)    monthsSet.Add((s.Date.Year, s.Date.Month));
             foreach (var e in expensesAll)  monthsSet.Add((e.Date.Year, e.Date.Month));
+            foreach (var i in incomesAll)   monthsSet.Add((i.Date.Year, i.Date.Month));
 
             var ordered = monthsSet
                 .OrderByDescending(t => t.Y).ThenByDescending(t => t.M)
@@ -195,10 +198,14 @@ public partial class FinanceViewModel : ObservableObject
                 var paidByFencer = paidByMonth[ym];
                 var monthRules   = rulesByMonth[ym];
 
-                var monthIncome = payments.Sum(p => p.Amount);
-
                 var from         = new DateTime(y, m, 1);
                 var to           = from.AddMonths(1).AddDays(-1);
+                var monthOneOffIncomes = incomesAll
+                    .Where(x => x.Date >= from && x.Date <= to)
+                    .Sum(x => x.Amount);
+
+                // Total cash in for the month = member dues paid + one-off incomes.
+                var monthIncome   = payments.Sum(p => p.Amount) + monthOneOffIncomes;
                 var monthExpenses = expensesAll
                     .Where(e => e.Date >= from && e.Date <= to)
                     .Sum(e => e.Amount);
@@ -259,6 +266,8 @@ public partial class FinanceViewModel : ObservableObject
                 {
                     foreach (var e in expensesAll.Where(e => e.Date >= from && e.Date <= to))
                         monthVm.Expenses.Add(e);
+                    foreach (var inc in incomesAll.Where(x => x.Date >= from && x.Date <= to))
+                        monthVm.Incomes.Add(inc);
                 }
 
                 monthVm.RaiseTotals();
@@ -465,6 +474,33 @@ public partial class FinanceViewModel : ObservableObject
         month.NewExpenseDescription = "";
         month.NewExpenseAmount = 0;
         month.IsAddingExpense = false;
+        month.RaiseTotals();
+    }
+
+    [RelayCommand]
+    public async Task AddIncomeAsync(MonthFinanceVm month)
+    {
+        if (month is null) return;
+        if (string.IsNullOrWhiteSpace(month.NewIncomeDescription) && month.NewIncomeAmount <= 0)
+            return;
+
+        var date = new DateTime(month.Year, month.Month,
+            Math.Min(DateTime.Today.Day, DateTime.DaysInMonth(month.Year, month.Month)));
+
+        var i = new Income
+        {
+            Date = date,
+            Category = month.NewIncomeCategory,
+            Description = month.NewIncomeDescription,
+            Amount = month.NewIncomeAmount
+        };
+        await _sheets.AddIncomeAsync(i);
+        month.Incomes.Add(i);
+
+        month.NewIncomeCategory = "";
+        month.NewIncomeDescription = "";
+        month.NewIncomeAmount = 0;
+        month.IsAddingIncome = false;
         month.RaiseTotals();
     }
 }

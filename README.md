@@ -50,11 +50,11 @@ A single flyout entry (**Trainings**) hosts four swipeable tabs inside a `Carous
 - Instructors can **Promote to instructor** with one confirmation prompt.
 
 ### 💰 Finance
-- Three swipeable tabs (`Monthly`, `Yearly`, `All Time`)
-- Instructors:
-  - **Mark Paid**, **Add Expense**, **Add Income** 
+- Four swipeable tabs for instructors (`Monthly`, `Yearly`, `All Time`, `Prices`); members see only the **Monthly** view.
+- **Monthly tab** — per-month card showing dues, expenses and **one-off incomes** (donations, gear sales, fencers paying for extras). Instructors get three actions:
+  - **Mark Paid** - **Add Expense** — **Add Income**
 - Members see a **My payments** card summarising "All payed up" or the total due.
-- Yearly and All‑Time tabs surface income / expenses / balance / sessions / average attendance aggregates computed once per load.
+- Yearly and All‑Time tabs surface **income (dues + one-off incomes)** / expenses / balance / sessions / average attendance aggregates computed once per load.
 
 ### 📊 Statistics
 - Visual summary of attendance and other statistics.
@@ -104,6 +104,7 @@ A single flyout entry (**Trainings**) hosts four swipeable tabs inside a `Carous
 **Finance tabs**
 - `Payments` — FencerId, Year, Month, Amount, PaidOn
 - `Expenses` — Id, Date, Category, Description, Amount
+- `Incomes` — Id, Date, Category, Description, Amount — one-off, non-dues income (donations, gear sales, fencers paying for extras); missing tab is tolerated (treated as "no incomes recorded")
 - `MonthNotes` — Year, Month, Note (append-only, latest wins)
 - `Prices` — Id, SessionCount, FullPrice, StudentPrice, StartDate, EndDate — `SessionCount` is `0` for the unlimited monthly pass, `1` for a single-session ticket, `N` for an N-session pack; missing tab falls back to `DuesCalculator` defaults
 
@@ -114,5 +115,5 @@ A single flyout entry (**Trainings**) hosts four swipeable tabs inside a `Carous
 - `Matches` — TournamentId, MatchId, PoolId, BracketRound, BracketSlot, BracketTag (`Final`/`Bronze`), OrderInPool, LeftFencerId, RightFencerId, LeftScore, RightScore, LeftYellowCards, LeftRedCards, RightYellowCards, RightRedCards, RemainingTimeSeconds, Status, WinnerFencerId, StartedAtUtc, FinishedAtUtc, Version, UpdatedAtUtc, UpdatedByUserId, LockedByUserId, LockedAtUtc — `LockedBy*` columns implement a 2‑minute soft‑lock so two judges can't edit the same fight
 - `FinalStandings` — TournamentId, Position, FencerId
 
-> Sheet I/O is split across partials: `Services/GoogleSheetsService.cs` (fencers, trainings, lessons, payments, expenses, month notes), `Services/GoogleSheetsService.Prices.cs` (price rules) and `Services/GoogleSheetsService.Tournaments.cs` (tournament aggregate). The cache decorator follows the same split: `Services/CachedGoogleSheetsService.cs` + `Services/CachedGoogleSheetsService.Tournaments.cs`.
+> Sheet I/O is split across partials: `Services/GoogleSheetsService.cs` (fencers, trainings, lessons, payments, expenses, month notes), `Services/GoogleSheetsService.Prices.cs` (price rules), `Services/GoogleSheetsService.Incomes.cs` (one-off incomes) and `Services/GoogleSheetsService.Tournaments.cs` (tournament aggregate). The cache decorator follows the same split: `Services/CachedGoogleSheetsService.cs` + `Services/CachedGoogleSheetsService.Tournaments.cs`.
 

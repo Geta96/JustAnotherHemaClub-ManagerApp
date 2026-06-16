@@ -14,6 +14,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
     private List<Fencer>? _fencers;
     private List<TrainingSession>? _trainings;
     private List<Expense>? _expenses;
+    private List<Income>? _incomes;
     private List<MonthNote>? _monthNotes;
     private readonly Dictionary<(int Y, int M), List<Payment>> _paymentsByMonth = new();
     private List<IndividualLesson>? _individualLessons;
@@ -128,6 +129,28 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
     {
         await _inner.AddExpenseAsync(expense);
         _expenses?.Add(expense);
+    }
+
+    // ---------- Incomes (one-off, non-dues income) ----------
+    public async Task<List<Income>> GetIncomesAsync(DateTime from, DateTime to)
+    {
+        if (_incomes is null)
+        {
+            await _gate.WaitAsync();
+            try
+            {
+                _incomes ??= await _inner.GetIncomesAsync(DateTime.MinValue.AddYears(1),
+                                                          DateTime.MaxValue.AddYears(-1));
+            }
+            finally { _gate.Release(); }
+        }
+        return _incomes.Where(i => i.Date >= from && i.Date <= to).ToList();
+    }
+
+    public async Task AddIncomeAsync(Income income)
+    {
+        await _inner.AddIncomeAsync(income);
+        _incomes?.Add(income);
     }
 
     // ---------- Month notes ----------
@@ -249,16 +272,19 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
         var trainings = _inner.GetTrainingsAsync();
         var expenses = _inner.GetExpensesAsync(DateTime.MinValue.AddYears(1),
                                                DateTime.MaxValue.AddYears(-1));
+        var incomes = _inner.GetIncomesAsync(DateTime.MinValue.AddYears(1),
+                                             DateTime.MaxValue.AddYears(-1));
         var notes = _inner.GetMonthNotesAsync();
         var today = DateTime.Today;
         var currentMonthPayments = _inner.GetPaymentsAsync(today.Year, today.Month);
         var prices = _inner.GetPriceRulesAsync();
 
-        await Task.WhenAll(fencers, trainings, expenses, notes, currentMonthPayments, prices);
+        await Task.WhenAll(fencers, trainings, expenses, incomes, notes, currentMonthPayments, prices);
 
         _fencers = fencers.Result;
         _trainings = trainings.Result;
         _expenses = expenses.Result;
+        _incomes = incomes.Result;
         _monthNotes = notes.Result;
         _paymentsByMonth[(today.Year, today.Month)] = currentMonthPayments.Result;
         _prices = prices.Result;
@@ -269,6 +295,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
         _fencers = null;
         _trainings = null;
         _expenses = null;
+        _incomes = null;
         _monthNotes = null;
         _paymentsByMonth.Clear();
         _individualLessons = null;
@@ -279,6 +306,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
     public void InvalidateFencers() => _fencers = null;
     public void InvalidateTrainings() => _trainings = null;
     public void InvalidateExpenses() => _expenses = null;
+    public void InvalidateIncomes() => _incomes = null;
     public void InvalidateMonthNotes() => _monthNotes = null;
     public void InvalidateIndividualLessons() => _individualLessons = null;
     public void InvalidateRecurringTrainings() => _recurringTrainings = null;
