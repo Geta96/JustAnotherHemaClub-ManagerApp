@@ -124,10 +124,20 @@
                                                                            VerticalOptions="Center" />
                                                                 </HorizontalStackLayout>
 
+                                                                <!-- Exactly paid: outstanding=0 AND no overpayment. -->
                                                                 <Label Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
                                                                        Text="✓ Paid"
-                                                                       IsVisible="{Binding IsPaid}"
+                                                                       IsVisible="{Binding IsExactlyPaid}"
                                                                        TextColor="#1F8A2E" FontAttributes="Bold" FontSize="18"
+                                                                       VerticalOptions="Center" />
+
+                                                                <!-- Overpaid: replaces "Paid" so the credit going forward is visible. -->
+                                                                <Label Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                                                                       Text="{Binding Overpayment, StringFormat='✓ Overpayed by {0:N0} Ft'}"
+                                                                       IsVisible="{Binding IsOverpaid}"
+                                                                       TextColor="#1F8A2E" FontAttributes="Bold" FontSize="14"
+                                                                       LineBreakMode="WordWrap"
+                                                                       HorizontalTextAlignment="End"
                                                                        VerticalOptions="Center" />
                                                             </Grid>
                                                         </Border>
@@ -277,10 +287,147 @@
             </ScrollView>
         </DataTemplate>
 
+        <!-- =================== PRICES TAB (instructor-only) =================== -->
+        <DataTemplate x:Key="PricesTabTemplate"
+                      x:DataType="vm:FinanceTab">
+            <ScrollView>
+                <VerticalStackLayout Padding="16,8,16,16" Spacing="14">
+
+                    <!-- Add new price rule -->
+                    <Border Style="{StaticResource Card}">
+                        <VerticalStackLayout Spacing="8">
+                            <Button Text="Add Price Rule"
+                                    BackgroundColor="#476FB5"
+                                    TextColor="{StaticResource Cream}"
+                                    IsVisible="{Binding Vm.PricesVm.IsAddingRule, Converter={StaticResource InverseBoolConverter}}"
+                                    Command="{Binding Vm.PricesVm.BeginAddRuleCommand}" />
+
+                            <VerticalStackLayout Spacing="8" IsVisible="{Binding Vm.PricesVm.IsAddingRule}">
+                                <Label Text="New price rule" FontAttributes="Bold"
+                                       TextColor="{StaticResource Wine}" />
+
+                                <Label Text="Applies to" Style="{StaticResource Caption}" />
+                                <Picker ItemsSource="{Binding Vm.PricesVm.SessionCountOptions}"
+                                        SelectedIndex="{Binding Vm.PricesVm.NewSessionCountIndex, Mode=TwoWay}" />
+
+                                <Label Text="Full price (Ft)" Style="{StaticResource Caption}" />
+                                <Entry Keyboard="Numeric" Text="{Binding Vm.PricesVm.NewFullPrice}" />
+
+                                <Label Text="Student price (Ft) — auto ≈60%, rounded to 500"
+                                       Style="{StaticResource Caption}" />
+                                <Entry Keyboard="Numeric" Text="{Binding Vm.PricesVm.NewStudentPrice}" />
+
+                                <Label Text="Start date" Style="{StaticResource Caption}" />
+                                <DatePicker Date="{Binding Vm.PricesVm.NewStartDate}" />
+
+                                <HorizontalStackLayout Spacing="8">
+                                    <CheckBox IsChecked="{Binding Vm.PricesVm.NewHasEndDate}" />
+                                    <Label Text="Has end date" VerticalOptions="Center" />
+                                </HorizontalStackLayout>
+                                <DatePicker Date="{Binding Vm.PricesVm.NewEndDate}"
+                                            IsVisible="{Binding Vm.PricesVm.NewHasEndDate}" />
+
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                    <Button Grid.Column="0" Text="Cancel"
+                                            BackgroundColor="{StaticResource Wine}"
+                                            TextColor="{StaticResource Cream}"
+                                            Command="{Binding Vm.PricesVm.CancelAddRuleCommand}" />
+                                    <Button Grid.Column="1" Text="Save"
+                                            BackgroundColor="#476FB5"
+                                            TextColor="{StaticResource Cream}"
+                                            Command="{Binding Vm.PricesVm.SaveNewRuleCommand}" />
+                                </Grid>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Empty-state -->
+                    <Label Text="No price rules yet. Add one above (the app falls back to defaults until you do)."
+                           IsVisible="{Binding Vm.PricesVm.HasNoRules}"
+                           Style="{StaticResource Caption}" />
+
+                    <!-- Existing rules — active first, all collapsed by default -->
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Vm.PricesVm.Rules}" Spacing="10">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="vm:PriceRuleRow">
+                                <VerticalStackLayout Spacing="0">
+                                    <Border Style="{StaticResource Card}">
+                                        <VerticalStackLayout Spacing="10">
+
+                                            <!-- Header -->
+                                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                                <Grid.GestureRecognizers>
+                                                    <TapGestureRecognizer Command="{Binding ToggleExpandedCommand}" />
+                                                </Grid.GestureRecognizers>
+                                                <Label Grid.Column="0" Text="{Binding ExpandGlyph}"
+                                                       FontSize="20" TextColor="{StaticResource Wine}"
+                                                       VerticalOptions="Center" />
+                                                <VerticalStackLayout Grid.Column="1">
+                                                    <Label Text="{Binding TierName}" Style="{StaticResource H2}" />
+                                                    <Label Text="{Binding PriceSummary}" Style="{StaticResource Caption}" />
+                                                    <Label Text="{Binding DateRange}" Style="{StaticResource Caption}" />
+                                                </VerticalStackLayout>
+                                                <Label Grid.Column="2" Text="{Binding ActiveBadge}"
+                                                       VerticalOptions="Center" FontAttributes="Bold"
+                                                       TextColor="{StaticResource Wine}" />
+                                            </Grid>
+
+                                            <!-- Body -->
+                                            <VerticalStackLayout IsVisible="{Binding IsExpanded}" Spacing="8">
+                                                <Label Text="Full price (Ft)" Style="{StaticResource Caption}" />
+                                                <Entry Keyboard="Numeric" Text="{Binding FullPrice}" />
+
+                                                <Label Text="Student price (Ft)" Style="{StaticResource Caption}" />
+                                                <Entry Keyboard="Numeric" Text="{Binding StudentPrice}" />
+
+                                                <Label Text="Start date" Style="{StaticResource Caption}" />
+                                                <DatePicker Date="{Binding StartDate}" />
+
+                                                <HorizontalStackLayout Spacing="8">
+                                                    <CheckBox IsChecked="{Binding HasEndDate}" />
+                                                    <Label Text="Has end date" VerticalOptions="Center" />
+                                                </HorizontalStackLayout>
+                                                <DatePicker Date="{Binding EndDate}"
+                                                            IsVisible="{Binding HasEndDate}" />
+
+                                                <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                                    <Button Grid.Column="0" Text="Delete"
+                                                            BackgroundColor="{StaticResource DangerRed}"
+                                                            TextColor="{StaticResource Cream}"
+                                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.PricesVm.DeleteRuleCommand}"
+                                                            CommandParameter="{Binding .}" />
+                                                    <Button Grid.Column="1" Text="Save changes"
+                                                            BackgroundColor="#476FB5"
+                                                            TextColor="{StaticResource Cream}"
+                                                            IsEnabled="{Binding IsDirty}"
+                                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.PricesVm.SaveRuleCommand}"
+                                                            CommandParameter="{Binding .}" />
+                                                </Grid>
+                                            </VerticalStackLayout>
+                                        </VerticalStackLayout>
+                                    </Border>
+
+                                    <!-- Active/inactive boundary divider. Visible only on the
+                                         last active rule, and only when at least one inactive
+                                         rule follows. IsVisible=False removes it from layout. -->
+                                    <BoxView HeightRequest="1"
+                                             BackgroundColor="{StaticResource Wine}"
+                                             Margin="8,8,8,0"
+                                             IsVisible="{Binding ShowActiveSeparator}" />
+                                </VerticalStackLayout>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+
+                </VerticalStackLayout>
+            </ScrollView>
+        </DataTemplate>
+
         <sel:FinanceTabTemplateSelector x:Key="TabSelector"
                                         MonthlyTemplate="{StaticResource MonthlyTabTemplate}"
                                         YearlyTemplate="{StaticResource YearlyTabTemplate}"
-                                        AllTimeTemplate="{StaticResource AllTimeTabTemplate}" />
+                                        AllTimeTemplate="{StaticResource AllTimeTabTemplate}"
+                                        PricesTemplate="{StaticResource PricesTabTemplate}" />
     </ContentPage.Resources>
 
     <Grid RowDefinitions="Auto,Auto,Auto,*">
@@ -307,13 +454,18 @@
             </Border>
         </Grid>
 
-        <!-- Pricing -->
-        <Label Grid.Row="1" Padding="16,8,16,0"
-               Text="Pricing: 1 session 3 500 · 4 sessions 9 000 · 8 sessions 12 000"
-               Style="{StaticResource Caption}" />
+        <!-- Pricing (today's active price rules) + coverage-gap warning -->
+        <VerticalStackLayout Grid.Row="1" Padding="16,8,16,0" Spacing="2">
+            <Label Text="{Binding PricingSummary}"
+                   Style="{StaticResource Caption}" />
+            <Label Text="{Binding PricingWarning}"
+                   IsVisible="{Binding HasPricingWarning}"
+                   TextColor="{StaticResource DangerRed}"
+                   FontAttributes="Bold" />
+        </VerticalStackLayout>
 
         <!-- Tab buttons (instructor-only; member sees only the Monthly carousel page) -->
-        <Grid Grid.Row="2" Padding="16,8" ColumnDefinitions="*,*,*" ColumnSpacing="6"
+        <Grid Grid.Row="2" Padding="16,8" ColumnDefinitions="*,*,*,*" ColumnSpacing="6"
               IsVisible="{Binding IsLoggedInInstructor}">
             <Button Grid.Column="0" Text="Monthly"
                     Command="{Binding ShowMonthlyTabCommand}"
@@ -343,6 +495,17 @@
                     TextColor="{StaticResource Wine}">
                 <Button.Triggers>
                     <DataTrigger TargetType="Button" Binding="{Binding IsAllTimeTab}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Wine}" />
+                        <Setter Property="TextColor" Value="{StaticResource Cream}" />
+                    </DataTrigger>
+                </Button.Triggers>
+            </Button>
+            <Button Grid.Column="3" Text="Prices"
+                    Command="{Binding ShowPricesTabCommand}"
+                    BackgroundColor="{StaticResource CreamSoft}"
+                    TextColor="{StaticResource Wine}">
+                <Button.Triggers>
+                    <DataTrigger TargetType="Button" Binding="{Binding IsPricesTab}" Value="True">
                         <Setter Property="BackgroundColor" Value="{StaticResource Wine}" />
                         <Setter Property="TextColor" Value="{StaticResource Cream}" />
                     </DataTrigger>

@@ -55,12 +55,12 @@ public partial class FencersViewModel : ObservableObject
         {
             var today = DateTime.Today;
 
-            // All reads in parallel — adds individual lessons too.
             var fencersTask    = _sheets.GetFencersAsync();
             var trainingsTask  = _sheets.GetTrainingsAsync();
             var paymentsTask   = _sheets.GetPaymentsAsync(today.Year, today.Month);
             var lessonsTask    = _sheets.GetIndividualLessonsAsync();
-            await Task.WhenAll(fencersTask, trainingsTask, paymentsTask, lessonsTask);
+            var priceRulesTask = _sheets.GetPriceRulesAsync();
+            await Task.WhenAll(fencersTask, trainingsTask, paymentsTask, lessonsTask, priceRulesTask);
 
             var all = fencersTask.Result.OrderBy(f => f.Name).ToList();
             var allTrainings = trainingsTask.Result;
@@ -68,6 +68,72 @@ public partial class FencersViewModel : ObservableObject
                 .Where(t => t.Date.Year == today.Year && t.Date.Month == today.Month)
                 .ToList();
             var payments = paymentsTask.Result;
+            var allRules = priceRulesTask.Result;
+
+            // Helper: rules covering a given month.
+            List<PriceRule> RulesForMonth(int y, int m)
+            {
+                var from = new DateTime(y, m, 1);
+                var to   = from.AddMonths(1).AddDays(-1);
+                return allRules.Where(r => r.StartDate.Date <= to &&
+                                            (r.EndDate is null || r.EndDate.Value.Date >= from))
+                               .ToList();
+            }
+
+            var monthRules = RulesForMonth(today.Year, today.Month);
+
+            // ===== Credit-carry pre-pass: walk every prior month with any
+            // training activity, in chronological order, so a fencer who
+            // overpaid earlier has that credit applied to this month's bill. =====
+            var priorMonths = allTrainings
+                .Where(t => t.Date.Year < today.Year ||
+                            (t.Date.Year == today.Year && t.Date.Month < today.Month))
+                .Select(t => (Y: t.Date.Year, M: t.Date.Month))
+                .Distinct()
+                .OrderBy(t => t.Y).ThenBy(t => t.M)
+                .ToList();
+
+            // The cache decorator makes repeat calls cheap; first load pays the
+            // per-month round-trip cost, subsequent loads are instant.
+            var priorPaymentTasks = priorMonths
+                .ToDictionary(ym => ym, ym => _sheets.GetPaymentsAsync(ym.Y, ym.M));
+            if (priorPaymentTasks.Count > 0)
+                await Task.WhenAll(priorPaymentTasks.Values);
+
+            var attendanceByMonth = priorMonths.ToDictionary(
+                ym => ym,
+                ym => allTrainings.Where(t => t.Date.Year == ym.Y && t.Date.Month == ym.M)
+                                  .SelectMany(t => t.AttendeeFencerIds)
+                                  .GroupBy(id => id)
+                                  .ToDictionary(g => g.Key, g => g.Count()));
+
+            var paidByMonthByFencer = priorMonths.ToDictionary(
+                ym => ym,
+                ym => priorPaymentTasks[ym].Result
+                        .GroupBy(p => p.FencerId)
+                        .ToDictionary(g => g.Key, g => g.Sum(p => p.Amount)));
+
+            var creditIntoCurrentMonth = new Dictionary<string, decimal>(all.Count);
+            foreach (var f in all)
+            {
+                decimal credit = 0m;
+                foreach (var ym in priorMonths)
+                {
+                    attendanceByMonth[ym].TryGetValue(f.Id, out var att);
+                    paidByMonthByFencer[ym].TryGetValue(f.Id, out var paid);
+                    if (att == 0 && paid == 0m && credit == 0m) continue;
+
+                    var rules = RulesForMonth(ym.Y, ym.M);
+                    var quote = DuesCalculator.Calculate(att, f.IsStudent, rules, paid + credit);
+                    credit = quote.Overpayment;
+                }
+                creditIntoCurrentMonth[f.Id] = credit;
+            }
+
+            // ===== Current-month dues (with carried credit applied) =====
+            var paidByFencer = payments
+                .GroupBy(p => p.FencerId)
+                .ToDictionary(g => g.Key, g => g.Sum(p => p.Amount));
 
             var attendance = monthTrainings
                 .SelectMany(t => t.AttendeeFencerIds)
@@ -79,12 +145,15 @@ public partial class FencersViewModel : ObservableObject
                 f =>
                 {
                     attendance.TryGetValue(f.Id, out var count);
-                    var amount = DuesCalculator.Calculate(count, f.IsStudent);
-                    var paid = payments.Any(p => p.FencerId == f.Id);
-                    return (count, amount, paid);
+                    paidByFencer.TryGetValue(f.Id, out var cash);
+                    creditIntoCurrentMonth.TryGetValue(f.Id, out var credit);
+
+                    var quote = DuesCalculator.Calculate(count, f.IsStudent, monthRules, cash + credit);
+                    // Outstanding doubles as "what they still owe"; IsCovered
+                    // is true for both exactly-paid and overpaid cases.
+                    return (Sessions: count, Amount: quote.Outstanding, Paid: quote.IsCovered);
                 });
 
-            // Single visible swap.
             Fencers.Clear();
             foreach (var f in all) Fencers.Add(f);
 

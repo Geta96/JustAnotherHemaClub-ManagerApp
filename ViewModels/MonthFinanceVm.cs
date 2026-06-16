@@ -21,7 +21,6 @@ public partial class MonthFinanceVm : ObservableObject
     [ObservableProperty] private bool isExpanded;
     public string ExpandGlyph => IsExpanded ? "▾" : "▸";
 
-    // Controls the inline "Add expense" form visibility.
     [ObservableProperty] private bool isAddingExpense;
 
     public MonthFinanceVm(int year, int month)
@@ -32,10 +31,17 @@ public partial class MonthFinanceVm : ObservableObject
         Expenses.CollectionChanged += (_, __) => RaiseTotals();
     }
 
-    public decimal TotalDue => Dues.Sum(d => d.AmountDue);
-    public decimal TotalPaid => Dues.Where(d => d.IsPaid).Sum(d => d.AmountDue);
-    public decimal TotalExpenses => Expenses.Sum(e => e.Amount);
-    public decimal Balance => TotalPaid - TotalExpenses;
+    // Expected revenue from members for this month (sum of cheapest tier per fencer).
+    public decimal TotalDue       => Dues.Sum(d => d.TotalCost);
+
+    // Actual income already collected this month (sum of recorded payments).
+    public decimal TotalPaid      => Dues.Sum(d => d.AlreadyPaid);
+
+    // Still to collect from members this month.
+    public decimal Outstanding    => Dues.Sum(d => d.AmountDue);
+
+    public decimal TotalExpenses  => Expenses.Sum(e => e.Amount);
+    public decimal Balance        => TotalPaid - TotalExpenses;
 
     public string Summary =>
         $"Dues {TotalDue:N0} · Paid {TotalPaid:N0} · Expenses {TotalExpenses:N0} · Balance {Balance:N0}";
@@ -44,6 +50,7 @@ public partial class MonthFinanceVm : ObservableObject
     {
         OnPropertyChanged(nameof(TotalDue));
         OnPropertyChanged(nameof(TotalPaid));
+        OnPropertyChanged(nameof(Outstanding));
         OnPropertyChanged(nameof(TotalExpenses));
         OnPropertyChanged(nameof(Balance));
         OnPropertyChanged(nameof(Summary));
@@ -51,11 +58,9 @@ public partial class MonthFinanceVm : ObservableObject
 
     partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(ExpandGlyph));
 
-    [RelayCommand]
-    private void ToggleExpanded() => IsExpanded = !IsExpanded;
+    [RelayCommand] private void ToggleExpanded() => IsExpanded = !IsExpanded;
 
-    [RelayCommand]
-    private void BeginAddExpense() => IsAddingExpense = true;
+    [RelayCommand] private void BeginAddExpense() => IsAddingExpense = true;
 
     [RelayCommand]
     private void CancelAddExpense()

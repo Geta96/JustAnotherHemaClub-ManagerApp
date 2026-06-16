@@ -9,7 +9,7 @@
         <VerticalStackLayout Spacing="0">
 
             <!-- Hero -->
-            <Grid Padding="0" HeightRequest="320">
+            <Grid Padding="0" HeightRequest="360">
                 <!-- Background image -->
                 <Image Source="home_bg_2.jpg"
                        Aspect="AspectFill"
@@ -18,9 +18,12 @@
                 <!-- Wine tint for legibility -->
                 <BoxView Color="{StaticResource Wine}" Opacity="0.10"
                          HorizontalOptions="Fill" VerticalOptions="Fill" />
-                <!-- Foreground content -->
+                <!-- Foreground content. HorizontalOptions=Fill so the subtitle
+                     gets the full hero width and doesn't wrap to "…Budapest"
+                     where the bottom would clip it. Children that should stay
+                     centred set HorizontalOptions=Center themselves. -->
                 <VerticalStackLayout Spacing="6" Padding="20,28,20,24"
-                                     HorizontalOptions="Center" VerticalOptions="Center">
+                                     HorizontalOptions="Fill" VerticalOptions="Center">
                     <Image Source="jahclogo.png"
                            HeightRequest="180"
                            Aspect="AspectFit"

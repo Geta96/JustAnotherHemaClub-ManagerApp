@@ -28,6 +28,11 @@ public interface IGoogleSheetsService
     Task UpsertRecurringTrainingAsync(RecurringTrainingRule rule);
     Task DeleteRecurringTrainingAsync(string ruleId);
 
+    // ---- Price rules (per-interval pricing for monthly dues) ----
+    Task<List<PriceRule>> GetPriceRulesAsync();
+    Task UpsertPriceRuleAsync(PriceRule rule);
+    Task DeletePriceRuleAsync(string ruleId);
+
     // ---- Tournaments (normalised + versioned) ----
 
     Task<List<Tournament>> GetTournamentHeadersAsync();
