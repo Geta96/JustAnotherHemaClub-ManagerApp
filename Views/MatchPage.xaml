@@ -1,0 +1,171 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels"
+             x:Class="JustAnotherHemaClub.Views.MatchPage"
+             x:DataType="vm:MatchViewModel"
+             Title="Match">
+
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Padding="16">
+
+        <!-- Title + status -->
+        <VerticalStackLayout Grid.Row="0" Spacing="2">
+            <Label Text="{Binding Title}" Style="{StaticResource H2}" />
+            <Label Style="{StaticResource Caption}">
+                <Label.FormattedText>
+                    <FormattedString>
+                        <Span Text="{Binding StatusBadge}" />
+                        <Span Text="&#160;&#160;&#160;&#160;" />
+                        <Span Text="{Binding LockHolderText}" />
+                    </FormattedString>
+                </Label.FormattedText>
+            </Label>
+            <Label Text="{Binding ErrorMessage}"
+                   TextColor="{StaticResource DangerRed}"
+                   IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}, FallbackValue=False}" />
+        </VerticalStackLayout>
+
+        <!-- Clock -->
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,12,0,0">
+            <VerticalStackLayout Spacing="8" HorizontalOptions="Center">
+                <Label Text="{Binding ClockText}"
+                       FontSize="56" FontAttributes="Bold"
+                       TextColor="{StaticResource Wine}"
+                       HorizontalOptions="Center" />
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                    <Button Grid.Column="0" Text="{Binding TimerButtonText}"
+                            BackgroundColor="#476FB5"
+                            TextColor="{StaticResource Cream}"
+                            IsEnabled="{Binding CanEdit}"
+                            Command="{Binding ToggleTimerCommand}" />
+                    <Button Grid.Column="1" Text="+1 min"
+                            BackgroundColor="{StaticResource CreamSoft}"
+                            TextColor="{StaticResource Wine}"
+                            IsEnabled="{Binding CanEdit}"
+                            Command="{Binding AddMinuteCommand}" />
+                </Grid>
+            </VerticalStackLayout>
+        </Border>
+
+        <!-- Mirrored score panels -->
+        <Grid Grid.Row="2" ColumnDefinitions="*,*" ColumnSpacing="10" Margin="0,12,0,0">
+
+            <!-- LEFT fencer -->
+            <Border Grid.Column="0" Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="8" HorizontalOptions="Fill">
+                    <Label Text="{Binding LeftName}"
+                           Style="{StaticResource H2}" HorizontalOptions="Center" />
+                    <Label Text="Score"
+                           Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                    <Label Text="{Binding LeftScore}"
+                           FontSize="72" FontAttributes="Bold"
+                           TextColor="{StaticResource Wine}"
+                           HorizontalOptions="Center" />
+
+                    <!-- Cards (now above the points) -->
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                        <Button Grid.Column="0" Text="Yellow"
+                                BackgroundColor="#E6B800"
+                                TextColor="Black"
+                                IsEnabled="{Binding CanLeftYellow}"
+                                Command="{Binding AddLeftYellowCommand}" />
+                        <Button Grid.Column="1" Text="Red"
+                                BackgroundColor="{StaticResource DangerRed}"
+                                TextColor="{StaticResource Cream}"
+                                IsEnabled="{Binding CanLeftRed}"
+                                Command="{Binding AddLeftRedCommand}" />
+                    </Grid>
+
+                    <!-- Big +1 (most used) -->
+                    <Button Text="+1"
+                            BackgroundColor="#476FB5"
+                            TextColor="{StaticResource Cream}"
+                            FontSize="34"
+                            HeightRequest="90"
+                            IsEnabled="{Binding CanEdit}"
+                            Command="{Binding AddLeftPointCommand}" />
+
+                    <!-- Smaller -1 -->
+                    <Button Text="-1"
+                            BackgroundColor="{StaticResource Wine}"
+                            TextColor="{StaticResource Cream}"
+                            IsEnabled="{Binding CanEdit}"
+                            Command="{Binding SubLeftPointCommand}" />
+
+                    <Label Style="{StaticResource Caption}" HorizontalOptions="Center">
+                        <Label.FormattedText>
+                            <FormattedString>
+                                <Span Text="Y: " />
+                                <Span Text="{Binding LeftYellow}" />
+                                <Span Text="   R: " />
+                                <Span Text="{Binding LeftRed}" />
+                            </FormattedString>
+                        </Label.FormattedText>
+                    </Label>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- RIGHT fencer -->
+            <Border Grid.Column="1" Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="8" HorizontalOptions="Fill">
+                    <Label Text="{Binding RightName}"
+                           Style="{StaticResource H2}" HorizontalOptions="Center" />
+                    <Label Text="Score"
+                           Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                    <Label Text="{Binding RightScore}"
+                           FontSize="72" FontAttributes="Bold"
+                           TextColor="{StaticResource Wine}"
+                           HorizontalOptions="Center" />
+
+                    <!-- Cards (now above the points) -->
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                        <Button Grid.Column="0" Text="Red"
+                                BackgroundColor="{StaticResource DangerRed}"
+                                TextColor="{StaticResource Cream}"
+                                IsEnabled="{Binding CanRightRed}"
+                                Command="{Binding AddRightRedCommand}" />
+                        <Button Grid.Column="1" Text="Yellow"
+                                BackgroundColor="#E6B800"
+                                TextColor="Black"
+                                IsEnabled="{Binding CanRightYellow}"
+                                Command="{Binding AddRightYellowCommand}" />
+                    </Grid>
+
+                    <!-- Big +1 (most used) -->
+                    <Button Text="+1"
+                            BackgroundColor="#476FB5"
+                            TextColor="{StaticResource Cream}"
+                            FontSize="34"
+                            HeightRequest="90"
+                            IsEnabled="{Binding CanEdit}"
+                            Command="{Binding AddRightPointCommand}" />
+
+                    <!-- Smaller -1 -->
+                    <Button Text="-1"
+                            BackgroundColor="{StaticResource Wine}"
+                            TextColor="{StaticResource Cream}"
+                            IsEnabled="{Binding CanEdit}"
+                            Command="{Binding SubRightPointCommand}" />
+
+                    <Label Style="{StaticResource Caption}" HorizontalOptions="Center">
+                        <Label.FormattedText>
+                            <FormattedString>
+                                <Span Text="Y: " />
+                                <Span Text="{Binding RightYellow}" />
+                                <Span Text="&#160;&#160;&#160;R: " />
+                                <Span Text="{Binding RightRed}" />
+                            </FormattedString>
+                        </Label.FormattedText>
+                    </Label>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <Button Grid.Row="4" Text="Finish Match"
+                BackgroundColor="#1F8A2E"
+                TextColor="{StaticResource Cream}"
+                IsVisible="{Binding CanEdit}"
+                Clicked="OnFinishClicked"
+                Margin="0,12,0,0" />
+    </Grid>
+</ContentPage>
