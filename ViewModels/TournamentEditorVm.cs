@@ -563,7 +563,7 @@ public partial class TournamentEditorVm : ObservableObject
             // Empty pools are allowed during editing but never make it into the
             // running tournament — drop them silently before any validation.
             var draftPools = Tournament.Pools
-                // .Where(p => p.FencerIds.Count > 0)
+                .Where(p => p.FencerIds.Count > 0)
                 .OrderBy(p => p.Index)
                 .ToList();
 
@@ -632,7 +632,11 @@ public partial class TournamentEditorVm : ObservableObject
             Tournament.State = TournamentState.PoolsInProgress;
             await _sheets.UpsertTournamentHeaderAsync(Tournament);
 
-            _cache.InvalidateTournaments();
+            // NOTE: Do NOT call _cache.InvalidateTournaments() here.
+            // UpsertTournamentHeaderAsync already placed the fully-hydrated
+            // tournament (pools WITH matches) into the cache. Invalidating would
+            // force the Hub page to re-fetch from the sheet, which can race against
+            // the Sheets API's write-propagation and return pools without matches.
             NotifyStateChanged();
         }
         catch (Exception ex) { ErrorMessage = $"Start failed: {ex.Message}"; }
