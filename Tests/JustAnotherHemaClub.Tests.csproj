@@ -40,12 +40,16 @@
     <Compile Include="..\Services\TournamentAutoSaveService.cs" Link="Shared\Services\TournamentAutoSaveService.cs" />
     <Compile Include="..\ViewModels\TournamentEditorVm.cs" Link="Shared\ViewModels\TournamentEditorVm.cs" />
     <Compile Include="..\ViewModels\TournamentFencerRow.cs" Link="Shared\ViewModels\TournamentFencerRow.cs" />
+    <Compile Include="..\ViewModels\PricesViewModel.cs" Link="Shared\ViewModels\PricesViewModel.cs" />
+    <Compile Include="..\ViewModels\FencerDetailsVm.cs" Link="Shared\ViewModels\FencerDetailsVm.cs" />
+    <Compile Include="..\ViewModels\FencerToggle.cs" Link="Shared\ViewModels\FencerToggle.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="FluentAssertions" />
     <Using Include="Microsoft.Maui.ApplicationModel" />
+    <Using Include="Microsoft.Maui.Controls" />
   </ItemGroup>
 
 </Project>
