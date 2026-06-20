@@ -1,0 +1,47 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>JustAnotherHemaClub.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.0" />
+    <PackageReference Include="FluentAssertions" Version="8.10.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="Moq" Version="4.20.72" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <!-- Compile business-logic sources directly (main project is Android-only MAUI) -->
+  <ItemGroup>
+    <Compile Include="..\Models\Pool.cs" Link="Shared\Models\Pool.cs" />
+    <Compile Include="..\Models\Tournament.cs" Link="Shared\Models\Tournament.cs" />
+    <Compile Include="..\Models\EliminationBracket.cs" Link="Shared\Models\EliminationBracket.cs" />
+    <Compile Include="..\Models\PriceRule.cs" Link="Shared\Models\PriceRule.cs" />
+    <Compile Include="..\Models\IndividualLesson.cs" Link="Shared\Models\IndividualLesson.cs" />
+    <Compile Include="..\Models\Fencer.cs" Link="Shared\Models\Fencer.cs" />
+    <Compile Include="..\Models\TrainingSession.cs" Link="Shared\Models\TrainingSession.cs" />
+    <Compile Include="..\Models\Payment.cs" Link="Shared\Models\Payment.cs" />
+    <Compile Include="..\Models\Expense.cs" Link="Shared\Models\Expense.cs" />
+    <Compile Include="..\Models\Income.cs" Link="Shared\Models\Income.cs" />
+    <Compile Include="..\Models\MonthNote.cs" Link="Shared\Models\MonthNote.cs" />
+    <Compile Include="..\Models\RecurringTrainingRule.cs" Link="Shared\Models\RecurringTrainingRule.cs" />
+    <Compile Include="..\Services\TournamentEngine.cs" Link="Shared\Services\TournamentEngine.cs" />
+    <Compile Include="..\Services\DuesCalculator.cs" Link="Shared\Services\DuesCalculator.cs" />
+    <Compile Include="..\Services\IGoogleSheetsService.cs" Link="Shared\Services\IGoogleSheetsService.cs" />
+    <Compile Include="..\Services\ICacheControl.cs" Link="Shared\Services\ICacheControl.cs" />
+    <Compile Include="..\Services\ConcurrencyConflictException.cs" Link="Shared\Services\ConcurrencyConflictException.cs" />
+    <Compile Include="..\Services\TournamentAutoSaveService.cs" Link="Shared\Services\TournamentAutoSaveService.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="FluentAssertions" />
+  </ItemGroup>
+
+</Project>
