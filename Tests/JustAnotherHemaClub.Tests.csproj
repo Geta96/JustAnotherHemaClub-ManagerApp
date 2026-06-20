@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
     <PackageReference Include="coverlet.collector" Version="6.0.0" />
     <PackageReference Include="FluentAssertions" Version="8.10.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
@@ -37,11 +38,14 @@
     <Compile Include="..\Services\ICacheControl.cs" Link="Shared\Services\ICacheControl.cs" />
     <Compile Include="..\Services\ConcurrencyConflictException.cs" Link="Shared\Services\ConcurrencyConflictException.cs" />
     <Compile Include="..\Services\TournamentAutoSaveService.cs" Link="Shared\Services\TournamentAutoSaveService.cs" />
+    <Compile Include="..\ViewModels\TournamentEditorVm.cs" Link="Shared\ViewModels\TournamentEditorVm.cs" />
+    <Compile Include="..\ViewModels\TournamentFencerRow.cs" Link="Shared\ViewModels\TournamentFencerRow.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="FluentAssertions" />
+    <Using Include="Microsoft.Maui.ApplicationModel" />
   </ItemGroup>
 
 </Project>
