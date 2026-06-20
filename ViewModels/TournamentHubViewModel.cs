@@ -80,6 +80,9 @@ public partial class TournamentHubViewModel : ObservableObject
     public bool ShowSetupHint => Tournament?.State == TournamentState.Setup;
     public bool CanManageRoster => CanEdit;
 
+    /// <summary>Editor button: visible for organisers in any state (the editor handles all operations).</summary>
+    public bool CanOpenEditor => _session.IsOrganiser && Tournament is not null;
+
     /// <summary>Manual End button: organiser, bracket complete, not yet finished.</summary>
     public bool CanEndTournament =>
         _session.IsOrganiser &&
@@ -142,6 +145,10 @@ public partial class TournamentHubViewModel : ObservableObject
 
             RaiseHeaderPropertiesChanged();
         }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Load failed: {ex.Message}";
+        }
         finally { IsLoading = false; }
     }
 
@@ -160,7 +167,11 @@ public partial class TournamentHubViewModel : ObservableObject
         try
         {
             var fresh = await _sheets.GetMatchesAsync(t.Id);
-            var byId = fresh.ToDictionary(m => m.Id);
+
+            // Deduplicate by ID in case the in-memory store has duplicates
+            var byId = new Dictionary<string, Match>(StringComparer.Ordinal);
+            foreach (var m in fresh)
+                byId[m.Id] = m; // last-write-wins for duplicates
 
             // Patch in-memory pool matches.
             foreach (var pool in t.Pools)
@@ -189,6 +200,10 @@ public partial class TournamentHubViewModel : ObservableObject
             // re-fire MatchUpdated for matches we just patched.
             PoolsVm.ResumePolling(fresh);
             RaiseHeaderPropertiesChanged();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Refresh failed: {ex.Message}";
         }
         finally { IsLoading = false; }
     }
@@ -304,6 +319,7 @@ public partial class TournamentHubViewModel : ObservableObject
         OnPropertyChanged(nameof(CanEdit));
         OnPropertyChanged(nameof(CanManageRoster));
         OnPropertyChanged(nameof(ShowSetupHint));
+        OnPropertyChanged(nameof(CanOpenEditor));
         OnPropertyChanged(nameof(CanEndTournament));
         OnPropertyChanged(nameof(CanReopenTournament));
         OnPropertyChanged(nameof(CanWithdrawFencer));

@@ -6,7 +6,7 @@
              x:DataType="vm:TournamentsViewModel"
              Title="Tournaments">
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <Grid RowDefinitions="Auto,Auto,Auto,*">
 
         <!-- Title + refresh -->
         <Grid Grid.Row="0" Padding="16,16,16,0"
@@ -27,17 +27,23 @@
             </Border>
         </Grid>
 
-        <!-- Filter -->
-        <Border Grid.Row="1" Margin="16,12,16,0"
-                BackgroundColor="{StaticResource CreamSoft}"
-                Stroke="{StaticResource Wine}" StrokeThickness="1"
-                StrokeShape="RoundRectangle 8"
-                Padding="10,2">
-            <Entry Placeholder="Filter by name..." Text="{Binding Filter}" />
-        </Border>
+        <!-- Filter + New button -->
+        <VerticalStackLayout Grid.Row="1" Padding="16,12,16,0" Spacing="8">
+            <Border BackgroundColor="{StaticResource CreamSoft}"
+                    Stroke="{StaticResource Wine}" StrokeThickness="1"
+                    StrokeShape="RoundRectangle 8"
+                    Padding="10,2">
+                <Entry Placeholder="Filter by name..." Text="{Binding Filter}" />
+            </Border>
+
+            <Button Text="+ New Tournament"
+                    BackgroundColor="#476FB5"
+                    TextColor="{StaticResource Cream}"
+                    Clicked="OnNewTournamentClicked" />
+        </VerticalStackLayout>
 
         <!-- List -->
-        <ScrollView Grid.Row="2"
+        <ScrollView Grid.Row="2" Grid.RowSpan="2"
                     IsVisible="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}">
             <VerticalStackLayout Padding="16,12,16,16" Spacing="10"
                                  BindableLayout.ItemsSource="{Binding FilteredTournaments}">
@@ -99,13 +105,6 @@
                Style="{StaticResource Caption}"
                HorizontalOptions="Center" VerticalOptions="Center"
                IsVisible="{Binding HasNoTournaments}" />
-
-        <!-- New button -->
-        <Button Grid.Row="3" Text="+ New Tournament"
-                BackgroundColor="#476FB5"
-                TextColor="{StaticResource Cream}"
-                Margin="16,8,16,16"
-                Clicked="OnNewTournamentClicked" />
 
         <!-- Loading overlay -->
         <VerticalStackLayout Grid.RowSpan="4"

@@ -111,8 +111,8 @@
             <Button Text="Create Tournament"
                     BackgroundColor="#476FB5"
                     TextColor="{StaticResource Cream}"
-                    Command="{Binding SaveNewCommand}"
-                    IsVisible="{Binding IsNew}" />
+                    IsVisible="{Binding IsNew}"
+                    Clicked="OnCreateTournamentClicked" />
 
             <!-- Pool allocation (Setup only) -->
             <Border Style="{StaticResource Card}"
@@ -123,16 +123,26 @@
                            Style="{StaticResource Caption}" />
 
                     <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
-                        <Button Grid.Column="0" Text="Auto-distribute"
+                        <Button Grid.Column="0" Text="Auto-distrib"
                                 BackgroundColor="#476FB5"
                                 TextColor="{StaticResource Cream}"
+                                FontSize="12"
+                                Padding="4,0"
                                 Command="{Binding AutoDistributePoolsCommand}" />
                         <Button Grid.Column="1" Text="+ Pool"
                                 BackgroundColor="{StaticResource Wine}"
                                 TextColor="{StaticResource Cream}"
+                                FontSize="12"
+                                Padding="4,0"
                                 Command="{Binding AddPoolCommand}" />
-                        <Label Grid.Column="2" Text=""
-                               VerticalOptions="Center" HorizontalTextAlignment="End" />
+                        <Button Grid.Column="2" Text="Reset"
+                                BackgroundColor="{StaticResource CreamSoft}"
+                                TextColor="{StaticResource DangerRed}"
+                                BorderColor="{StaticResource DangerRed}"
+                                BorderWidth="1"
+                                FontSize="12"
+                                Padding="4,0"
+                                Command="{Binding UnassignAllFencersCommand}" />
                     </Grid>
 
                     <!-- Unassigned fencers -->
@@ -228,19 +238,23 @@
 
             <!-- Start -->
             <Border Style="{StaticResource Card}"
-                    IsVisible="{Binding IsExisting}">
+                    IsVisible="{Binding CanStart}">
                 <VerticalStackLayout Spacing="8">
-                    <Label Text="Start tournament" Style="{StaticResource H2}"
-                           IsVisible="{Binding IsSetupState}" />
-                    <Label Text="{Binding StartHintText}" Style="{StaticResource Caption}"
-                           IsVisible="{Binding IsSetupState}" />
+                    <Label Text="Start tournament" Style="{StaticResource H2}" />
+                    <Label Text="{Binding StartHintText}" Style="{StaticResource Caption}" />
                     <Button Text="Start Tournament"
                             BackgroundColor="#1F8A2E"
                             TextColor="{StaticResource Cream}"
-                            IsVisible="{Binding IsSetupState}"
                             Clicked="OnStartTournamentClicked" />
                 </VerticalStackLayout>
             </Border>
+
+            <!-- Restart (after tournament has started) -->
+            <Button Text="Restart Tournament"
+                    BackgroundColor="#B8860B"
+                    TextColor="{StaticResource Cream}"
+                    IsVisible="{Binding CanRestart}"
+                    Clicked="OnRestartClicked" />
 
             <!-- Delete -->
             <Button Text="Delete Tournament"

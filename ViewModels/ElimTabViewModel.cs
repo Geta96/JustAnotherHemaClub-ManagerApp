@@ -24,6 +24,12 @@ public partial class ElimTabViewModel : ObservableObject, IDisposable
     /// <summary>Raised when an elim match card is tapped, so the page can push the MatchPage.</summary>
     public event Action<Match>? MatchSelected;
 
+    /// <summary>
+    /// Set by the page so the VM can prompt the user for which elimination option to use.
+    /// Returns the picked option, or null if the user cancelled.
+    /// </summary>
+    public Func<IReadOnlyList<TournamentEngine.EliminationOption>, Task<TournamentEngine.EliminationOption?>>? PickEliminationOptionAsync { get; set; }
+
     public bool HasBracket   => Columns.Count > 0;
     public bool HasNoBracket => Columns.Count == 0;
 
@@ -42,8 +48,39 @@ public partial class ElimTabViewModel : ObservableObject, IDisposable
     public bool CanGenerateBracket =>
         CanEdit && _session?.Current?.Bracket is null && AllPoolsFinished;
 
+    /// <summary>
+    /// True when the bracket exists but no elimination match has been started yet
+    /// (all non-bye matches are Pending), meaning the organiser can regenerate.
+    /// </summary>
+    public bool CanRegenerateBracket
+    {
+        get
+        {
+            if (!CanEdit) return false;
+            var bracket = _session?.Current?.Bracket;
+            if (bracket is null) return false;
+
+            // Check that no real match (non-bye) has been started or finished.
+            foreach (var round in bracket.Rounds)
+                foreach (var m in round.Matches)
+                {
+                    if (m.Status == MatchStatus.Finished &&
+                        !string.IsNullOrEmpty(m.LeftFencerId) &&
+                        !string.IsNullOrEmpty(m.RightFencerId))
+                        return false; // a real (non-bye) match was played
+                    if (m.Status == MatchStatus.InProgress)
+                        return false;
+                }
+            if (bracket.BronzeMatch is not null && bracket.BronzeMatch.Status != MatchStatus.Pending)
+                return false;
+
+            return true;
+        }
+    }
+
     public string GenerateHint =>
-        _session?.Current?.Bracket is not null ? "Bracket has been generated."
+        _session?.Current?.Bracket is not null
+            ? (CanRegenerateBracket ? "Bracket generated. You can regenerate with different rules." : "Bracket has been generated.")
         : !AllPoolsFinished                    ? "Finish every pool match first."
         : "Ready to generate the bracket.";
 
@@ -63,7 +100,10 @@ public partial class ElimTabViewModel : ObservableObject, IDisposable
         var t = _session?.Current;
         if (t?.Bracket is null) { RaiseStateChanged(); return; }
 
-        var nameById = t.Fencers.ToDictionary(f => f.Id, f => f.Name);
+        // Deduplicate by ID in case in-memory store has dupes from by-reference storage
+        var nameById = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var f in t.Fencers)
+            nameById[f.Id] = f.Name;
         int lastRoundIndex = t.Bracket.Rounds.Count - 1;
 
         for (int r = 0; r < t.Bracket.Rounds.Count; r++)
@@ -101,6 +141,7 @@ public partial class ElimTabViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(CanEdit));
         OnPropertyChanged(nameof(AllPoolsFinished));
         OnPropertyChanged(nameof(CanGenerateBracket));
+        OnPropertyChanged(nameof(CanRegenerateBracket));
         OnPropertyChanged(nameof(GenerateHint));
     }
 
@@ -112,11 +153,27 @@ public partial class ElimTabViewModel : ObservableObject, IDisposable
         if (_session?.Current is null || !CanGenerateBracket) return;
         var t = _session.Current;
 
+        // Compute options and let the user pick
+        var options = TournamentEngine.ComputeEliminationOptions(t);
+        if (options.Count == 0)
+        {
+            ErrorMessage = "Not enough fencers to generate a bracket (minimum 4).";
+            return;
+        }
+
+        double cutoff = 0.6; // default
+        if (PickEliminationOptionAsync is not null && options.Count > 1)
+        {
+            var picked = await PickEliminationOptionAsync(options);
+            if (picked is null) return; // user cancelled
+            cutoff = picked.CutoffFraction;
+        }
+
         IsBusy = true;
         ErrorMessage = "";
         try
         {
-            var bracket = TournamentEngine.BuildBracketFromPoolStandings(t);
+            var bracket = TournamentEngine.BuildBracketFromPoolStandings(t, cutoff);
             t.Bracket = bracket;
 
             // Phase 1: bulk-append every match row (rounds + bronze) in one call.
@@ -135,6 +192,68 @@ public partial class ElimTabViewModel : ObservableObject, IDisposable
             Recompute();
         }
         catch (Exception ex) { ErrorMessage = $"Generate failed: {ex.Message}"; }
+        finally { IsBusy = false; }
+    }
+
+    /// <summary>
+    /// Regenerate the elimination bracket with different rules. Only allowed
+    /// before any real (non-bye) match has started.
+    /// </summary>
+    [RelayCommand]
+    private async Task RegenerateBracketAsync()
+    {
+        if (_session?.Current is null || !CanRegenerateBracket) return;
+        var t = _session.Current;
+
+        var options = TournamentEngine.ComputeEliminationOptions(t);
+        if (options.Count == 0)
+        {
+            ErrorMessage = "Not enough fencers to regenerate a bracket (minimum 4).";
+            return;
+        }
+
+        double cutoff = 0.6;
+        if (PickEliminationOptionAsync is not null && options.Count > 1)
+        {
+            var picked = await PickEliminationOptionAsync(options);
+            if (picked is null) return;
+            cutoff = picked.CutoffFraction;
+        }
+
+        IsBusy = true;
+        ErrorMessage = "";
+        try
+        {
+            // Delete old bracket matches from the backend.
+            var oldBracket = t.Bracket!;
+            var oldMatchIds = new List<string>();
+            foreach (var round in oldBracket.Rounds)
+                foreach (var m in round.Matches)
+                    oldMatchIds.Add(m.Id);
+            if (oldBracket.BronzeMatch is not null)
+                oldMatchIds.Add(oldBracket.BronzeMatch.Id);
+
+            foreach (var id in oldMatchIds)
+                await _sheets.DeleteMatchAsync(t.Id, id);
+
+            // Build a new bracket with the chosen cutoff.
+            var bracket = TournamentEngine.BuildBracketFromPoolStandings(t, cutoff);
+            t.Bracket = bracket;
+
+            var allInitial = new List<Match>(bracket.Rounds.SelectMany(r => r.Matches));
+            if (bracket.BronzeMatch is not null) allInitial.Add(bracket.BronzeMatch);
+            await _sheets.AppendMatchesAsync(t.Id, allInitial);
+
+            var changed = TournamentEngine.PropagateAndCollectChanges(bracket);
+            foreach (var m in changed)
+                await _sheets.UpsertMatchAsync(t.Id, m);
+
+            t.State = TournamentState.EliminationInProgress;
+            await _sheets.UpsertTournamentHeaderAsync(t);
+
+            Recompute();
+        }
+        catch (Exception ex) { ErrorMessage = $"Regenerate failed: {ex.Message}"; }
         finally { IsBusy = false; }
     }
 
@@ -190,7 +309,10 @@ public partial class ElimTabViewModel : ObservableObject, IDisposable
             foreach (var m in round.Matches) modelById[m.Id] = m;
         if (bracket.BronzeMatch is not null) modelById[bracket.BronzeMatch.Id] = bracket.BronzeMatch;
 
-        var nameById = t.Fencers.ToDictionary(f => f.Id, f => f.Name);
+        // Deduplicate by ID in case in-memory store has dupes from by-reference storage
+        var nameById = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var f in t.Fencers)
+            nameById[f.Id] = f.Name;
 
         // Defensive: if the column structure no longer matches the bracket (e.g.
         // the bracket was regenerated under us), fall back to a full rebuild —

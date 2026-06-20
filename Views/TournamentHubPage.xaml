@@ -460,8 +460,8 @@
 
         <!-- Header -->
         <Border Grid.Row="0" Style="{StaticResource Card}" Margin="16,16,16,0">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                <VerticalStackLayout Grid.Column="0" Spacing="2">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" RowDefinitions="Auto,Auto">
+                <VerticalStackLayout Grid.Column="0" Grid.Row="0" Spacing="2">
                     <Label Text="{Binding TournamentName}" Style="{StaticResource H1}" />
                     <Label Style="{StaticResource Caption}">
                         <Label.FormattedText>
@@ -475,6 +475,26 @@
                     <Label Text="{Binding ErrorMessage}"
                            TextColor="{StaticResource DangerRed}"
                            IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}, FallbackValue=False}" />
+                </VerticalStackLayout>
+
+                <!-- Settings icon: top-right of the card -->
+                <Button Grid.Column="1" Grid.Row="0"
+                        Text="⚙"
+                        FontSize="20"
+                        HeightRequest="36"
+                        WidthRequest="36"
+                        Padding="0"
+                        CornerRadius="18"
+                        VerticalOptions="Start"
+                        BackgroundColor="{StaticResource CreamSoft}"
+                        TextColor="{StaticResource Wine}"
+                        BorderColor="{StaticResource Wine}"
+                        BorderWidth="1"
+                        IsVisible="{Binding CanOpenEditor}"
+                        Clicked="OnManageRosterClicked" />
+
+                <!-- Full-width action buttons spanning both columns -->
+                <VerticalStackLayout Grid.Row="1" Grid.ColumnSpan="2" Spacing="4">
                     <Button Text="Manage Roster / Start"
                             BackgroundColor="#476FB5"
                             TextColor="{StaticResource Cream}"
@@ -486,30 +506,14 @@
                             TextColor="{StaticResource Cream}"
                             IsVisible="{Binding CanEndTournament}"
                             Command="{Binding EndTournamentCommand}"
-                            Margin="0,8,0,0" />
+                            Margin="0,4,0,0" />
                     <Button Text="Reopen Tournament"
                             BackgroundColor="#476FB5"
                             TextColor="{StaticResource Cream}"
                             IsVisible="{Binding CanReopenTournament}"
                             Command="{Binding ReopenTournamentCommand}"
-                            Margin="0,8,0,0" />
+                            Margin="0,4,0,0" />
                 </VerticalStackLayout>
-
-                <!-- Compact "Withdraw a fencer" action: top-right of the card,
-                     shares vertical space with the title so it doesn't push other content down. -->
-                <Button Grid.Column="1"
-                        Text="Withdraw…"
-                        FontSize="12"
-                        HeightRequest="32"
-                        Padding="12,0"
-                        CornerRadius="6"
-                        VerticalOptions="Start"
-                        BackgroundColor="{StaticResource CreamSoft}"
-                        TextColor="{StaticResource DangerRed}"
-                        BorderColor="{StaticResource DangerRed}"
-                        BorderWidth="1"
-                        IsVisible="{Binding CanWithdrawFencer}"
-                        Command="{Binding WithdrawFencerPromptCommand}" />
             </Grid>
         </Border>
 

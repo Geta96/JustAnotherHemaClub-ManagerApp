@@ -389,6 +389,291 @@ public class TournamentEditorVmTests
         _cacheMock.Verify(c => c.InvalidateTournaments(), Times.Once);
     }
 
+    // -------- Pool Add/Remove: regression tests for duplicate-pool bug --------
+
+    [Fact]
+    public async Task AddPool_AddsExactlyOnePool()
+    {
+        var tournament = CreateSampleTournament();
+        _sheetsMock.Setup(s => s.GetTournamentAsync("t1")).ReturnsAsync(tournament);
+        _sheetsMock.Setup(s => s.UpsertPoolAsync(It.IsAny<string>(), It.IsAny<Pool>())).Returns(Task.CompletedTask);
+        await _vm.InitExistingAsync("t1");
+
+        // Should start with zero visible pools
+        _vm.DraftPools.Should().BeEmpty();
+
+        await _vm.AddPoolAsync();
+
+        _vm.DraftPools.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task AddPool_CalledThreeTimes_ShowsExactlyThreePools()
+    {
+        var tournament = CreateSampleTournament();
+        _sheetsMock.Setup(s => s.GetTournamentAsync("t1")).ReturnsAsync(tournament);
+        _sheetsMock.Setup(s => s.UpsertPoolAsync(It.IsAny<string>(), It.IsAny<Pool>())).Returns(Task.CompletedTask);
+        await _vm.InitExistingAsync("t1");
+
+        await _vm.AddPoolAsync();
+        await _vm.AddPoolAsync();
+        await _vm.AddPoolAsync();
+
+        _vm.DraftPools.Should().HaveCount(3);
+        // Pool names should be sequential
+        _vm.DraftPools[0].Title.Should().Be("Pool 1");
+        _vm.DraftPools[1].Title.Should().Be("Pool 2");
+        _vm.DraftPools[2].Title.Should().Be("Pool 3");
+    }
+
+    [Fact]
+    public async Task RemovePool_RemovesExactlyOnePool()
+    {
+        var tournament = CreateSampleTournament();
+        _sheetsMock.Setup(s => s.GetTournamentAsync("t1")).ReturnsAsync(tournament);
+        _sheetsMock.Setup(s => s.UpsertPoolAsync(It.IsAny<string>(), It.IsAny<Pool>())).Returns(Task.CompletedTask);
+        await _vm.InitExistingAsync("t1");
+
+        // Add 3 pools
+        await _vm.AddPoolAsync();
+        await _vm.AddPoolAsync();
+        await _vm.AddPoolAsync();
+        _vm.DraftPools.Should().HaveCount(3);
+
+        // Remove the middle one
+        await _vm.RemovePoolAsync(_vm.DraftPools[1]);
+
+        _vm.DraftPools.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task RemovePool_CanRemoveLastEmptyPool()
+    {
+        var tournament = CreateSampleTournament();
+        _sheetsMock.Setup(s => s.GetTournamentAsync("t1")).ReturnsAsync(tournament);
+        _sheetsMock.Setup(s => s.UpsertPoolAsync(It.IsAny<string>(), It.IsAny<Pool>())).Returns(Task.CompletedTask);
+        await _vm.InitExistingAsync("t1");
+
+        // Add one pool, then remove it
+        await _vm.AddPoolAsync();
+        _vm.DraftPools.Should().HaveCount(1);
+
+        await _vm.RemovePoolAsync(_vm.DraftPools[0]);
+
+        _vm.DraftPools.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RemovePool_AllPools_LeavesZeroPools()
+    {
+        var tournament = CreateSampleTournament();
+        _sheetsMock.Setup(s => s.GetTournamentAsync("t1")).ReturnsAsync(tournament);
+        _sheetsMock.Setup(s => s.UpsertPoolAsync(It.IsAny<string>(), It.IsAny<Pool>())).Returns(Task.CompletedTask);
+        await _vm.InitExistingAsync("t1");
+
+        await _vm.AddPoolAsync();
+        await _vm.AddPoolAsync();
+        await _vm.AddPoolAsync();
+
+        // Remove all three one by one
+        await _vm.RemovePoolAsync(_vm.DraftPools[2]);
+        await _vm.RemovePoolAsync(_vm.DraftPools[1]);
+        await _vm.RemovePoolAsync(_vm.DraftPools[0]);
+
+        _vm.DraftPools.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AddPool_AfterRemoveAll_AddsExactlyOne()
+    {
+        var tournament = CreateSampleTournament();
+        _sheetsMock.Setup(s => s.GetTournamentAsync("t1")).ReturnsAsync(tournament);
+        _sheetsMock.Setup(s => s.UpsertPoolAsync(It.IsAny<string>(), It.IsAny<Pool>())).Returns(Task.CompletedTask);
+        await _vm.InitExistingAsync("t1");
+
+        // Add 2, remove both, then add 1 again
+        await _vm.AddPoolAsync();
+        await _vm.AddPoolAsync();
+        await _vm.RemovePoolAsync(_vm.DraftPools[1]);
+        await _vm.RemovePoolAsync(_vm.DraftPools[0]);
+        _vm.DraftPools.Should().BeEmpty();
+
+        await _vm.AddPoolAsync();
+
+        _vm.DraftPools.Should().HaveCount(1, "only one pool should exist after re-adding");
+    }
+
+    [Fact]
+    public async Task AddAndRemovePool_Interleaved_CorrectCount()
+    {
+        var tournament = CreateSampleTournament();
+        _sheetsMock.Setup(s => s.GetTournamentAsync("t1")).ReturnsAsync(tournament);
+        _sheetsMock.Setup(s => s.UpsertPoolAsync(It.IsAny<string>(), It.IsAny<Pool>())).Returns(Task.CompletedTask);
+        await _vm.InitExistingAsync("t1");
+
+        // Add ? Remove ? Add ? Add ? Remove ? should be 1
+        await _vm.AddPoolAsync();       // 1
+        await _vm.RemovePoolAsync(_vm.DraftPools[0]); // 0
+        await _vm.AddPoolAsync();       // 1
+        await _vm.AddPoolAsync();       // 2
+        await _vm.RemovePoolAsync(_vm.DraftPools[0]); // 1
+
+        _vm.DraftPools.Should().HaveCount(1);
+    }
+
+    // -------- Fencer name resolution: regression for "?" bug --------
+
+    [Fact]
+    public async Task AddFencer_ThenAutoDistribute_ShowsNamesNotQuestionMarks()
+    {
+        // Reproduces the bug: add 13 fencers via AddFencerAsync, auto-distribute,
+        // then verify every pool member has a real name (not "?").
+        _sheetsMock.Setup(s => s.UpsertTournamentHeaderAsync(It.IsAny<Tournament>())).Returns(Task.CompletedTask);
+        _sheetsMock.Setup(s => s.AppendTournamentFencersAsync(It.IsAny<string>(), It.IsAny<IList<TournamentFencer>>()))
+            .Returns(Task.CompletedTask);
+        _sheetsMock.Setup(s => s.UpsertTournamentFencerAsync(It.IsAny<string>(), It.IsAny<TournamentFencer>()))
+            .Returns(Task.CompletedTask);
+        _sheetsMock.Setup(s => s.UpsertPoolAsync(It.IsAny<string>(), It.IsAny<Pool>())).Returns(Task.CompletedTask);
+
+        _vm.InitNew();
+        _vm.Name = "Test";
+        _vm.Password = "pass";
+        await _vm.SaveNewAsync();
+
+        // Add 13 fencers one by one (the way a user would)
+        for (int i = 0; i < 13; i++)
+        {
+            _vm.NewFencerName = $"Fencer{i}";
+            await _vm.AddFencerAsync();
+        }
+
+        _vm.ActiveFencerCount.Should().Be(13);
+
+        // Auto-distribute into pools
+        await _vm.AutoDistributePoolsAsync();
+
+        // Verify: no pool member should have "?" as name
+        _vm.DraftPools.Should().NotBeEmpty();
+        _vm.DraftPools.SelectMany(p => p.Members)
+            .Should().AllSatisfy(m => m.Name.Should().NotBe("?",
+                "all fencers added via AddFencerAsync must be resolvable by RebuildDraftPools"));
+    }
+
+    [Fact]
+    public async Task AddFencer_ThenAutoDistribute_ThenRedistribute_AllNamesResolved()
+    {
+        // Simulates: add fencers ? auto-distribute ? auto-distribute again (user reshuffles)
+        _sheetsMock.Setup(s => s.UpsertTournamentHeaderAsync(It.IsAny<Tournament>())).Returns(Task.CompletedTask);
+        _sheetsMock.Setup(s => s.AppendTournamentFencersAsync(It.IsAny<string>(), It.IsAny<IList<TournamentFencer>>()))
+            .Returns(Task.CompletedTask);
+        _sheetsMock.Setup(s => s.UpsertTournamentFencerAsync(It.IsAny<string>(), It.IsAny<TournamentFencer>()))
+            .Returns(Task.CompletedTask);
+        _sheetsMock.Setup(s => s.UpsertPoolAsync(It.IsAny<string>(), It.IsAny<Pool>())).Returns(Task.CompletedTask);
+
+        _vm.InitNew();
+        _vm.Name = "Cup";
+        _vm.Password = "x";
+        await _vm.SaveNewAsync();
+
+        for (int i = 0; i < 10; i++)
+        {
+            _vm.NewFencerName = $"Player{i}";
+            await _vm.AddFencerAsync();
+        }
+
+        await _vm.AutoDistributePoolsAsync();
+        await _vm.AutoDistributePoolsAsync(); // second time
+
+        _vm.DraftPools.SelectMany(p => p.Members)
+            .Should().AllSatisfy(m => m.Name.Should().NotBe("?"));
+
+        // Total assigned should equal total active fencers
+        var totalAssigned = _vm.DraftPools.Sum(p => p.Members.Count);
+        totalAssigned.Should().Be(10);
+    }
+
+    [Fact]
+    public async Task AddFencer_MoveFencer_NameStillResolved()
+    {
+        _sheetsMock.Setup(s => s.UpsertTournamentHeaderAsync(It.IsAny<Tournament>())).Returns(Task.CompletedTask);
+        _sheetsMock.Setup(s => s.AppendTournamentFencersAsync(It.IsAny<string>(), It.IsAny<IList<TournamentFencer>>()))
+            .Returns(Task.CompletedTask);
+        _sheetsMock.Setup(s => s.UpsertTournamentFencerAsync(It.IsAny<string>(), It.IsAny<TournamentFencer>()))
+            .Returns(Task.CompletedTask);
+        _sheetsMock.Setup(s => s.UpsertPoolAsync(It.IsAny<string>(), It.IsAny<Pool>())).Returns(Task.CompletedTask);
+
+        _vm.InitNew();
+        _vm.Name = "Cup";
+        _vm.Password = "x";
+        await _vm.SaveNewAsync();
+
+        // Add 5 fencers, auto-distribute, then add more and move them
+        for (int i = 0; i < 5; i++)
+        {
+            _vm.NewFencerName = $"F{i}";
+            await _vm.AddFencerAsync();
+        }
+        await _vm.AutoDistributePoolsAsync();
+
+        // Add 3 more
+        for (int i = 5; i < 8; i++)
+        {
+            _vm.NewFencerName = $"F{i}";
+            await _vm.AddFencerAsync();
+        }
+
+        // Move new fencers into existing pools
+        var poolId = _vm.DraftPools[0].PoolId;
+        var unassigned = _vm.UnassignedFencers;
+        foreach (var f in unassigned)
+            await _vm.MoveFencerToPoolAsync(f.FencerId, poolId);
+
+        // All members should have names
+        _vm.DraftPools.SelectMany(p => p.Members)
+            .Should().AllSatisfy(m => m.Name.Should().NotBe("?"));
+    }
+
+    // -------- UnassignAllFencers: reset button --------
+
+    [Fact]
+    public async Task UnassignAllFencers_ClearsAllPoolAssignments()
+    {
+        var tournament = CreateTournamentWithPools(poolSizes: new[] { 5, 5 });
+        _sheetsMock.Setup(s => s.GetTournamentAsync("t1")).ReturnsAsync(tournament);
+        _sheetsMock.Setup(s => s.UpsertPoolAsync(It.IsAny<string>(), It.IsAny<Pool>())).Returns(Task.CompletedTask);
+        await _vm.InitExistingAsync("t1");
+
+        // Pools initially have fencers
+        _vm.DraftPools.Sum(p => p.Members.Count).Should().Be(10);
+
+        await _vm.UnassignAllFencersAsync();
+
+        // All pools should be empty now
+        _vm.DraftPools.Should().AllSatisfy(p => p.Members.Should().BeEmpty());
+        // All fencers should be unassigned
+        _vm.UnassignedFencers.Should().HaveCount(10);
+    }
+
+    [Fact]
+    public async Task UnassignAllFencers_ThenAutoDistribute_WorksCleanly()
+    {
+        var tournament = CreateTournamentWithPools(poolSizes: new[] { 5, 5 });
+        _sheetsMock.Setup(s => s.GetTournamentAsync("t1")).ReturnsAsync(tournament);
+        _sheetsMock.Setup(s => s.UpsertPoolAsync(It.IsAny<string>(), It.IsAny<Pool>())).Returns(Task.CompletedTask);
+        await _vm.InitExistingAsync("t1");
+
+        // Unassign all, then redistribute
+        await _vm.UnassignAllFencersAsync();
+        await _vm.AutoDistributePoolsAsync();
+
+        // All fencers should be re-assigned with proper names
+        var totalAssigned = _vm.DraftPools.Sum(p => p.Members.Count);
+        totalAssigned.Should().Be(10);
+        _vm.DraftPools.SelectMany(p => p.Members)
+            .Should().AllSatisfy(m => m.Name.Should().NotBe("?"));
+        _vm.UnassignedFencers.Should().BeEmpty();
+    }
+
     // -------- Helpers --------
 
     private static Tournament CreateSampleTournament() => new()

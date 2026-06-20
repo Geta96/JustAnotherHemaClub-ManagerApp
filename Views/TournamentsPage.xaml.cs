@@ -69,7 +69,7 @@ public partial class TournamentsPage : ContentPage
         // and call _session.Close(), wiping the session we just opened.
         var hub = _services.GetRequiredService<TournamentHubPage>();
         Navigation.InsertPageBefore(hub, access);
-        await Navigation.PopAsync();
+        await Navigation.PopAsync(animated: false);
     }
 
     private async void OnDeleteTapped(object? sender, TappedEventArgs e)

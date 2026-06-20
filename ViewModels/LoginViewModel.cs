@@ -1,4 +1,4 @@
- using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JustAnotherHemaClub.Services;
 
@@ -113,6 +113,13 @@ public partial class LoginViewModel : ObservableObject
 
             if (await _auth.LoginAsync(Username, Password))
             {
+                // If test mode, swap the service registrations to the in-memory dummy store.
+                if (_auth.IsTestMode)
+                {
+                    var testService = _services.GetRequiredService<TestDataService>();
+                    ServiceSwap.Activate(testService);
+                }
+
                 if (KeepLoggedIn)
                 {
                     var hash = AuthService.Hash(Password);

@@ -8,7 +8,7 @@ namespace JustAnotherHemaClub.Services;
 /// </summary>
 public static class TournamentEngine
 {
-    public const int DefaultMatchSeconds = 180;
+    public const int DefaultMatchSeconds = 120;
 
     // ---------- Pool partitioning ----------
 
@@ -520,6 +520,13 @@ public static class TournamentEngine
     ///      next best fencers globally are added until 8 qualify.
     /// </summary>
     public static List<string> ComputeQualifyingFencerIds(Tournament t)
+        => ComputeQualifyingFencerIds(t, 0.6);
+
+    /// <summary>
+    /// Returns the IDs of fencers who qualify for the elimination using the given
+    /// <paramref name="cutoffFraction"/> (0.0–1.0). The minimum qualifying count is 4.
+    /// </summary>
+    public static List<string> ComputeQualifyingFencerIds(Tournament t, double cutoffFraction)
     {
         if (t.Pools.Count == 0) return new List<string>();
 
@@ -551,28 +558,34 @@ public static class TournamentEngine
 
         var globallyOrdered = SortSeedStats(all);
 
-        // Rule 2: < 8 fencers in total → every fencer enters the elimination.
-        if (totalFencers < 8)
+        // Rule 2: < 8 fencers in total → every fencer enters the elimination (if cutoff allows all).
+        if (totalFencers < 8 && cutoffFraction >= 0.6)
             return globallyOrdered.Select(s => s.FencerId).ToList();
 
-        // Rule 1: per-pool top 60% baseline.
+        // Use the cutoff fraction to determine per-pool qualification.
         var qualifierSet = new HashSet<string>();
         foreach (var poolOrdered in byPool)
         {
-            int qCount = (int)Math.Round(poolOrdered.Count * 0.6, MidpointRounding.AwayFromZero);
+            int qCount = (int)Math.Round(poolOrdered.Count * cutoffFraction, MidpointRounding.AwayFromZero);
             if (qCount < 1 && poolOrdered.Count > 0) qCount = 1;
             if (qCount > poolOrdered.Count)          qCount = poolOrdered.Count;
             foreach (var q in poolOrdered.Take(qCount)) qualifierSet.Add(q.FencerId);
         }
 
-        // Rule 3: floor of 8. If 60% per pool didn't get us there, fill from the
-        // global ranking (best non-qualifier first) until we have 8.
-        int target = Math.Min(8, totalFencers);
-        if (qualifierSet.Count < target)
+        // Floor rule: for standard cutoffs (≥ 0.6), ensure at least 8 qualify when
+        // there are 8+ fencers (backward compat). For lower cutoffs (user chose
+        // fewer), the floor is 4 (minimum for a bracket).
+        int minQualifiers;
+        if (cutoffFraction >= 0.6)
+            minQualifiers = Math.Min(8, totalFencers);
+        else
+            minQualifiers = Math.Min(4, totalFencers);
+
+        if (qualifierSet.Count < minQualifiers)
         {
             foreach (var s in globallyOrdered)
             {
-                if (qualifierSet.Count >= target) break;
+                if (qualifierSet.Count >= minQualifiers) break;
                 qualifierSet.Add(s.FencerId);
             }
         }
@@ -590,8 +603,16 @@ public static class TournamentEngine
     /// Qualification rules are owned by <see cref="ComputeQualifyingFencerIds"/>.
     /// </summary>
     public static EliminationBracket BuildBracketFromPoolStandings(Tournament t)
+        => BuildBracketFromPoolStandings(t, 0.6);
+
+    /// <summary>
+    /// Build the bracket from per-pool standings using a custom
+    /// <paramref name="cutoffFraction"/> (0.0–1.0) to determine how many fencers
+    /// advance from pools. Minimum 4 fencers enter the bracket.
+    /// </summary>
+    public static EliminationBracket BuildBracketFromPoolStandings(Tournament t, double cutoffFraction)
     {
-        var seededIds = ComputeQualifyingFencerIds(t);
+        var seededIds = ComputeQualifyingFencerIds(t, cutoffFraction);
         int size      = PickBracketSize(seededIds.Count);
 
         var bracket = new EliminationBracket { Size = size };
@@ -648,6 +669,57 @@ public static class TournamentEngine
 
         PropagateAdvancements(bracket);
         return bracket;
+    }
+
+    // ---------- Elimination options ----------
+
+    /// <summary>
+    /// Describes one elimination bracket option the user can pick when generating
+    /// (or regenerating) the bracket.
+    /// </summary>
+    public sealed class EliminationOption
+    {
+        /// <summary>Display label, e.g. "All go to elim" or "60% go to elim".</summary>
+        public string Label { get; init; } = "";
+
+        /// <summary>Fraction 0.0–1.0 used to compute qualification.</summary>
+        public double CutoffFraction { get; init; }
+
+        /// <summary>Number of fencers that would qualify with this cutoff.</summary>
+        public int QualifyingCount { get; init; }
+
+        /// <summary>Bracket table size (4, 8, 16, 32…).</summary>
+        public int BracketSize { get; init; }
+
+        /// <summary>Short suffix shown to the user, e.g. "8 place table".</summary>
+        public string TableLabel => $"{BracketSize} place table";
+    }
+
+    /// <summary>
+    /// Computes the available elimination options for a tournament whose pools are
+    /// complete. Returns up to 4 options (100%, 80%, 60%, 40%) filtered so each
+    /// produces at least 4 qualifiers.
+    /// </summary>
+    public static List<EliminationOption> ComputeEliminationOptions(Tournament t)
+    {
+        var options = new List<EliminationOption>();
+        var fractions = new[] { (1.0, "All go to elim"), (0.8, "80% go to elim"), (0.6, "60% go to elim"), (0.4, "40% go to elim") };
+
+        foreach (var (fraction, label) in fractions)
+        {
+            var qualifiers = ComputeQualifyingFencerIds(t, fraction);
+            if (qualifiers.Count < 4) continue;
+
+            options.Add(new EliminationOption
+            {
+                Label = label,
+                CutoffFraction = fraction,
+                QualifyingCount = qualifiers.Count,
+                BracketSize = PickBracketSize(qualifiers.Count)
+            });
+        }
+
+        return options;
     }
 
     private static List<ElimSeedStats> SortSeedStats(IEnumerable<ElimSeedStats> rows) =>

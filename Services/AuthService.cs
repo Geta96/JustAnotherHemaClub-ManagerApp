@@ -15,6 +15,9 @@ public class AuthService
     public Fencer? CurrentFencer { get; private set; }
     public bool IsGuest { get; private set; }
 
+    /// <summary>True when the current session is using the in-memory test data service.</summary>
+    public bool IsTestMode { get; private set; }
+
     public bool IsLoggedInInstructor =>
         CurrentFencer is not null && CurrentFencer.IsInstructor && !IsGuest;
 
@@ -30,9 +33,25 @@ public class AuthService
     {
         IsGuest = false;
         CurrentFencer = null;
+        IsTestMode = false;
 
         var inputUser = (username ?? string.Empty).Trim();
         var inputHash = Hash(password ?? string.Empty);
+
+        // --- Test user shortcut: all operations route to in-memory dummy data ---
+        if (string.Equals(inputUser, TestDataService.TestUsername, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(inputHash, Hash(TestDataService.TestPassword), StringComparison.OrdinalIgnoreCase))
+        {
+            IsTestMode = true;
+            CurrentFencer = new Fencer
+            {
+                Id = "test-001", Name = "Test User", Username = TestDataService.TestUsername,
+                PasswordHash = inputHash, Email = "test@example.com",
+                Active = true, IsInstructor = true, IsStudent = false,
+                GdprAccepted = true, LiabilityAccepted = true
+            };
+            return true;
+        }
 
         var fencers = await _sheets.Value.GetFencersAsync();
         var match = fencers.FirstOrDefault(f =>
@@ -73,6 +92,8 @@ public class AuthService
     {
         CurrentFencer = null;
         IsGuest = false;
+        IsTestMode = false;
+        ServiceSwap.Deactivate();
         ClearPersistedCredentials();
     }
 

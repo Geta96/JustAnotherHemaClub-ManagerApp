@@ -5,6 +5,8 @@ namespace JustAnotherHemaClub.Services;
 /// <summary>
 /// In-memory caching decorator over <see cref="IGoogleSheetsService"/>.
 /// Reads return cached lists; writes hit the backend and patch the cache.
+/// When <see cref="ServiceSwap"/> is active (test user mode), all calls
+/// are delegated to the in-memory test data service instead.
 /// </summary>
 public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, ICacheControl
 {
@@ -26,6 +28,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
     // ---------- Fencers ----------
     public async Task<List<Fencer>> GetFencersAsync()
     {
+        if (ServiceSwap.IsActive) return await ServiceSwap.CurrentSheets!.GetFencersAsync();
         if (_fencers is not null) return Clone(_fencers);
         await _gate.WaitAsync();
         try
@@ -38,12 +41,14 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
 
     public async Task AddFencerAsync(Fencer fencer)
     {
+        if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.AddFencerAsync(fencer); return; }
         await _inner.AddFencerAsync(fencer);
         _fencers?.Add(fencer);
     }
 
     public async Task UpsertFencerAsync(Fencer fencer)
     {
+        if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.UpsertFencerAsync(fencer); return; }
         await _inner.UpsertFencerAsync(fencer);
         if (_fencers is not null)
         {
@@ -56,6 +61,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
     // ---------- Trainings ----------
     public async Task<List<TrainingSession>> GetTrainingsAsync()
     {
+        if (ServiceSwap.IsActive) return await ServiceSwap.CurrentSheets!.GetTrainingsAsync();
         if (_trainings is not null) return Clone(_trainings);
         await _gate.WaitAsync();
         try
@@ -68,6 +74,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
 
     public async Task UpsertTrainingAsync(TrainingSession training)
     {
+        if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.UpsertTrainingAsync(training); return; }
         await _inner.UpsertTrainingAsync(training);
         if (_trainings is not null)
         {
@@ -79,6 +86,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
 
     public async Task DeleteTrainingAsync(string trainingId)
     {
+        if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.DeleteTrainingAsync(trainingId); return; }
         await _inner.DeleteTrainingAsync(trainingId);
         _trainings?.RemoveAll(t => t.Id == trainingId);
     }
@@ -86,6 +94,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
     // ---------- Payments (keyed per month) ----------
     public async Task<List<Payment>> GetPaymentsAsync(int year, int month)
     {
+        if (ServiceSwap.IsActive) return await ServiceSwap.CurrentSheets!.GetPaymentsAsync(year, month);
         if (_paymentsByMonth.TryGetValue((year, month), out var cached))
             return Clone(cached);
 
@@ -104,6 +113,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
 
     public async Task MarkPaidAsync(Payment payment)
     {
+        if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.MarkPaidAsync(payment); return; }
         await _inner.MarkPaidAsync(payment);
         if (_paymentsByMonth.TryGetValue((payment.Year, payment.Month), out var list))
             list.Add(payment);
@@ -112,6 +122,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
     // ---------- Expenses ----------
     public async Task<List<Expense>> GetExpensesAsync(DateTime from, DateTime to)
     {
+        if (ServiceSwap.IsActive) return await ServiceSwap.CurrentSheets!.GetExpensesAsync(from, to);
         if (_expenses is null)
         {
             await _gate.WaitAsync();
@@ -127,6 +138,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
 
     public async Task AddExpenseAsync(Expense expense)
     {
+        if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.AddExpenseAsync(expense); return; }
         await _inner.AddExpenseAsync(expense);
         _expenses?.Add(expense);
     }
@@ -134,6 +146,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
     // ---------- Incomes (one-off, non-dues income) ----------
     public async Task<List<Income>> GetIncomesAsync(DateTime from, DateTime to)
     {
+        if (ServiceSwap.IsActive) return await ServiceSwap.CurrentSheets!.GetIncomesAsync(from, to);
         if (_incomes is null)
         {
             await _gate.WaitAsync();
@@ -149,6 +162,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
 
     public async Task AddIncomeAsync(Income income)
     {
+        if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.AddIncomeAsync(income); return; }
         await _inner.AddIncomeAsync(income);
         _incomes?.Add(income);
     }
@@ -156,6 +170,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
     // ---------- Month notes ----------
     public async Task<List<MonthNote>> GetMonthNotesAsync()
     {
+        if (ServiceSwap.IsActive) return await ServiceSwap.CurrentSheets!.GetMonthNotesAsync();
         if (_monthNotes is not null) return Clone(_monthNotes);
         await _gate.WaitAsync();
         try
@@ -168,6 +183,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
 
     public async Task UpsertMonthNoteAsync(MonthNote note)
     {
+        if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.UpsertMonthNoteAsync(note); return; }
         await _inner.UpsertMonthNoteAsync(note);
         _monthNotes?.Add(note);
     }
@@ -175,6 +191,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
     // ---------- Individual lessons ----------
     public async Task<List<IndividualLesson>> GetIndividualLessonsAsync()
     {
+        if (ServiceSwap.IsActive) return await ServiceSwap.CurrentSheets!.GetIndividualLessonsAsync();
         if (_individualLessons is not null) return Clone(_individualLessons);
         await _gate.WaitAsync();
         try
@@ -187,6 +204,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
 
     public async Task UpsertIndividualLessonAsync(IndividualLesson lesson)
     {
+        if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.UpsertIndividualLessonAsync(lesson); return; }
         await _inner.UpsertIndividualLessonAsync(lesson);
         if (_individualLessons is not null)
         {
@@ -207,6 +225,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
     // ---------- Recurring trainings ----------
     public async Task<List<RecurringTrainingRule>> GetRecurringTrainingsAsync()
     {
+        if (ServiceSwap.IsActive) return await ServiceSwap.CurrentSheets!.GetRecurringTrainingsAsync();
         if (_recurringTrainings is not null) return Clone(_recurringTrainings);
         await _gate.WaitAsync();
         try
@@ -219,6 +238,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
 
     public async Task UpsertRecurringTrainingAsync(RecurringTrainingRule rule)
     {
+        if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.UpsertRecurringTrainingAsync(rule); return; }
         await _inner.UpsertRecurringTrainingAsync(rule);
         if (_recurringTrainings is not null)
         {
@@ -230,6 +250,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
 
     public async Task DeleteRecurringTrainingAsync(string ruleId)
     {
+        if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.DeleteRecurringTrainingAsync(ruleId); return; }
         await _inner.DeleteRecurringTrainingAsync(ruleId);
         _recurringTrainings?.RemoveAll(r => r.Id == ruleId);
     }
@@ -237,6 +258,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
     // ---------- Price rules ----------
     public async Task<List<PriceRule>> GetPriceRulesAsync()
     {
+        if (ServiceSwap.IsActive) return await ServiceSwap.CurrentSheets!.GetPriceRulesAsync();
         if (_prices is not null) return Clone(_prices);
         await _gate.WaitAsync();
         try
@@ -249,6 +271,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
 
     public async Task UpsertPriceRuleAsync(PriceRule rule)
     {
+        if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.UpsertPriceRuleAsync(rule); return; }
         await _inner.UpsertPriceRuleAsync(rule);
         if (_prices is not null)
         {
@@ -260,6 +283,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
 
     public async Task DeletePriceRuleAsync(string ruleId)
     {
+        if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.DeletePriceRuleAsync(ruleId); return; }
         await _inner.DeletePriceRuleAsync(ruleId);
         _prices?.RemoveAll(r => r.Id == ruleId);
     }
@@ -267,6 +291,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
     // ---------- ICacheControl ----------
     public async Task WarmAsync()
     {
+        if (ServiceSwap.IsActive) return; // test mode has everything in memory already
         InvalidateAll();
         var fencers = _inner.GetFencersAsync();
         var trainings = _inner.GetTrainingsAsync();

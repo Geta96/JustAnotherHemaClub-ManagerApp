@@ -58,7 +58,7 @@ public partial class TournamentEditorPage : ContentPage
 
             var hub = _services.GetRequiredService<TournamentHubPage>();
             Navigation.InsertPageBefore(hub, this);
-            await Navigation.PopAsync();
+            await Navigation.PopAsync(animated: false);
         }
     }
 
@@ -73,6 +73,39 @@ public partial class TournamentEditorPage : ContentPage
 
         await _vm.DeleteTournamentCommand.ExecuteAsync(null);
         await Navigation.PopAsync();
+    }
+
+    private async void OnRestartClicked(object? sender, EventArgs e)
+    {
+        if (_vm.Tournament is null) return;
+
+        // Ask for organiser password
+        var enteredPassword = await DisplayPromptAsync(
+            "Restart tournament",
+            "This will delete ALL matches, standings, and pool assignments.\n\n" +
+            "Enter the organiser password to confirm:",
+            accept: "Restart", cancel: "Cancel",
+            placeholder: "password",
+            maxLength: 64);
+        if (string.IsNullOrWhiteSpace(enteredPassword)) return;
+
+        // Verify password
+        if (!string.Equals(enteredPassword.Trim(), _vm.Tournament.PasswordPlain?.Trim(), StringComparison.Ordinal))
+        {
+            await DisplayAlert("Incorrect password", "The password you entered is incorrect.", "OK");
+            return;
+        }
+
+        // Final confirmation
+        var confirm = await DisplayAlert(
+            "Are you sure?",
+            "This cannot be undone. All match scores, pool standings, bracket results, " +
+            "and final standings will be permanently deleted.\n\n" +
+            "The roster will be kept and all fencers reinstated.",
+            "Yes, restart", "Cancel");
+        if (!confirm) return;
+
+        await _vm.RestartTournamentCommand.ExecuteAsync(null);
     }
 
     /// <summary>
@@ -135,5 +168,21 @@ public partial class TournamentEditorPage : ContentPage
             : pools.First(p => p.Title == choice).PoolId;
 
         await _vm.MoveFencerToPoolAsync(chip.FencerId, targetPoolId);
+    }
+
+    private async void OnCreateTournamentClicked(object? sender, EventArgs e)
+    {
+        await _vm.SaveNewCommand.ExecuteAsync(null);
+
+        // After successful save, navigate to the Tournament Hub so the user
+        // can manage the roster / start from there (via the ? editor button).
+        if (_vm.IsExisting && _vm.Tournament is not null)
+        {
+            _session.Open(_vm.Tournament, TournamentRole.Organiser);
+
+            var hub = _services.GetRequiredService<TournamentHubPage>();
+            Navigation.InsertPageBefore(hub, this);
+            await Navigation.PopAsync(animated: false);
+        }
     }
 }

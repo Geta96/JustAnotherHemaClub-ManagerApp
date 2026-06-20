@@ -67,7 +67,7 @@ public class PoolMatchGenerationTests
         {
             m.PoolId.Should().Be(pool.Id);
             m.Status.Should().Be(MatchStatus.Pending);
-            m.RemainingTimeSeconds.Should().Be(180);
+            m.RemainingTimeSeconds.Should().Be(120);
         });
     }
 

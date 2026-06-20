@@ -85,7 +85,11 @@ public partial class PoolsTabViewModel : ObservableObject, IDisposable
         Pools.Clear();
         if (_session?.Current is null) return;
 
-        var nameById       = _session.Current.Fencers.ToDictionary(f => f.Id, f => f.Name);
+        // Deduplicate by ID in case in-memory store has dupes from by-reference storage
+        var nameById = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var f in _session.Current.Fencers)
+            nameById[f.Id] = f.Name;
+
         var canEdit        = _session.CanEdit;
         var bracketStarted = _session.Current.Bracket is not null;
         foreach (var pool in _session.Current.Pools

@@ -51,7 +51,10 @@ public partial class PoolStandingsTabViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var nameById = _session.Current.Fencers.ToDictionary(f => f.Id, f => f.Name);
+        // Deduplicate by ID in case in-memory store has dupes from by-reference storage
+        var nameById = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var f in _session.Current.Fencers)
+            nameById[f.Id] = f.Name;
 
         // Single source of truth — the engine decides who actually enters the elimination.
         // This drives every separator on this page (per-pool AND overall).
@@ -201,7 +204,9 @@ public partial class PoolStandingsTabViewModel : ObservableObject, IDisposable
             // A match in ANY pool can shift the global qualifier set (e.g. a
             // top-up beyond 60% may pick a different fencer when stats change),
             // so refill every group + the overall card with a freshly computed set.
-            var nameById = _session.Current.Fencers.ToDictionary(f => f.Id, f => f.Name);
+            var nameById = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var f in _session.Current.Fencers)
+                nameById[f.Id] = f.Name;
             var qualifiedIds = new HashSet<string>(
                 TournamentEngine.ComputeQualifyingFencerIds(_session.Current));
 

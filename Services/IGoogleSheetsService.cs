@@ -50,6 +50,7 @@ public interface IGoogleSheetsService
 
     Task UpsertPoolAsync(string tournamentId, Pool pool);
     Task UpsertMatchAsync(string tournamentId, Match match);
+    Task DeleteMatchAsync(string tournamentId, string matchId);
 
     /// <summary>One HTTP call regardless of how many pools � used by Start Tournament.</summary>
     Task AppendPoolsAsync(string tournamentId, IList<Pool> pools);

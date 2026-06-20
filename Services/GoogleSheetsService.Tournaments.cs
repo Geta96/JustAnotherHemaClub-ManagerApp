@@ -305,6 +305,22 @@ public partial class GoogleSheetsService
         await req.ExecuteAsync();
     }
 
+    public async Task DeleteMatchAsync(string tournamentId, string matchId)
+    {
+        if (string.IsNullOrWhiteSpace(tournamentId) || string.IsNullOrWhiteSpace(matchId)) return;
+
+        var rows = await ReadAsync(MatchesRange);
+        var rangesToClear = new List<string>();
+        for (int i = 0; i < rows.Count; i++)
+            if (S(rows[i], 0) == tournamentId && S(rows[i], 1) == matchId)
+                rangesToClear.Add($"Matches!A{i + 2}:Y{i + 2}");
+        if (rangesToClear.Count == 0) return;
+
+        var svc = await GetServiceAsync();
+        var batch = new BatchClearValuesRequest { Ranges = rangesToClear };
+        await svc.Spreadsheets.Values.BatchClear(batch, _spreadsheetId).ExecuteAsync();
+    }
+
     public async Task AppendPoolsAsync(string tournamentId, IList<Pool> pools)
     {
         if (pools is null || pools.Count == 0) return;

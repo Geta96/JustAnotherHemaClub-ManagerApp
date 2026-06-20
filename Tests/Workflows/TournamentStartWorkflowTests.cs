@@ -30,7 +30,7 @@ public class TournamentStartWorkflowTests
         pools.SelectMany(p => p.Matches).Should().AllSatisfy(m =>
         {
             m.Status.Should().Be(MatchStatus.Pending);
-            m.RemainingTimeSeconds.Should().Be(180);
+            m.RemainingTimeSeconds.Should().Be(120);
             m.PoolId.Should().NotBeNullOrEmpty();
         });
     }

@@ -66,4 +66,17 @@ public partial class MatchPage : ContentPage
             await Navigation.PopAsync();
         }
     }
+
+    private async void OnUpdateMatchClicked(object? sender, EventArgs e)
+    {
+        var confirm = await DisplayAlert(
+            "Update finished match",
+            "This match has already been finished. " +
+            "Are you sure you want to reopen it and change the result?\n\n" +
+            "The match will go back to 'In progress' and you can edit the score and cards.",
+            "Yes, update", "Cancel");
+        if (!confirm) return;
+
+        await _vm.ReopenMatchCommand.ExecuteAsync(null);
+    }
 }

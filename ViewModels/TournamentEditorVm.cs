@@ -53,6 +53,9 @@ public partial class TournamentEditorVm : ObservableObject
     public bool ShowPoolAllocation => IsExisting && IsSetupState && ActiveFencerCount > 0;
     public bool ShowLiveWithdrawHint => IsExisting && !IsSetupState;
 
+    /// <summary>Restart button: visible when the tournament has already started (not Setup, not new).</summary>
+    public bool CanRestart => IsExisting && !IsSetupState;
+
     public TournamentEditorVm(IGoogleSheetsService sheets,
                               TournamentAutoSaveService autoSave,
                               ICacheControl cache)
@@ -172,7 +175,15 @@ public partial class TournamentEditorVm : ObservableObject
         var n = (NewFencerName ?? "").Trim();
         if (n.Length == 0) return Task.CompletedTask;
 
+        // Prevent duplicate names (case-insensitive)
+        if (Fencers.Any(f => string.Equals(f.Name, n, StringComparison.OrdinalIgnoreCase)))
+        {
+            ErrorMessage = $"A fencer named '{n}' is already on the roster.";
+            return Task.CompletedTask;
+        }
+
         var fencer = new TournamentFencer { Name = n, OrderIndex = Fencers.Count };
+        Tournament.Fencers.Add(fencer);
         Fencers.Add(new TournamentFencerRow(fencer));
         NewFencerName = "";
 
@@ -203,6 +214,7 @@ public partial class TournamentEditorVm : ObservableObject
         if (Tournament is null || row is null || !CanRemoveFencers) return Task.CompletedTask;
 
         Fencers.Remove(row);
+        Tournament.Fencers.Remove(row.Fencer);
 
         // Drop them from any draft pool they were placed in.
         var affectedPools = new List<Pool>();
@@ -308,6 +320,43 @@ public partial class TournamentEditorVm : ObservableObject
         return Task.CompletedTask;
     }
 
+    /// <summary>Remove all fencers from all pools and remove the empty pools, moving everyone to unassigned.</summary>
+    [RelayCommand]
+    public Task UnassignAllFencersAsync()
+    {
+        if (Tournament is null || !IsSetupState) return Task.CompletedTask;
+        ErrorMessage = "";
+
+        var affected = new List<Pool>();
+        foreach (var pool in Tournament.Pools)
+        {
+            if (pool.FencerIds.Count > 0)
+            {
+                pool.FencerIds.Clear();
+                affected.Add(pool);
+            }
+        }
+
+        // Also remove all visible (now-empty) pools so the UI is clean
+        var toPersist = ApplyPoolReplacementLocal(new List<Pool>());
+
+        RebuildDraftPools();
+        NotifyStateChanged();
+
+        if ((affected.Count > 0 || toPersist.Count > 0) && !_isInitialSave)
+        {
+            var tournamentId = Tournament.Id;
+            var snapshot = toPersist.ToList();
+            RunInBackground(async () =>
+            {
+                foreach (var pool in snapshot)
+                    await _sheets.UpsertPoolAsync(tournamentId, pool);
+            }, "Unassign all failed");
+        }
+
+        return Task.CompletedTask;
+    }
+
     /// <summary>Add one more empty pool to the draft.</summary>
     [RelayCommand]
     public Task AddPoolAsync()
@@ -315,7 +364,7 @@ public partial class TournamentEditorVm : ObservableObject
         if (Tournament is null || !IsSetupState) return Task.CompletedTask;
         ErrorMessage = "";
 
-        var pools = Tournament.Pools.OrderBy(p => p.Index).ToList();
+        var pools = GetVisiblePools();
         pools.Add(new Pool { Index = pools.Count });
 
         var toPersist = ApplyPoolReplacementLocal(pools);
@@ -340,9 +389,8 @@ public partial class TournamentEditorVm : ObservableObject
         if (Tournament is null || poolVm is null || !IsSetupState) return Task.CompletedTask;
         ErrorMessage = "";
 
-        var pools = Tournament.Pools
+        var pools = GetVisiblePools()
             .Where(p => p.Id != poolVm.Pool.Id)
-            .OrderBy(p => p.Index)
             .ToList();
 
         // Re-index so they're contiguous 0..n-1.
@@ -363,7 +411,9 @@ public partial class TournamentEditorVm : ObservableObject
         return Task.CompletedTask;
     }
 
-    /// <summary>Move a fencer to <paramref name="targetPoolId"/> (empty string = unassigned).</summary>
+    /// <summary>
+    /// Move a fencer to <paramref name="targetPoolId"/> (empty string = unassigned).
+    /// </summary>
     public Task MoveFencerToPoolAsync(string fencerId, string targetPoolId)
     {
         if (Tournament is null || !IsSetupState || string.IsNullOrEmpty(fencerId)) return Task.CompletedTask;
@@ -405,6 +455,25 @@ public partial class TournamentEditorVm : ObservableObject
     }
 
     /// <summary>
+    /// Returns the currently-visible pools (contiguous Index 0..n-1), excluding
+    /// leftover pools that were previously removed and still exist in the sheet
+    /// with cleared FencerIds. This is the set the user sees and interacts with.
+    /// </summary>
+    private List<Pool> GetVisiblePools()
+    {
+        if (Tournament is null) return new List<Pool>();
+
+        var sorted = Tournament.Pools.OrderBy(p => p.Index).ToList();
+        var visible = new List<Pool>();
+        for (int i = 0; i < sorted.Count; i++)
+        {
+            if (sorted[i].Index != i) break;
+            visible.Add(sorted[i]);
+        }
+        return visible;
+    }
+
+    /// <summary>
     /// Synchronous half of the old <c>ReplacePoolsAsync</c>: mutate
     /// <see cref="Tournament.Pools"/> to reflect the new draft set and return the
     /// list of pools the caller must upsert (in any order — the background queue
@@ -426,6 +495,9 @@ public partial class TournamentEditorVm : ObservableObject
             if (!keptIds.Contains(old.Id))
             {
                 old.FencerIds.Clear();
+                // Push the leftover's index far out of the contiguous range so
+                // RebuildDraftPools / GetVisiblePools won't pick it up.
+                old.Index = int.MaxValue;
                 toUpsert.Add(old);
             }
         }
@@ -476,7 +548,10 @@ public partial class TournamentEditorVm : ObservableObject
         DraftPools.Clear();
         if (Tournament is null || !IsSetupState) { OnPropertyChanged(nameof(UnassignedFencers)); return; }
 
-        var nameById = Tournament.Fencers.ToDictionary(f => f.Id, f => f.Name);
+        // Deduplicate by ID in case in-memory store has dupes from by-reference storage
+        var nameById = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var f in Tournament.Fencers)
+            nameById[f.Id] = f.Name;
 
         // Only show pools that have non-empty content OR have never been emptied
         // (i.e. those the user is currently editing). The "hidden" empty pools
@@ -657,6 +732,80 @@ public partial class TournamentEditorVm : ObservableObject
         finally { IsLoading = false; }
     }
 
+    /// <summary>
+    /// Resets the tournament back to Setup state: deletes all matches, clears all
+    /// pools, removes bracket and final standings, and reinstates all withdrawn
+    /// fencers. After this the user can add/remove fencers and reassign pools.
+    /// </summary>
+    [RelayCommand]
+    public async Task RestartTournamentAsync()
+    {
+        if (Tournament is null || _isInitialSave || IsSetupState) return;
+
+        IsLoading = true;
+        ErrorMessage = "";
+        try
+        {
+            var tournamentId = Tournament.Id;
+
+            // 1. Delete all matches (pool + bracket) — snapshot first to avoid enumeration issues
+            var allMatches = Tournament.Pools.SelectMany(p => p.Matches).ToList();
+            if (Tournament.Bracket is not null)
+            {
+                allMatches.AddRange(Tournament.Bracket.Rounds.SelectMany(r => r.Matches));
+                if (Tournament.Bracket.BronzeMatch is not null)
+                    allMatches.Add(Tournament.Bracket.BronzeMatch);
+            }
+            foreach (var m in allMatches)
+                await _sheets.DeleteMatchAsync(tournamentId, m.Id);
+
+            // 2. Clear final standings
+            await _sheets.SaveFinalStandingsAsync(tournamentId, Array.Empty<string>());
+
+            // 3. Clear all pool memberships — snapshot the list to avoid modifying during enumeration
+            var poolsSnapshot = Tournament.Pools.ToList();
+            foreach (var pool in poolsSnapshot)
+            {
+                pool.FencerIds.Clear();
+                pool.Matches.Clear();
+                pool.IsClosed = false;
+                pool.Index = int.MaxValue;
+                await _sheets.UpsertPoolAsync(tournamentId, pool);
+            }
+
+            // 4. Reinstate all withdrawn fencers — snapshot the list
+            var fencersSnapshot = Tournament.Fencers.ToList();
+            foreach (var fencer in fencersSnapshot)
+            {
+                if (fencer.IsWithdrawn)
+                {
+                    fencer.IsWithdrawn = false;
+                    await _sheets.UpsertTournamentFencerAsync(tournamentId, fencer);
+                }
+            }
+
+            // 5. Reset in-memory state
+            Tournament.Pools = new List<Pool>();
+            Tournament.Bracket = null;
+            Tournament.FinalStandingFencerIds = new List<string>();
+            Tournament.State = TournamentState.Setup;
+            await _sheets.UpsertTournamentHeaderAsync(Tournament);
+
+            // 6. Rebuild the editor UI
+            _suppressAutoSave = true;
+            Fencers.Clear();
+            foreach (var f in Tournament.Fencers.OrderBy(f => f.OrderIndex))
+                Fencers.Add(new TournamentFencerRow(f));
+            _suppressAutoSave = false;
+
+            _cache.InvalidateTournaments();
+            RebuildDraftPools();
+            NotifyStateChanged();
+        }
+        catch (Exception ex) { ErrorMessage = $"Restart failed: {ex.Message}"; }
+        finally { IsLoading = false; }
+    }
+
     private void NotifyStateChanged()
     {
         OnPropertyChanged(nameof(IsNew));
@@ -665,6 +814,7 @@ public partial class TournamentEditorVm : ObservableObject
         OnPropertyChanged(nameof(CanAddFencers));
         OnPropertyChanged(nameof(CanRemoveFencers));
         OnPropertyChanged(nameof(CanStart));
+        OnPropertyChanged(nameof(CanRestart));
         OnPropertyChanged(nameof(ActiveFencerCount));
         OnPropertyChanged(nameof(FencerCountText));
         OnPropertyChanged(nameof(StartHintText));

@@ -26,6 +26,9 @@ public static class MauiProgram
         builder.Services.AddSingleton<IGoogleSheetsService>(sp => sp.GetRequiredService<CachedGoogleSheetsService>());
         builder.Services.AddSingleton<ICacheControl>(sp => sp.GetRequiredService<CachedGoogleSheetsService>());
 
+        // Test user in-memory data store (no network, no backend)
+        builder.Services.AddSingleton<TestDataService>();
+
         // Recurring training materialization (runs after login warm-up)
         builder.Services.AddSingleton<RecurringTrainingMaterializer>();
 
