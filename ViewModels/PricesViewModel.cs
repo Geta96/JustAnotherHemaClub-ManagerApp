@@ -11,6 +11,7 @@ public partial class PriceRuleRow : ObservableObject
     public PriceRule Rule { get; }
 
     [ObservableProperty] private int sessionCount;
+    [ObservableProperty] private int monthCount;
     [ObservableProperty] private decimal fullPrice;
     [ObservableProperty] private decimal studentPrice;
     [ObservableProperty] private DateTime startDate;
@@ -38,11 +39,12 @@ public partial class PriceRuleRow : ObservableObject
         StartDate.Date <= DateTime.Today &&
         (!HasEndDate || EndDate.Date >= DateTime.Today);
 
-    public string TierName => SessionCount switch
+    public string TierName => (SessionCount, MonthCount) switch
     {
-        0 => "Unlimited monthly pass",
-        1 => "Single-session ticket",
-        _ => $"{SessionCount}-session pass"
+        (0, 2) => "2-month unlimited pass",
+        (0, _) => "Unlimited monthly pass",
+        (1, _) => "Single-session ticket",
+        _      => $"{SessionCount}-session pass"
     };
 
     public string DateRange => HasEndDate
@@ -58,20 +60,28 @@ public partial class PriceRuleRow : ObservableObject
         _initializing = true;
         try
         {
-            Rule = r;
+            Rule         = r;
             SessionCount = r.SessionCount;
-            FullPrice = r.FullPrice;
+            MonthCount   = r.MonthCount < 1 ? 1 : r.MonthCount;
+            FullPrice    = r.FullPrice;
             StudentPrice = r.StudentPrice;
-            StartDate = r.StartDate == default ? DateTime.Today : r.StartDate;
-            HasEndDate = r.EndDate.HasValue;
-            EndDate = r.EndDate ?? DateTime.Today.AddMonths(6);
+            StartDate    = r.StartDate == default ? DateTime.Today : r.StartDate;
+            HasEndDate   = r.EndDate.HasValue;
+            EndDate      = r.EndDate ?? DateTime.Today.AddMonths(6);
             // Always start collapsed; expansion is a per-tap state from here on.
-            IsExpanded = false;
+            IsExpanded   = false;
         }
         finally { _initializing = false; }
     }
 
     partial void OnSessionCountChanged(int value)
+    {
+        if (_initializing) return;
+        IsDirty = true;
+        OnPropertyChanged(nameof(TierName));
+    }
+
+    partial void OnMonthCountChanged(int value)
     {
         if (_initializing) return;
         IsDirty = true;
@@ -121,10 +131,11 @@ public partial class PriceRuleRow : ObservableObject
     public PriceRule ToUpdatedRule()
     {
         Rule.SessionCount = SessionCount;
-        Rule.FullPrice = FullPrice;
+        Rule.MonthCount   = MonthCount;
+        Rule.FullPrice    = FullPrice;
         Rule.StudentPrice = StudentPrice;
-        Rule.StartDate = StartDate;
-        Rule.EndDate = HasEndDate ? EndDate : null;
+        Rule.StartDate    = StartDate;
+        Rule.EndDate      = HasEndDate ? EndDate : null;
         return Rule;
     }
 
@@ -144,9 +155,13 @@ public partial class PricesViewModel : ObservableObject
     public ObservableCollection<PriceRuleRow> Rules { get; } = new();
 
     // Session-count Picker options for the inline "Add price rule" form.
-    // Index ↔ SessionCount: 0→1, 1→4, 2→Unlimited (stored as 0).
+    // Index ↔ (SessionCount, MonthCount):
+    //   0 → (1, 1)   single session
+    //   1 → (4, 1)   4-session pass
+    //   2 → (0, 1)   unlimited (1 month)
+    //   3 → (0, 2)   unlimited (2 months)
     public IReadOnlyList<string> SessionCountOptions { get; } =
-        new[] { "1 session", "4 sessions", "Unlimited" };
+        new[] { "1 session", "4 sessions", "Unlimited (1 month)", "Unlimited (2 months)" };
 
     [ObservableProperty] private bool isLoading;
     [ObservableProperty] private bool isAddingRule;
@@ -231,28 +246,26 @@ public partial class PricesViewModel : ObservableObject
             return;
         }
 
-        var sessions = NewSessionCountIndex switch
+        var (sessions, months) = NewSessionCountIndex switch
         {
-            0 => 1,
-            1 => 4,
-            _ => 0  // Unlimited
+            0 => (1, 1),
+            1 => (4, 1),
+            2 => (0, 1),
+            _ => (0, 2)  // Unlimited 2-month
         };
 
         var rule = new PriceRule
         {
             SessionCount = sessions,
-            FullPrice = NewFullPrice,
+            MonthCount   = months,
+            FullPrice    = NewFullPrice,
             StudentPrice = NewStudentPrice > 0
                 ? NewStudentPrice
                 : DuesCalculator.SuggestStudentPrice(NewFullPrice),
             StartDate = NewStartDate,
-            EndDate = NewHasEndDate ? NewEndDate : null
+            EndDate   = NewHasEndDate ? NewEndDate : null
         };
 
-        // Warn before saving an overlapping rule of the same SessionCount.
-        // DuesCalculator picks newest-by-StartDate among same-tier overlaps,
-        // so saving is allowed — this just means the new rule will supersede
-        // the older one — but the instructor should still see the conflict.
         var conflict = FindOverlap(rule);
         if (conflict is not null && !await ConfirmOverlapAsync(rule, conflict))
             return;
@@ -325,7 +338,9 @@ public partial class PricesViewModel : ObservableObject
 
     private static bool RulesOverlap(PriceRule a, PriceRule b)
     {
+        // Two rules are in the same tier only when both SessionCount AND MonthCount match.
         if (a.SessionCount != b.SessionCount) return false;
+        if (a.MonthCount   != b.MonthCount)   return false;
 
         var aStart = a.StartDate.Date;
         var aEnd   = a.EndDate?.Date ?? DateTime.MaxValue.Date;
@@ -341,18 +356,19 @@ public partial class PricesViewModel : ObservableObject
         var page = Application.Current?.MainPage;
         if (page is null) return true; // headless — don't block.
 
-        static string TierLabel(int sc) => sc switch
+        static string TierLabel(PriceRule r) => (r.SessionCount, r.MonthCount) switch
         {
-            0 => "Unlimited monthly pass",
-            1 => "Single-session ticket",
-            _ => $"{sc}-session pass"
+            (0, 2) => "2-month unlimited pass",
+            (0, _) => "Unlimited monthly pass",
+            (1, _) => "Single-session ticket",
+            _      => $"{r.SessionCount}-session pass"
         };
 
         static string Range(PriceRule r) => r.EndDate is { } e
             ? $"{r.StartDate:yyyy-MM-dd} → {e:yyyy-MM-dd}"
             : $"from {r.StartDate:yyyy-MM-dd} (no end date)";
 
-        var tier = TierLabel(candidate.SessionCount).ToLowerInvariant();
+        var tier = TierLabel(candidate).ToLowerInvariant();
 
         return await page.DisplayAlert(
             "⚠ Overlaps with another rule",

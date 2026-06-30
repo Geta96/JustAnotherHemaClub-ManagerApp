@@ -29,10 +29,10 @@ public readonly record struct DuesQuote(
 /// Selection policy:
 ///   1. Drop rules that can't cover this much attendance (a 4-pack cannot
 ///      bill 5 sessions).
-///   2. When two or more rules share the same SessionCount tier, keep only
-///      the newest one — latest StartDate, then highest FullPrice as a
-///      deterministic secondary tie-break.
-///   3. Across tiers the cheapest cost wins.
+///   2. When two or more rules share the same (SessionCount, MonthCount) tier,
+///      keep only the newest one — latest StartDate, then highest FullPrice
+///      as a deterministic secondary tie-break.
+///   3. Across tiers the cheapest per-month cost wins.
 ///   4. The caller passes <paramref name="alreadyPaid"/> as the total funds
 ///      available for this month (cash this month + credit carried forward
 ///      from prior overpayments). The calculator returns Outstanding =
@@ -41,7 +41,9 @@ public readonly record struct DuesQuote(
 ///      alreadyPaid if it wants credit to carry across months.
 ///
 /// SessionCount mapping:
-///   0   → unlimited monthly pass (always applicable when attendance ≥ 1).
+///   0   → unlimited pass (always applicable when attendance ≥ 1).
+///             MonthCount = 1 → standard monthly pass (cost = price).
+///             MonthCount = 2 → two-month pass (cost = price ÷ 2 per month).
 ///   1   → single-session ticket (cost = price × attendance).
 ///   N>1 → N-session pack (applicable iff attendance ≤ N; cost = flat price).
 ///
@@ -51,9 +53,9 @@ public readonly record struct DuesQuote(
 public static class DuesCalculator
 {
     // Fallback defaults — only used when no PriceRules have been configured yet.
-    public const decimal SinglePrice = 3500m;
-    public const decimal HalfPassPrice = 9000m;
-    public const decimal FullPassPrice = 12000m;
+    public const decimal SinglePrice    = 3500m;
+    public const decimal HalfPassPrice  = 9000m;
+    public const decimal FullPassPrice  = 12000m;
     public const decimal StudentMultiplier = 0.60m;
 
     private static readonly PriceRule[] DefaultRules =
@@ -62,7 +64,7 @@ public static class DuesCalculator
                 StudentPrice = SuggestStudentPrice(SinglePrice) },
         new() { SessionCount = 4, FullPrice = HalfPassPrice,
                 StudentPrice = SuggestStudentPrice(HalfPassPrice) },
-        new() { SessionCount = 0, FullPrice = FullPassPrice,
+        new() { SessionCount = 0, MonthCount = 1, FullPrice = FullPassPrice,
                 StudentPrice = SuggestStudentPrice(FullPassPrice) },
     };
 
@@ -87,16 +89,17 @@ public static class DuesCalculator
 
         var effective = (rules is null || rules.Count == 0) ? DefaultRules : rules;
 
+        // Group by (SessionCount, MonthCount) and pick the newest within each tier.
         var perTier = effective
             .Where(r => IsApplicable(r, sessionsAttended))
-            .GroupBy(r => r.SessionCount)
+            .GroupBy(r => (r.SessionCount, r.MonthCount))
             .Select(g => g
                 .OrderByDescending(r => r.StartDate.Date)
                 .ThenByDescending(r => r.FullPrice)
                 .First())
             .ToList();
 
-        decimal bestCost = decimal.MaxValue;
+        decimal bestCost  = decimal.MaxValue;
         string  bestLabel = "—";
 
         foreach (var r in perTier)
@@ -105,9 +108,24 @@ public static class DuesCalculator
             decimal cost;
             string  label;
 
-            if      (r.SessionCount == 0) { cost = price;                    label = "unlimited monthly pass"; }
-            else if (r.SessionCount == 1) { cost = price * sessionsAttended; label = "single ticket"; }
-            else                          { cost = price;                    label = $"{r.SessionCount}-session pass"; }
+            if (r.SessionCount == 0)
+            {
+                // Amortize multi-month pass cost per calendar month.
+                var months = Math.Max(1, r.MonthCount);
+                cost  = price / months;
+                label = months == 1 ? "unlimited monthly pass"
+                                    : $"unlimited {months}-month pass";
+            }
+            else if (r.SessionCount == 1)
+            {
+                cost  = price * sessionsAttended;
+                label = "single ticket";
+            }
+            else
+            {
+                cost  = price;
+                label = $"{r.SessionCount}-session pass";
+            }
 
             if (cost < bestCost) { bestCost = cost; bestLabel = label; }
         }
@@ -123,7 +141,7 @@ public static class DuesCalculator
                 IsCovered:        true,
                 IsOverpaid:       alreadyPaid > 0m);
 
-        var outstanding = Math.Max(0m, bestCost   - alreadyPaid);
+        var outstanding = Math.Max(0m, bestCost    - alreadyPaid);
         var overpayment = Math.Max(0m, alreadyPaid - bestCost);
 
         return new DuesQuote(

@@ -12,6 +12,14 @@ public class PriceRule
     /// </summary>
     public int SessionCount { get; set; }
 
+    /// <summary>
+    /// How many calendar months this rule's price covers (only meaningful when
+    /// SessionCount == 0). Default is 1 (standard single-month unlimited pass).
+    /// Set to 2 for a two-month pass: DuesCalculator amortizes the price as
+    /// FullPrice ÷ MonthCount per month, offering a built-in discount.
+    /// </summary>
+    public int MonthCount { get; set; } = 1;
+
     public decimal FullPrice { get; set; }
     public decimal StudentPrice { get; set; }
 
