@@ -6,6 +6,9 @@
     <Style TargetType="ContentPage" ApplyToDerivedTypes="True">
         <Setter Property="BackgroundColor" Value="{StaticResource Background}" />
         <Setter Property="Padding" Value="0" />
+        <Setter Property="Shell.BackgroundColor" Value="{StaticResource Wine}" />
+        <Setter Property="Shell.ForegroundColor" Value="{StaticResource OnPrimary}" />
+        <Setter Property="Shell.TitleColor" Value="{StaticResource OnPrimary}" />
     </Style>
 
     <!-- Labels -->

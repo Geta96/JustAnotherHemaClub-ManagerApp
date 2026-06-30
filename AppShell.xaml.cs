@@ -17,6 +17,9 @@ public partial class AppShell : Shell
         UserLabel.Text = _auth.IsGuest
             ? "Signed in as Guest"
             : $"Signed in as {_auth.CurrentFencer?.Name ?? _auth.CurrentFencer?.Username ?? "user"}";
+
+        // Re-apply after the Shell handler has finished setting up its Android views
+        Loaded += (_, _) => MainActivity.ApplyWineStatusBar();
     }
 
     private async void OnLogoutClicked(object? sender, EventArgs e)
@@ -25,6 +28,10 @@ public partial class AppShell : Shell
 
         var login = _services.GetRequiredService<LoginPage>();
         Application.Current!.MainPage = new NavigationPage(login);
+
+        // Re-apply for the NavigationPage that just took over
+        MainActivity.ApplyWineStatusBar();
+
         await Task.CompletedTask;
     }
 }

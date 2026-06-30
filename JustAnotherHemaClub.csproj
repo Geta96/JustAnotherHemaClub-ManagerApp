@@ -100,8 +100,4 @@
         <MauiImage Include="Resources\Images\**" Exclude="Resources\Images\app_icon_blue.svg" />
     </ItemGroup>
 
-    <ItemGroup>
-      <AndroidResource Remove="Platforms\Android\Resources\values\styles.xml" />
-    </ItemGroup>
-
 </Project>
