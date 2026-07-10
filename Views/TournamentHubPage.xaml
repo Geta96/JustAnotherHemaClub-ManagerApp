@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels"
              xmlns:sel="clr-namespace:JustAnotherHemaClub.Selectors"
+             xmlns:services="clr-namespace:JustAnotherHemaClub.Services"
              x:Class="JustAnotherHemaClub.Views.TournamentHubPage"
              x:Name="HubPage"
              x:DataType="vm:TournamentHubViewModel"
@@ -127,18 +128,37 @@
                            TextColor="{StaticResource DangerRed}"
                            IsVisible="{Binding Vm.ElimVm.ErrorMessage, Converter={StaticResource StringNotEmptyConverter}, FallbackValue=False}" />
 
-                    <!-- Pre-bracket: generate-bracket card -->
+                    <!-- Pre-bracket: bracket-size picker -->
                     <Border Style="{StaticResource Card}"
                             IsVisible="{Binding Vm.ElimVm.HasNoBracket}">
                         <VerticalStackLayout Spacing="8">
                             <Label Text="Elimination bracket" Style="{StaticResource H2}" />
                             <Label Text="{Binding Vm.ElimVm.GenerateHint}" Style="{StaticResource Caption}" />
-                            <Button Text="Generate bracket"
-                                    BackgroundColor="#476FB5"
-                                    TextColor="{StaticResource Cream}"
-                                    IsVisible="{Binding Vm.ElimVm.CanGenerateBracket}"
-                                    IsEnabled="{Binding Vm.ElimVm.CanGenerateBracket}"
-                                    Command="{Binding Vm.ElimVm.GenerateBracketCommand}" />
+
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Vm.ElimVm.Options}"
+                                                 Spacing="8"
+                                                 IsVisible="{Binding Vm.ElimVm.CanGenerateBracket}">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="services:TournamentEngine+EliminationOption">
+                                        <Button Text="{Binding Label}"
+                                                IsEnabled="{Binding IsAvailable}"
+                                                TextColor="{StaticResource Cream}"
+                                                Command="{Binding Source={x:Reference HubPage}, Path=BindingContext.ElimVm.GenerateBracketWithOptionCommand}"
+                                                CommandParameter="{Binding .}">
+                                            <Button.Triggers>
+                                                <DataTrigger TargetType="Button" Binding="{Binding IsAvailable}" Value="True">
+                                                    <Setter Property="BackgroundColor" Value="#476FB5" />
+                                                </DataTrigger>
+                                                <DataTrigger TargetType="Button" Binding="{Binding IsAvailable}" Value="False">
+                                                    <Setter Property="BackgroundColor" Value="#B0B0B0" />
+                                                    <Setter Property="Opacity"         Value="0.6" />
+                                                </DataTrigger>
+                                            </Button.Triggers>
+                                        </Button>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+
                             <ActivityIndicator IsRunning="{Binding Vm.ElimVm.IsBusy}"
                                                IsVisible="{Binding Vm.ElimVm.IsBusy}"
                                                Color="{StaticResource Wine}"

@@ -299,9 +299,9 @@ public static class TournamentEngine
 
     public static int PickBracketSize(int seededCount)
     {
-        int[] sizes = { 8, 16, 32, 64, 128 };
+        int[] sizes = { 4, 8, 16, 32, 64, 128, 256 };
         foreach (var s in sizes) if (s >= seededCount) return s;
-        return 128;
+        return 256;
     }
 
     public static string RoundName(int participants) => participants switch
@@ -671,51 +671,146 @@ public static class TournamentEngine
         return bracket;
     }
 
+    /// <summary>
+    /// The canonical bracket sizes the organiser can pick from.
+    /// </summary>
+    public static readonly int[] AllBracketSizes = { 4, 8, 16, 32, 64, 128, 256 };
+
+    /// <summary>
+    /// Build the bracket from per-pool standings, seeding exactly <paramref name="bracketSize"/>
+    /// slots with the top-N fencers (N = min(bracketSize, totalFencers)).
+    /// Extra slots become byes.
+    /// </summary>
+    public static EliminationBracket BuildBracketFromPoolStandingsBySize(Tournament t, int bracketSize)
+    {
+        // Global ordering across every fencer that played (uses 1.0 so we get all fencers back).
+        var globallyOrdered = ComputeQualifyingFencerIds(t, 1.0);
+        int take            = Math.Min(bracketSize, globallyOrdered.Count);
+        var seededIds       = globallyOrdered.Take(take).ToList();
+        return BuildBracketWithSeeds(seededIds, bracketSize);
+    }
+
+    /// <summary>
+    /// Internal helper shared by <see cref="BuildBracketFromPoolStandings(Tournament, double)"/>
+    /// and <see cref="BuildBracketFromPoolStandingsBySize"/>.
+    /// </summary>
+    private static EliminationBracket BuildBracketWithSeeds(IReadOnlyList<string> seededIds, int size)
+    {
+        var bracket     = new EliminationBracket { Size = size };
+        int[] seedOrder = BuildBracketSeedOrder(size);
+        var round1      = new EliminationRound { Index = 0, Name = RoundName(size) };
+
+        for (int i = 0; i < size; i += 2)
+        {
+            int seedA = seedOrder[i];
+            int seedB = seedOrder[i + 1];
+            string? leftId  = seedA <= seededIds.Count ? seededIds[seedA - 1] : null;
+            string? rightId = seedB <= seededIds.Count ? seededIds[seedB - 1] : null;
+
+            var match = new Match
+            {
+                BracketRound = 0,
+                BracketSlot  = i / 2,
+                LeftFencerId  = leftId  ?? "",
+                RightFencerId = rightId ?? "",
+                RemainingTimeSeconds = DefaultMatchSeconds
+            };
+
+            if (string.IsNullOrEmpty(leftId) ^ string.IsNullOrEmpty(rightId))
+            {
+                match.Status = MatchStatus.Finished;
+                match.WinnerFencerId = string.IsNullOrEmpty(leftId) ? rightId : leftId;
+            }
+            round1.Matches.Add(match);
+        }
+        bracket.Rounds.Add(round1);
+
+        int matchesInRound = size / 2;
+        int roundIndex     = 1;
+        while (matchesInRound > 1)
+        {
+            matchesInRound /= 2;
+            var next = new EliminationRound { Index = roundIndex, Name = RoundName(matchesInRound * 2) };
+            for (int s = 0; s < matchesInRound; s++)
+                next.Matches.Add(new Match
+                {
+                    BracketRound = roundIndex,
+                    BracketSlot  = s,
+                    RemainingTimeSeconds = DefaultMatchSeconds
+                });
+            bracket.Rounds.Add(next);
+            roundIndex++;
+        }
+
+        bracket.BronzeMatch = new Match { BracketTag = "Bronze", RemainingTimeSeconds = DefaultMatchSeconds };
+        if (bracket.Rounds.Count > 0 && bracket.Rounds[^1].Matches.Count == 1)
+            bracket.Rounds[^1].Matches[0].BracketTag = "Final";
+
+        PropagateAdvancements(bracket);
+        return bracket;
+    }
+
     // ---------- Elimination options ----------
 
     /// <summary>
     /// Describes one elimination bracket option the user can pick when generating
-    /// (or regenerating) the bracket.
+    /// (or regenerating) the bracket. Options are now size-based (4, 8, 16, 32,
+    /// 64, 128, 256). Sizes larger than the fencer count are still returned with
+    /// <see cref="IsAvailable"/> = false so the UI can grey them out.
     /// </summary>
     public sealed class EliminationOption
     {
-        /// <summary>Display label, e.g. "All go to elim" or "60% go to elim".</summary>
+        /// <summary>Display label, e.g. "8 bracket (44% of fencers)".</summary>
         public string Label { get; init; } = "";
 
-        /// <summary>Fraction 0.0–1.0 used to compute qualification.</summary>
-        public double CutoffFraction { get; init; }
+        /// <summary>Bracket table size (4, 8, 16, 32, 64, 128, 256).</summary>
+        public int BracketSize { get; init; }
 
-        /// <summary>Number of fencers that would qualify with this cutoff.</summary>
+        /// <summary>Number of fencers that would qualify with this size (= min(size, totalFencers)).</summary>
         public int QualifyingCount { get; init; }
 
-        /// <summary>Bracket table size (4, 8, 16, 32…).</summary>
-        public int BracketSize { get; init; }
+        /// <summary>Total fencers in the tournament (denominator of the percentage shown).</summary>
+        public int TotalFencers { get; init; }
+
+        /// <summary>Fraction of fencers that will enter the bracket (0.0–1.0).</summary>
+        public double CutoffFraction => TotalFencers > 0 ? (double)QualifyingCount / TotalFencers : 0;
+
+        /// <summary>True if this bracket size is playable. A size is playable when the
+        /// *previous* smaller size wouldn't already hold every fencer — i.e.
+        /// <c>BracketSize / 2 &lt; TotalFencers</c>. This means sizes below the
+        /// fencer count are always available, and the smallest size that fits
+        /// all fencers (with byes) is also available; everything larger is
+        /// greyed out. Example: 5 fencers → 4, 8 available; 35 fencers → 4, 8,
+        /// 16, 32, 64 available.
+        /// </summary>
+        public bool IsAvailable => TotalFencers >= 4 && BracketSize / 2 < TotalFencers;
 
         /// <summary>Short suffix shown to the user, e.g. "8 place table".</summary>
         public string TableLabel => $"{BracketSize} place table";
     }
 
     /// <summary>
-    /// Computes the available elimination options for a tournament whose pools are
-    /// complete. Returns up to 4 options (100%, 80%, 60%, 40%) filtered so each
-    /// produces at least 4 qualifiers.
+    /// Computes the available elimination options for a tournament whose pools are complete.
+    /// Returns one option per canonical bracket size (4, 8, 16, 32, 64, 128, 256).
+    /// Sizes larger than the fencer count are included with <see cref="EliminationOption.IsAvailable"/>
+    /// = false so the UI can render them as greyed-out.
     /// </summary>
     public static List<EliminationOption> ComputeEliminationOptions(Tournament t)
     {
-        var options = new List<EliminationOption>();
-        var fractions = new[] { (1.0, "All go to elim"), (0.8, "80% go to elim"), (0.6, "60% go to elim"), (0.4, "40% go to elim") };
+        int total = t.Fencers?.Count ?? 0;
+        var options = new List<EliminationOption>(AllBracketSizes.Length);
 
-        foreach (var (fraction, label) in fractions)
+        foreach (var size in AllBracketSizes)
         {
-            var qualifiers = ComputeQualifyingFencerIds(t, fraction);
-            if (qualifiers.Count < 4) continue;
+            int qualifying = Math.Min(size, total);
+            int pct        = total > 0 ? (int)Math.Round(100.0 * qualifying / total) : 0;
 
             options.Add(new EliminationOption
             {
-                Label = label,
-                CutoffFraction = fraction,
-                QualifyingCount = qualifiers.Count,
-                BracketSize = PickBracketSize(qualifiers.Count)
+                BracketSize     = size,
+                QualifyingCount = qualifying,
+                TotalFencers    = total,
+                Label           = $"{size} bracket ({pct}% of fencers)"
             });
         }
 

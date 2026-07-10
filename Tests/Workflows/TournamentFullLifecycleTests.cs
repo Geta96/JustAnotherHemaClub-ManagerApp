@@ -160,7 +160,7 @@ public class TournamentFullLifecycleTests
         tournament.Pools = Services.TournamentEngine.BuildPools(fencers, new Random(42));
         tournament.State = TournamentState.PoolsInProgress;
 
-        // Single pool with 4 fencers ? 6 matches
+        // Single pool with 4 fencers -> 6 matches
         tournament.Pools.Should().HaveCount(1);
         tournament.Pools[0].Matches.Should().HaveCount(6);
 
@@ -172,11 +172,11 @@ public class TournamentFullLifecycleTests
             m.WinnerFencerId = m.LeftFencerId;
         }
 
-        // Build bracket � all 4 qualify (< 8 rule)
+        // Build bracket - all 4 qualify (< 8 rule)
         var qualifiers = Services.TournamentEngine.ComputeQualifyingFencerIds(tournament);
         qualifiers.Should().HaveCount(4);
 
         var bracket = Services.TournamentEngine.BuildBracketFromPoolStandings(tournament);
-        bracket.Size.Should().Be(8); // minimum bracket size
+        bracket.Size.Should().Be(4); // minimum bracket size is now 4
     }
 }

@@ -98,7 +98,7 @@ public partial class ElimTabViewModel : ObservableObject, IDisposable
     {
         Columns.Clear();
         var t = _session?.Current;
-        if (t?.Bracket is null) { RaiseStateChanged(); return; }
+        if (t?.Bracket is null) { RefreshOptions(); RaiseStateChanged(); return; }
 
         // Deduplicate by ID in case in-memory store has dupes from by-reference storage
         var nameById = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -131,6 +131,7 @@ public partial class ElimTabViewModel : ObservableObject, IDisposable
             Columns.Add(col);
         }
 
+        RefreshOptions();
         RaiseStateChanged();
     }
 
@@ -145,43 +146,46 @@ public partial class ElimTabViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(GenerateHint));
     }
 
+    /// <summary>
+    /// Bracket-size options rendered as buttons on the Elim tab. Unavailable
+    /// options (size > next-power-of-two of fencer count) are kept in the list
+    /// but flagged so the UI can grey them out.
+    /// </summary>
+    public ObservableCollection<TournamentEngine.EliminationOption> Options { get; } = new();
+
+    public void RefreshOptions()
+    {
+        Options.Clear();
+        var t = _session?.Current;
+        if (t is null) return;
+        foreach (var opt in TournamentEngine.ComputeEliminationOptions(t))
+            Options.Add(opt);
+    }
+
     // ---------------- Commands ----------------
 
+    /// <summary>
+    /// Build the bracket for the chosen size. Bound to per-size buttons on the
+    /// Elim tab. No user prompt — the size is picked up straight from the tapped button.
+    /// </summary>
     [RelayCommand]
-    private async Task GenerateBracketAsync()
+    private async Task GenerateBracketWithOptionAsync(TournamentEngine.EliminationOption? option)
     {
+        if (option is null || !option.IsAvailable) return;
         if (_session?.Current is null || !CanGenerateBracket) return;
         var t = _session.Current;
-
-        // Compute options and let the user pick
-        var options = TournamentEngine.ComputeEliminationOptions(t);
-        if (options.Count == 0)
-        {
-            ErrorMessage = "Not enough fencers to generate a bracket (minimum 4).";
-            return;
-        }
-
-        double cutoff = 0.6; // default
-        if (PickEliminationOptionAsync is not null && options.Count > 1)
-        {
-            var picked = await PickEliminationOptionAsync(options);
-            if (picked is null) return; // user cancelled
-            cutoff = picked.CutoffFraction;
-        }
 
         IsBusy = true;
         ErrorMessage = "";
         try
         {
-            var bracket = TournamentEngine.BuildBracketFromPoolStandings(t, cutoff);
+            var bracket = TournamentEngine.BuildBracketFromPoolStandingsBySize(t, option.BracketSize);
             t.Bracket = bracket;
 
-            // Phase 1: bulk-append every match row (rounds + bronze) in one call.
             var allInitial = new List<Match>(bracket.Rounds.SelectMany(r => r.Matches));
             if (bracket.BronzeMatch is not null) allInitial.Add(bracket.BronzeMatch);
             await _sheets.AppendMatchesAsync(t.Id, allInitial);
 
-            // Phase 2: persist whatever auto-byes/propagation populated in later rounds.
             var changed = TournamentEngine.PropagateAndCollectChanges(bracket);
             foreach (var m in changed)
                 await _sheets.UpsertMatchAsync(t.Id, m);
@@ -192,68 +196,6 @@ public partial class ElimTabViewModel : ObservableObject, IDisposable
             Recompute();
         }
         catch (Exception ex) { ErrorMessage = $"Generate failed: {ex.Message}"; }
-        finally { IsBusy = false; }
-    }
-
-    /// <summary>
-    /// Regenerate the elimination bracket with different rules. Only allowed
-    /// before any real (non-bye) match has started.
-    /// </summary>
-    [RelayCommand]
-    private async Task RegenerateBracketAsync()
-    {
-        if (_session?.Current is null || !CanRegenerateBracket) return;
-        var t = _session.Current;
-
-        var options = TournamentEngine.ComputeEliminationOptions(t);
-        if (options.Count == 0)
-        {
-            ErrorMessage = "Not enough fencers to regenerate a bracket (minimum 4).";
-            return;
-        }
-
-        double cutoff = 0.6;
-        if (PickEliminationOptionAsync is not null && options.Count > 1)
-        {
-            var picked = await PickEliminationOptionAsync(options);
-            if (picked is null) return;
-            cutoff = picked.CutoffFraction;
-        }
-
-        IsBusy = true;
-        ErrorMessage = "";
-        try
-        {
-            // Delete old bracket matches from the backend.
-            var oldBracket = t.Bracket!;
-            var oldMatchIds = new List<string>();
-            foreach (var round in oldBracket.Rounds)
-                foreach (var m in round.Matches)
-                    oldMatchIds.Add(m.Id);
-            if (oldBracket.BronzeMatch is not null)
-                oldMatchIds.Add(oldBracket.BronzeMatch.Id);
-
-            foreach (var id in oldMatchIds)
-                await _sheets.DeleteMatchAsync(t.Id, id);
-
-            // Build a new bracket with the chosen cutoff.
-            var bracket = TournamentEngine.BuildBracketFromPoolStandings(t, cutoff);
-            t.Bracket = bracket;
-
-            var allInitial = new List<Match>(bracket.Rounds.SelectMany(r => r.Matches));
-            if (bracket.BronzeMatch is not null) allInitial.Add(bracket.BronzeMatch);
-            await _sheets.AppendMatchesAsync(t.Id, allInitial);
-
-            var changed = TournamentEngine.PropagateAndCollectChanges(bracket);
-            foreach (var m in changed)
-                await _sheets.UpsertMatchAsync(t.Id, m);
-
-            t.State = TournamentState.EliminationInProgress;
-            await _sheets.UpsertTournamentHeaderAsync(t);
-
-            Recompute();
-        }
-        catch (Exception ex) { ErrorMessage = $"Regenerate failed: {ex.Message}"; }
         finally { IsBusy = false; }
     }
 

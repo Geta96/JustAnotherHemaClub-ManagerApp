@@ -6,7 +6,8 @@ namespace JustAnotherHemaClub.Tests.TournamentEngine;
 public class BracketTests
 {
     [Theory]
-    [InlineData(3, 8)]
+    [InlineData(3, 4)]
+    [InlineData(4, 4)]
     [InlineData(5, 8)]
     [InlineData(8, 8)]
     [InlineData(9, 16)]
