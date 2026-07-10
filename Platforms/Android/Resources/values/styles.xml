@@ -1,0 +1,17 @@
+<resources>
+  <style name="Maui.MainTheme.NoActionBar" parent="Maui.MainTheme">
+    <item name="bottomNavigationStyle">@style/Jahc.BottomNav</item>
+    <item name="android:statusBarColor">@android:color/transparent</item>
+    <item name="android:windowLightStatusBar">false</item>
+  </style>
+
+  <style name="Jahc.BottomNav" parent="Widget.MaterialComponents.BottomNavigationView">
+    <item name="itemTextAppearanceActive">@style/Jahc.BottomNav.Text</item>
+    <item name="itemTextAppearanceInactive">@style/Jahc.BottomNav.Text</item>
+  </style>
+
+  <style name="Jahc.BottomNav.Text" parent="TextAppearance.AppCompat.Caption">
+    <item name="android:textSize">14sp</item>
+    <item name="android:textStyle">bold</item>
+  </style>
+</resources>
