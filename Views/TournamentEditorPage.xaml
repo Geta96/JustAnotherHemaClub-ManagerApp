@@ -249,6 +249,13 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- Reset elimination (keeps pools, wipes the bracket + standings) -->
+            <Button Text="Reset Elimination"
+                    BackgroundColor="{StaticResource Wine}"
+                    TextColor="{StaticResource Cream}"
+                    IsVisible="{Binding CanResetElimination}"
+                    Clicked="OnResetEliminationClicked" />
+
             <!-- Restart (after tournament has started) -->
             <Button Text="Restart Tournament"
                     BackgroundColor="#B8860B"

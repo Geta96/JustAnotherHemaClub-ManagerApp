@@ -56,6 +56,15 @@ public partial class TournamentEditorVm : ObservableObject
     /// <summary>Restart button: visible when the tournament has already started (not Setup, not new).</summary>
     public bool CanRestart => IsExisting && !IsSetupState;
 
+    /// <summary>
+    /// Reset-Elimination button: visible once a bracket exists (Elimination or Finished),
+    /// so the organiser can wipe the elim tree/standings and re-pick a bracket size
+    /// while keeping the pools intact.
+    /// </summary>
+    public bool CanResetElimination =>
+        IsExisting && Tournament?.Bracket is not null &&
+        Tournament.State is TournamentState.EliminationInProgress or TournamentState.Finished;
+
     public TournamentEditorVm(IGoogleSheetsService sheets,
                               TournamentAutoSaveService autoSave,
                               ICacheControl cache)
@@ -806,6 +815,46 @@ public partial class TournamentEditorVm : ObservableObject
         finally { IsLoading = false; }
     }
 
+    /// <summary>
+    /// Deletes the generated elimination tree and its standings while keeping the
+    /// pools, pool results, and roster intact. Returns the tournament to
+    /// <see cref="TournamentState.PoolsClosed"/> so the Elim tab shows the
+    /// bracket-size options again.
+    /// </summary>
+    [RelayCommand]
+    public async Task ResetEliminationAsync()
+    {
+        if (Tournament is null || _isInitialSave || Tournament.Bracket is null) return;
+
+        IsLoading = true;
+        ErrorMessage = "";
+        try
+        {
+            var tournamentId = Tournament.Id;
+
+            // 1. Delete every bracket match (rounds + bronze).
+            var bracketMatches = Tournament.Bracket.Rounds.SelectMany(r => r.Matches).ToList();
+            if (Tournament.Bracket.BronzeMatch is not null)
+                bracketMatches.Add(Tournament.Bracket.BronzeMatch);
+            foreach (var m in bracketMatches)
+                await _sheets.DeleteMatchAsync(tournamentId, m.Id);
+
+            // 2. Clear final standings (they were derived from the bracket).
+            await _sheets.SaveFinalStandingsAsync(tournamentId, Array.Empty<string>());
+
+            // 3. Reset in-memory state — pools & their matches are untouched.
+            Tournament.Bracket = null;
+            Tournament.FinalStandingFencerIds = new List<string>();
+            Tournament.State = TournamentState.PoolsClosed;
+            await _sheets.UpsertTournamentHeaderAsync(Tournament);
+
+            _cache.InvalidateTournaments();
+            NotifyStateChanged();
+        }
+        catch (Exception ex) { ErrorMessage = $"Reset elimination failed: {ex.Message}"; }
+        finally { IsLoading = false; }
+    }
+
     private void NotifyStateChanged()
     {
         OnPropertyChanged(nameof(IsNew));
@@ -815,13 +864,7 @@ public partial class TournamentEditorVm : ObservableObject
         OnPropertyChanged(nameof(CanRemoveFencers));
         OnPropertyChanged(nameof(CanStart));
         OnPropertyChanged(nameof(CanRestart));
-        OnPropertyChanged(nameof(ActiveFencerCount));
-        OnPropertyChanged(nameof(FencerCountText));
-        OnPropertyChanged(nameof(StartHintText));
-        OnPropertyChanged(nameof(ShowPoolAllocation));
-        OnPropertyChanged(nameof(ShowLiveWithdrawHint));
-        OnPropertyChanged(nameof(HasUnassignedFencers));
-        OnPropertyChanged(nameof(UnassignedFencers));
+        OnPropertyChanged(nameof(CanResetElimination));
     }
 }
 

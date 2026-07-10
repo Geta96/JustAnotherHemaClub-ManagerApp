@@ -185,4 +185,34 @@ public partial class TournamentEditorPage : ContentPage
             await Navigation.PopAsync(animated: false);
         }
     }
+
+    private async void OnResetEliminationClicked(object? sender, EventArgs e)
+    {
+        if (_vm.Tournament is null) return;
+
+        var enteredPassword = await DisplayPromptAsync(
+            "Reset elimination",
+            "This will delete the elimination bracket and its standings.\n" +
+            "Pools and pool results are kept.\n\n" +
+            "Enter the organiser password to confirm:",
+            accept: "Reset", cancel: "Cancel",
+            placeholder: "password",
+            maxLength: 64);
+        if (string.IsNullOrWhiteSpace(enteredPassword)) return;
+
+        if (!string.Equals(enteredPassword.Trim(), _vm.Tournament.PasswordPlain?.Trim(), StringComparison.Ordinal))
+        {
+            await DisplayAlert("Incorrect password", "The password you entered is incorrect.", "OK");
+            return;
+        }
+
+        var confirm = await DisplayAlert(
+            "Are you sure?",
+            "The elimination tree and final standings will be permanently deleted. " +
+            "You can then choose a new bracket size on the Elim tab.",
+            "Yes, reset", "Cancel");
+        if (!confirm) return;
+
+        await _vm.ResetEliminationCommand.ExecuteAsync(null);
+    }
 }
