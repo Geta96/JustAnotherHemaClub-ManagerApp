@@ -214,5 +214,18 @@ public partial class TournamentEditorPage : ContentPage
         if (!confirm) return;
 
         await _vm.ResetEliminationCommand.ExecuteAsync(null);
+
+        // On success navigate back to the hub, landing directly on the Elim tab.
+        if (_vm.Tournament?.Bracket is null)
+        {
+            // Find the TournamentHubPage that sits below this editor in the stack.
+            var hub = Navigation.NavigationStack
+                .OfType<TournamentHubPage>()
+                .LastOrDefault();
+            if (hub is not null)
+                hub.NavigateToElimTabOnAppear = true;
+
+            await Navigation.PopAsync();
+        }
     }
 }

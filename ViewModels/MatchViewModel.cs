@@ -621,17 +621,17 @@ public partial class MatchViewModel : ObservableObject, IDisposable
     public async Task FinishMatchAsync()
     {
         if (!CanEdit || Match is null || _session.Current is null) return;
-        if (Match.LeftScore == Match.RightScore)
+
+        // Draws are only forbidden in elimination matches (someone must be eliminated).
+        // Pool matches may finish with equal scores — WinnerFencerId stays null.
+        bool isEliminationMatch = Match.BracketRound.HasValue;
+        if (isEliminationMatch && Match.LeftScore == Match.RightScore)
         {
-            ErrorMessage = "Cannot finish on a tied score.";
+            ErrorMessage = "Cannot finish on a tied score in an elimination match.";
             return;
         }
 
-        // Snapshot for rollback. If the save below throws (slow network /
-        // Sheets timeout) we MUST NOT leave the in-memory match marked as
-        // Finished — the page would then pop, the sheet would still say
-        // "InProgress + locked + no winner", and the user's score would be
-        // gone the next time they opened the match.
+        // Snapshot for rollback.
         var prevStatus       = Match.Status;
         var prevWinnerId     = Match.WinnerFencerId;
         var prevFinishedAt   = Match.FinishedAtUtc;
@@ -639,15 +639,17 @@ public partial class MatchViewModel : ObservableObject, IDisposable
         var prevLockedAt     = Match.LockedAtUtc;
         var prevTimerRunning = IsTimerRunning;
 
-        // Stop background activity FIRST so no heartbeat / clock write can
-        // race the flush. Use the local stop so PauseTimer's PersistAsync
-        // doesn't queue an extra debounced write while we're finishing.
         StopHeartbeat();
         StopTimerLocalOnly();
 
-        Match.Status         = MatchStatus.Finished;
-        Match.WinnerFencerId = Match.LeftScore > Match.RightScore
-            ? Match.LeftFencerId : Match.RightFencerId;
+        Match.Status = MatchStatus.Finished;
+
+        // Pool match: null winner on a draw; otherwise highest score wins.
+        // Elimination match: always has a winner (draw blocked above).
+        Match.WinnerFencerId = Match.LeftScore == Match.RightScore
+            ? null
+            : (Match.LeftScore > Match.RightScore ? Match.LeftFencerId : Match.RightFencerId);
+
         Match.FinishedAtUtc  = DateTime.UtcNow;
         Match.LockedByUserId = null;
         Match.LockedAtUtc    = null;
@@ -674,7 +676,7 @@ public partial class MatchViewModel : ObservableObject, IDisposable
 
         // Elimination follow-ups: propagate winner to the next round (and bronze if applicable),
         // then auto-finalise the tournament when the whole bracket is complete.
-        if (Match.BracketRound.HasValue && t.Bracket is not null)
+        if (isEliminationMatch && t.Bracket is not null)
         {
             TournamentEngine.PatchInBracket(t.Bracket, Match);
             var downstream = TournamentEngine.PropagateAndCollectChanges(t.Bracket);

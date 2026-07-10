@@ -26,6 +26,12 @@ public partial class TournamentHubPage : ContentPage
 
     private bool _returningFromMatch;
 
+    /// <summary>
+    /// When true, OnAppearing will switch to the Elim tab after loading.
+    /// Set by TournamentEditorPage after a successful Reset Elimination.
+    /// </summary>
+    public bool NavigateToElimTabOnAppear { get; set; }
+
     protected override async void OnAppearing()
     {
         base.OnAppearing();
@@ -39,6 +45,12 @@ public partial class TournamentHubPage : ContentPage
         else
         {
             await _vm.LoadAsync();
+        }
+
+        if (NavigateToElimTabOnAppear)
+        {
+            NavigateToElimTabOnAppear = false;
+            _vm.SelectedTabIndex = 2; // Elim tab
         }
     }
 
