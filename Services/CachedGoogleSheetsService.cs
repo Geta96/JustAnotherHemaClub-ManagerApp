@@ -248,7 +248,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
         }
     }
 
-    public async Task DeleteRecurringTrainingAsync(string ruleId)
+    public async Task DeleteRecurringTrainingAsync(String ruleId)
     {
         if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.DeleteRecurringTrainingAsync(ruleId); return; }
         await _inner.DeleteRecurringTrainingAsync(ruleId);
@@ -281,7 +281,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
         }
     }
 
-    public async Task DeletePriceRuleAsync(string ruleId)
+    public async Task DeletePriceRuleAsync(String ruleId)
     {
         if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.DeletePriceRuleAsync(ruleId); return; }
         await _inner.DeletePriceRuleAsync(ruleId);
@@ -313,6 +313,113 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
         _monthNotes = notes.Result;
         _paymentsByMonth[(today.Year, today.Month)] = currentMonthPayments.Result;
         _prices = prices.Result;
+    }
+
+    /// <summary>
+    /// Background prefetch that only fetches datasets not already cached. Unlike
+    /// <see cref="WarmAsync"/> it never invalidates, so calling it while the user
+    /// is idle on the home page is safe and won't discard freshly-warmed slices.
+    /// Primarily fills the datasets WarmAsync skips (tournament headers, individual
+    /// lessons, recurring trainings) plus any others still empty after login.
+    /// </summary>
+    public async Task PrefetchAsync()
+    {
+        if (ServiceSwap.IsActive) return; // test mode is fully in-memory already
+
+        var tasks = new List<Task>();
+
+        // Datasets that WarmAsync does NOT cover — these are cold on first
+        // navigation to the Tournaments / Trainings pages.
+        if (_tournamentHeaders is null)
+            tasks.Add(FillTournamentHeadersAsync());
+        if (_individualLessons is null)
+            tasks.Add(FillIndividualLessonsAsync());
+        if (_recurringTrainings is null)
+            tasks.Add(FillRecurringTrainingsAsync());
+
+        // Defensive: fill anything WarmAsync would have covered but that is still
+        // empty (e.g. login ran before connectivity was available).
+        if (_fencers is null)  tasks.Add(FillFencersAsync());
+        if (_trainings is null) tasks.Add(FillTrainingsAsync());
+        if (_prices is null)   tasks.Add(FillPricesAsync());
+
+        // Warm the last few months of payments in parallel. The Finance and
+        // Fencers pages fetch one month per network round-trip, so pre-warming
+        // the recent window (which the user is most likely to look at first)
+        // removes the bulk of their cold first-load latency.
+        var today = DateTime.Today;
+        for (int back = 0; back < PrefetchPaymentMonths; back++)
+        {
+            var d = today.AddMonths(-back);
+            if (!_paymentsByMonth.ContainsKey((d.Year, d.Month)))
+                tasks.Add(FillPaymentsAsync(d.Year, d.Month));
+        }
+
+        if (tasks.Count > 0)
+            await Task.WhenAll(tasks);
+    }
+
+    /// <summary>How many recent months of payments the background prefetch warms.</summary>
+    private const int PrefetchPaymentMonths = 3;
+
+    private async Task FillTournamentHeadersAsync()
+    {
+        var data = await _inner.GetTournamentHeadersAsync();
+        await _gate.WaitAsync();
+        try { _tournamentHeaders ??= data; }
+        finally { _gate.Release(); }
+    }
+
+    private async Task FillIndividualLessonsAsync()
+    {
+        var data = await _inner.GetIndividualLessonsAsync();
+        await _gate.WaitAsync();
+        try { _individualLessons ??= data; }
+        finally { _gate.Release(); }
+    }
+
+    private async Task FillRecurringTrainingsAsync()
+    {
+        var data = await _inner.GetRecurringTrainingsAsync();
+        await _gate.WaitAsync();
+        try { _recurringTrainings ??= data; }
+        finally { _gate.Release(); }
+    }
+
+    private async Task FillFencersAsync()
+    {
+        var data = await _inner.GetFencersAsync();
+        await _gate.WaitAsync();
+        try { _fencers ??= data; }
+        finally { _gate.Release(); }
+    }
+
+    private async Task FillTrainingsAsync()
+    {
+        var data = await _inner.GetTrainingsAsync();
+        await _gate.WaitAsync();
+        try { _trainings ??= data; }
+        finally { _gate.Release(); }
+    }
+
+    private async Task FillPricesAsync()
+    {
+        var data = await _inner.GetPriceRulesAsync();
+        await _gate.WaitAsync();
+        try { _prices ??= data; }
+        finally { _gate.Release(); }
+    }
+
+    private async Task FillPaymentsAsync(int year, int month)
+    {
+        var data = await _inner.GetPaymentsAsync(year, month);
+        await _gate.WaitAsync();
+        try
+        {
+            if (!_paymentsByMonth.ContainsKey((year, month)))
+                _paymentsByMonth[(year, month)] = data;
+        }
+        finally { _gate.Release(); }
     }
 
     public void InvalidateAll()

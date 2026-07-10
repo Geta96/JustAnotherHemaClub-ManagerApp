@@ -74,29 +74,40 @@ public partial class TrainingsViewModel : ObservableObject
 
             var trainings = trainingsTask.Result;
             var notes     = notesTask.Result;
+            var myId      = _auth.CurrentFencer?.Id;
 
-            var noteByMonth = notes
-                .GroupBy(n => (n.Year, n.Month))
-                .ToDictionary(g => g.Key, g => g.Last().Note);
+            // Snapshot the fencer list as a plain List so the month tree can be
+            // built OFF the UI thread (EditableTrainingRow only reads it, it does
+            // not retain the ObservableCollection). Building potentially many
+            // months × trainings × per-fencer toggles on the dispatcher is what
+            // made the first load lag — move it to a background thread and only
+            // publish the finished Months collection back on the UI thread.
+            var fencerSnapshot = fencersTask.Result.ToList();
 
-            var myId = _auth.CurrentFencer?.Id;
-
-            // Build months locally, swap once.
-            var built = new List<PastMonthVm>();
-            var grouped = trainings
-                .GroupBy(s => (s.Date.Year, s.Date.Month))
-                .OrderByDescending(g => g.Key.Year).ThenByDescending(g => g.Key.Month);
-
-            foreach (var g in grouped)
+            var built = await Task.Run(() =>
             {
-                var mvm = new PastMonthVm(g.Key.Year, g.Key.Month);
-                if (noteByMonth.TryGetValue(g.Key, out var n)) mvm.Note = n;
-                mvm.IsNoteDirty = false;
-                foreach (var t in g.OrderByDescending(s => s.Date))
-                    mvm.Trainings.Add(new EditableTrainingRow(t, AllFencers, myId));
-                built.Add(mvm);
-            }
+                var noteByMonth = notes
+                    .GroupBy(n => (n.Year, n.Month))
+                    .ToDictionary(g => g.Key, g => g.Last().Note);
 
+                var list = new List<PastMonthVm>();
+                var grouped = trainings
+                    .GroupBy(s => (s.Date.Year, s.Date.Month))
+                    .OrderByDescending(g => g.Key.Year).ThenByDescending(g => g.Key.Month);
+
+                foreach (var g in grouped)
+                {
+                    var mvm = new PastMonthVm(g.Key.Year, g.Key.Month);
+                    if (noteByMonth.TryGetValue(g.Key, out var n)) mvm.Note = n;
+                    mvm.IsNoteDirty = false;
+                    foreach (var t in g.OrderByDescending(s => s.Date))
+                        mvm.Trainings.Add(new EditableTrainingRow(t, fencerSnapshot, myId));
+                    list.Add(mvm);
+                }
+                return list;
+            });
+
+            // ----- UI-thread publish -----
             Months.Clear();
             foreach (var mv in built) Months.Add(mv);
         }

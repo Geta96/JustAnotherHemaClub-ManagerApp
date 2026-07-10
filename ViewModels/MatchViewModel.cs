@@ -221,33 +221,32 @@ public partial class MatchViewModel : ObservableObject, IDisposable
         {
             _myUserId = _auth.CurrentFencer?.Id ?? $"anon-{Guid.NewGuid():N}";
 
-            // Always read latest so we see the current lock state.
-            var matches = await _sheets.GetMatchesAsync(_session.Current.Id);
-            var latest = matches.FirstOrDefault(m => m.Id == matchId);
+            // Try the in-memory session first — avoids a full sheet read in the
+            // common case where we just navigated here from the hub.
+            Match = FindMatchInSession(matchId);
 
-            // Fallback: if the sheet read didn't find it (eventual-consistency
-            // delay right after AppendMatchesAsync), use the in-memory copy
-            // from the session's pools or bracket.
-            if (latest is null)
+            // Fall back to the sheet only when the match isn't in memory yet
+            // (rare: eventual-consistency delay right after AppendMatchesAsync).
+            if (Match is null)
             {
-                latest = FindMatchInSession(matchId);
+                var matches = await _sheets.GetMatchesAsync(_session.Current.Id);
+                Match = matches.FirstOrDefault(m => m.Id == matchId);
             }
 
-            if (latest is null) { ErrorMessage = "Match not found."; return; }
+            if (Match is null) { ErrorMessage = "Match not found."; return; }
 
-            Match = latest;
             HydrateNames();
 
             // Take-over flow.
-            if (_session.CanEdit && latest.IsLockedByOther(_myUserId, DateTime.UtcNow))
+            if (_session.CanEdit && Match.IsLockedByOther(_myUserId, DateTime.UtcNow))
             {
                 var go = ConfirmTakeOverAsync is null
                        ? false
-                       : await ConfirmTakeOverAsync(latest.LockedByUserId ?? "another judge");
+                       : await ConfirmTakeOverAsync(Match.LockedByUserId ?? "another judge");
                 if (!go)
                 {
                     IsReadOnly = true;
-                    LockHolderText = $"Locked by {latest.LockedByUserId} — read-only.";
+                    LockHolderText = $"Locked by {Match.LockedByUserId} — read-only.";
                     RefreshAll();
                     return;
                 }

@@ -87,12 +87,31 @@ public partial class StatisticsViewModel : ObservableObject
             OnPropertyChanged(nameof(LiabilitySummary));
             OnPropertyChanged(nameof(IsLoggedInInstructor));
 
-            BuildLeaderboards(fencers, trainings, lessons);
+            // Grouping over all-time attendance / lessons is CPU work — build the
+            // leaderboard rows off the UI thread, then publish on the dispatcher.
+            var boards = await Task.Run(() => ComputeLeaderboards(fencers, trainings, lessons));
+
+            RecentAttendanceSubtitle = boards.RecentSubtitle;
+            OnPropertyChanged(nameof(RecentAttendanceSubtitle));
+
+            Replace(TopAttendanceRecent, boards.Recent);
+            Replace(TopAttendanceAllTime, boards.AllTime);
+            Replace(TopOneOnOneGivers, boards.Givers);
+            Replace(TopOneOnOneReceivers, boards.Receivers);
         }
         finally { if (showSpinner) IsLoading = false; }
     }
 
-    private void BuildLeaderboards(
+    private sealed class LeaderboardData
+    {
+        public string RecentSubtitle = "";
+        public List<LeaderboardRow> Recent = new();
+        public List<LeaderboardRow> AllTime = new();
+        public List<LeaderboardRow> Givers = new();
+        public List<LeaderboardRow> Receivers = new();
+    }
+
+    private static LeaderboardData ComputeLeaderboards(
         List<Fencer> fencers,
         List<TrainingSession> trainings,
         List<IndividualLesson> lessons)
@@ -113,17 +132,6 @@ public partial class StatisticsViewModel : ObservableObject
             .Take(5)
             .ToList();
 
-        RecentAttendanceSubtitle = $"From {cutoff:MMM yyyy} to {today:MMM yyyy}";
-        OnPropertyChanged(nameof(RecentAttendanceSubtitle));
-
-        Replace(TopAttendanceRecent, recentCounts.Select((x, i) => new LeaderboardRow
-        {
-            Rank = i + 1,
-            Name = nameById[x.Id],
-            Count = x.Count,
-            CountText = $"{x.Count} session(s)"
-        }));
-
         var allTimeCounts = trainings
             .SelectMany(t => t.AttendeeFencerIds)
             .Where(id => !instructorIds.Contains(id) && nameById.ContainsKey(id))
@@ -132,14 +140,6 @@ public partial class StatisticsViewModel : ObservableObject
             .OrderByDescending(x => x.Count)
             .Take(5)
             .ToList();
-
-        Replace(TopAttendanceAllTime, allTimeCounts.Select((x, i) => new LeaderboardRow
-        {
-            Rank = i + 1,
-            Name = nameById[x.Id],
-            Count = x.Count,
-            CountText = $"{x.Count} session(s)"
-        }));
 
         var acceptedLessons = lessons
             .Where(l => l.Status == IndividualLessonStatus.Accepted)
@@ -155,14 +155,6 @@ public partial class StatisticsViewModel : ObservableObject
             .Take(5)
             .ToList();
 
-        Replace(TopOneOnOneGivers, giverCounts.Select((x, i) => new LeaderboardRow
-        {
-            Rank = i + 1,
-            Name = nameById[x.Id],
-            Count = x.Count,
-            CountText = $"{x.Count} lesson(s)"
-        }));
-
         var receiverCounts = acceptedLessons
             .Where(l => !string.IsNullOrEmpty(l.StudentId) && nameById.ContainsKey(l.StudentId))
             .GroupBy(l => l.StudentId)
@@ -171,13 +163,30 @@ public partial class StatisticsViewModel : ObservableObject
             .Take(5)
             .ToList();
 
-        Replace(TopOneOnOneReceivers, receiverCounts.Select((x, i) => new LeaderboardRow
+        return new LeaderboardData
         {
-            Rank = i + 1,
-            Name = nameById[x.Id],
-            Count = x.Count,
-            CountText = $"{x.Count} lesson(s)"
-        }));
+            RecentSubtitle = $"From {cutoff:MMM yyyy} to {today:MMM yyyy}",
+            Recent = recentCounts.Select((x, i) => new LeaderboardRow
+            {
+                Rank = i + 1, Name = nameById[x.Id], Count = x.Count,
+                CountText = $"{x.Count} session(s)"
+            }).ToList(),
+            AllTime = allTimeCounts.Select((x, i) => new LeaderboardRow
+            {
+                Rank = i + 1, Name = nameById[x.Id], Count = x.Count,
+                CountText = $"{x.Count} session(s)"
+            }).ToList(),
+            Givers = giverCounts.Select((x, i) => new LeaderboardRow
+            {
+                Rank = i + 1, Name = nameById[x.Id], Count = x.Count,
+                CountText = $"{x.Count} lesson(s)"
+            }).ToList(),
+            Receivers = receiverCounts.Select((x, i) => new LeaderboardRow
+            {
+                Rank = i + 1, Name = nameById[x.Id], Count = x.Count,
+                CountText = $"{x.Count} lesson(s)"
+            }).ToList()
+        };
     }
 
     private static void Replace<T>(ObservableCollection<T> target, IEnumerable<T> source)

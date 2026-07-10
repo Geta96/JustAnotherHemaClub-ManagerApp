@@ -26,6 +26,7 @@ public partial class HomeViewModel : ObservableObject
         "https://t.me/+6EUfQu6kXPY4NWM8";
 
     private readonly IGoogleSheetsService _sheets;
+    private readonly ICacheControl _cache;
 
     public ObservableCollection<HomeWeeklyRow> WeeklyTrainings { get; } = new();
 
@@ -33,9 +34,10 @@ public partial class HomeViewModel : ObservableObject
     [ObservableProperty] private bool hasWeeklyTrainings;
     public bool HasNoWeeklyTrainings => !HasWeeklyTrainings && !IsLoadingWeekly;
 
-    public HomeViewModel(IGoogleSheetsService sheets)
+    public HomeViewModel(IGoogleSheetsService sheets, ICacheControl cache)
     {
         _sheets = sheets;
+        _cache = cache;
         WeeklyTrainings.CollectionChanged += (_, __) =>
         {
             HasWeeklyTrainings = WeeklyTrainings.Count > 0;
@@ -80,6 +82,17 @@ public partial class HomeViewModel : ObservableObject
             WeeklyTrainings.Clear();
         }
         finally { IsLoadingWeekly = false; }
+
+        // Use the user's idle time on the home page to warm the datasets the
+        // other tabs need (tournaments, individual lessons, recurring trainings,
+        // …). Fire-and-forget: failures are swallowed inside PrefetchAsync's
+        // callers and the pages fall back to their own network fetch. This makes
+        // the first navigation to Tournaments / Trainings / Finance feel instant.
+        _ = Task.Run(async () =>
+        {
+            try { await _cache.PrefetchAsync(); }
+            catch { /* best-effort background warm-up */ }
+        });
     }
 
     [RelayCommand]

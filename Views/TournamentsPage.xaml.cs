@@ -1,3 +1,4 @@
+using JustAnotherHemaClub.Models;
 using JustAnotherHemaClub.Services;
 using JustAnotherHemaClub.ViewModels;
 
@@ -17,6 +18,7 @@ public partial class TournamentsPage : ContentPage
     /// </summary>
     private DateTime _lastDeleteTapUtc = DateTime.MinValue;
     private static readonly TimeSpan SuppressOpenAfterDelete = TimeSpan.FromMilliseconds(350);
+    private bool _loadedOnce;
 
     public TournamentsPage(TournamentsViewModel vm, IServiceProvider services, TournamentSession session)
     {
@@ -31,7 +33,9 @@ public partial class TournamentsPage : ContentPage
         base.OnAppearing();
         _session.Close(); // returning here means we're not inside a tournament anymore
         await Task.Yield();
-        await _vm.LoadAsync(showSpinner: false);
+        // Show the centered spinner on the first load; stay silent afterwards.
+        await _vm.LoadAsync(showSpinner: !_loadedOnce);
+        _loadedOnce = true;
     }
 
     private async void OnRefreshTapped(object? sender, TappedEventArgs e)
@@ -51,9 +55,19 @@ public partial class TournamentsPage : ContentPage
 
         if (sender is not BindableObject bo || bo.BindingContext is not TournamentRow row) return;
 
-        // We have to refetch the tournament so the access page sees the latest password/roster.
-        var sheets = _services.GetRequiredService<IGoogleSheetsService>();
-        var full = await sheets.GetTournamentAsync(row.Id);
+        // Show a spinner on the list immediately so the tap feels responsive.
+        _vm.IsLoading = true;
+        Tournament? full;
+        try
+        {
+            var sheets = _services.GetRequiredService<IGoogleSheetsService>();
+            full = await sheets.GetTournamentAsync(row.Id);
+        }
+        finally
+        {
+            _vm.IsLoading = false;
+        }
+
         if (full is null)
         {
             await DisplayAlert("Not found", "This tournament could not be loaded.", "OK");
@@ -62,11 +76,8 @@ public partial class TournamentsPage : ContentPage
 
         var access = _services.GetRequiredService<TournamentAccessPage>();
         var role = await access.ShowAsync(Navigation, full);
-        if (role is null) return; // user backed out; access page already popped by the system
+        if (role is null) return;
 
-        // Access page is still on top. Atomically replace it with the hub so this
-        // TournamentsPage never re-appears in between — which would fire OnAppearing
-        // and call _session.Close(), wiping the session we just opened.
         var hub = _services.GetRequiredService<TournamentHubPage>();
         Navigation.InsertPageBefore(hub, access);
         await Navigation.PopAsync(animated: false);

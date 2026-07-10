@@ -8,6 +8,7 @@ public partial class TrainingsHubPage : ContentPage
     private readonly TrainingsHubViewModel _vm;
     private readonly ICacheControl _cache;
     private readonly IServiceProvider _services;
+    private bool _loadedOnce;
 
     public TrainingsHubPage(TrainingsHubViewModel vm, ICacheControl cache, IServiceProvider services)
     {
@@ -22,7 +23,9 @@ public partial class TrainingsHubPage : ContentPage
         base.OnAppearing();
         // Let Shell finish its transition before hitting the cache layer.
         await Task.Yield();
-        await _vm.LoadAllAsync(showSpinner: false);
+        // Show the centered spinner on the first load; stay silent afterwards.
+        await _vm.LoadAllAsync(showSpinner: !_loadedOnce);
+        _loadedOnce = true;
     }
 
     private async void OnRefreshTapped(object? sender, TappedEventArgs e)

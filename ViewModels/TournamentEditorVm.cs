@@ -557,34 +557,23 @@ public partial class TournamentEditorVm : ObservableObject
         DraftPools.Clear();
         if (Tournament is null || !IsSetupState) { OnPropertyChanged(nameof(UnassignedFencers)); return; }
 
-        // Deduplicate by ID in case in-memory store has dupes from by-reference storage
         var nameById = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var f in Tournament.Fencers)
             nameById[f.Id] = f.Name;
 
-        // Only show pools that have non-empty content OR have never been emptied
-        // (i.e. those the user is currently editing). The "hidden" empty pools
-        // from ApplyPoolReplacementLocal stay out of the UI but remain Ids we can reuse.
-        var visiblePools = Tournament.Pools
-            .OrderBy(p => p.Index)
-            .Where(p => p.FencerIds.Count > 0 || ContainsId(Tournament.Pools, p.Id))
-            .ToList();
-
-        // Heuristic: a pool is "visible" if it's in the current top-level set
-        // (i.e. its Index is contiguous from 0..n-1 in OrderBy). Otherwise it's
-        // a leftover from ApplyPoolReplacementLocal. We just take the first
-        // PoolCount by ordering and trust the caller to maintain contiguous indexes.
-        var contiguous = Tournament.Pools.OrderBy(p => p.Index).ToList();
+        // Walk the sorted list once and stop at the first gap — these are the
+        // user-visible pools; higher-Index leftovers from ApplyPoolReplacementLocal are excluded.
+        var sorted = Tournament.Pools.OrderBy(p => p.Index).ToList();
         int validCount = 0;
-        for (int i = 0; i < contiguous.Count; i++)
+        for (int i = 0; i < sorted.Count; i++)
         {
-            if (contiguous[i].Index != i) break;
+            if (sorted[i].Index != i) break;
             validCount++;
         }
-        var shown = contiguous.Take(validCount).ToList();
 
-        foreach (var pool in shown)
+        for (int i = 0; i < validCount; i++)
         {
+            var pool = sorted[i];
             var rows = pool.FencerIds
                 .Select(id => new EditorPoolFencerVm(id, nameById.TryGetValue(id, out var n) ? n : "?"))
                 .ToList();
@@ -757,7 +746,7 @@ public partial class TournamentEditorVm : ObservableObject
         {
             var tournamentId = Tournament.Id;
 
-            // 1. Delete all matches (pool + bracket) — snapshot first to avoid enumeration issues
+            // 1. Delete all matches (pool + bracket) in parallel.
             var allMatches = Tournament.Pools.SelectMany(p => p.Matches).ToList();
             if (Tournament.Bracket is not null)
             {
@@ -765,13 +754,13 @@ public partial class TournamentEditorVm : ObservableObject
                 if (Tournament.Bracket.BronzeMatch is not null)
                     allMatches.Add(Tournament.Bracket.BronzeMatch);
             }
-            foreach (var m in allMatches)
-                await _sheets.DeleteMatchAsync(tournamentId, m.Id);
+            if (allMatches.Count > 0)
+                await Task.WhenAll(allMatches.Select(m => _sheets.DeleteMatchAsync(tournamentId, m.Id)));
 
-            // 2. Clear final standings
+            // 2. Clear final standings.
             await _sheets.SaveFinalStandingsAsync(tournamentId, Array.Empty<string>());
 
-            // 3. Clear all pool memberships — snapshot the list to avoid modifying during enumeration
+            // 3. Clear all pool memberships in parallel.
             var poolsSnapshot = Tournament.Pools.ToList();
             foreach (var pool in poolsSnapshot)
             {
@@ -779,28 +768,25 @@ public partial class TournamentEditorVm : ObservableObject
                 pool.Matches.Clear();
                 pool.IsClosed = false;
                 pool.Index = int.MaxValue;
-                await _sheets.UpsertPoolAsync(tournamentId, pool);
             }
+            if (poolsSnapshot.Count > 0)
+                await Task.WhenAll(poolsSnapshot.Select(p => _sheets.UpsertPoolAsync(tournamentId, p)));
 
-            // 4. Reinstate all withdrawn fencers — snapshot the list
+            // 4. Reinstate all withdrawn fencers in parallel.
             var fencersSnapshot = Tournament.Fencers.ToList();
-            foreach (var fencer in fencersSnapshot)
-            {
-                if (fencer.IsWithdrawn)
-                {
-                    fencer.IsWithdrawn = false;
-                    await _sheets.UpsertTournamentFencerAsync(tournamentId, fencer);
-                }
-            }
+            var withdrawn = fencersSnapshot.Where(f => f.IsWithdrawn).ToList();
+            foreach (var fencer in withdrawn) fencer.IsWithdrawn = false;
+            if (withdrawn.Count > 0)
+                await Task.WhenAll(withdrawn.Select(f => _sheets.UpsertTournamentFencerAsync(tournamentId, f)));
 
-            // 5. Reset in-memory state
+            // 5. Reset in-memory state.
             Tournament.Pools = new List<Pool>();
             Tournament.Bracket = null;
             Tournament.FinalStandingFencerIds = new List<string>();
             Tournament.State = TournamentState.Setup;
             await _sheets.UpsertTournamentHeaderAsync(Tournament);
 
-            // 6. Rebuild the editor UI
+            // 6. Rebuild the editor UI.
             _suppressAutoSave = true;
             Fencers.Clear();
             foreach (var f in Tournament.Fencers.OrderBy(f => f.OrderIndex))
@@ -815,12 +801,6 @@ public partial class TournamentEditorVm : ObservableObject
         finally { IsLoading = false; }
     }
 
-    /// <summary>
-    /// Deletes the generated elimination tree and its standings while keeping the
-    /// pools, pool results, and roster intact. Returns the tournament to
-    /// <see cref="TournamentState.PoolsClosed"/> so the Elim tab shows the
-    /// bracket-size options again.
-    /// </summary>
     [RelayCommand]
     public async Task ResetEliminationAsync()
     {
@@ -832,12 +812,12 @@ public partial class TournamentEditorVm : ObservableObject
         {
             var tournamentId = Tournament.Id;
 
-            // 1. Delete every bracket match (rounds + bronze).
+            // 1. Delete every bracket match in parallel.
             var bracketMatches = Tournament.Bracket.Rounds.SelectMany(r => r.Matches).ToList();
             if (Tournament.Bracket.BronzeMatch is not null)
                 bracketMatches.Add(Tournament.Bracket.BronzeMatch);
-            foreach (var m in bracketMatches)
-                await _sheets.DeleteMatchAsync(tournamentId, m.Id);
+            if (bracketMatches.Count > 0)
+                await Task.WhenAll(bracketMatches.Select(m => _sheets.DeleteMatchAsync(tournamentId, m.Id)));
 
             // 2. Clear final standings (they were derived from the bracket).
             await _sheets.SaveFinalStandingsAsync(tournamentId, Array.Empty<string>());

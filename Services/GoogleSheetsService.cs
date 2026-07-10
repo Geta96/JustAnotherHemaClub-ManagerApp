@@ -11,28 +11,48 @@ public partial class GoogleSheetsService : IGoogleSheetsService
 {
     private readonly string _spreadsheetId;
     private SheetsService? _service;
+    private readonly SemaphoreSlim _serviceGate = new(1, 1);
 
     public GoogleSheetsService(string spreadsheetId)
     {
         _spreadsheetId = spreadsheetId;
     }
 
+    /// <summary>
+    /// Warms the credential-independent parts of the Sheets client: reading the
+    /// bundled service-account file, building the OAuth credential and the
+    /// <see cref="SheetsService"/> / HttpClient. This needs NO user login (it's a
+    /// service account), so it can run at app launch — while the user is still on
+    /// the login screen — removing this one-time handshake cost from the first
+    /// real read after sign-in. Safe to call multiple times; it's a no-op once
+    /// the service exists.
+    /// </summary>
+    public Task InitializeAsync() => GetServiceAsync();
+
     private async Task<SheetsService> GetServiceAsync()
     {
         if (_service is not null) return _service;
 
-        using var stream = await FileSystem.OpenAppPackageFileAsync("service-account.json");
-        var credential = GoogleCredential.FromStream(stream)
-            .CreateScoped(SheetsService.Scope.Spreadsheets);
-
-        _service = new SheetsService(new BaseClientService.Initializer
+        await _serviceGate.WaitAsync().ConfigureAwait(false);
+        try
         {
-            HttpClientInitializer = credential,
-            ApplicationName = "JAHC Manager"
-        });
-        // Fail faster than the default 100 s, so users get a clearer error sooner.
-        _service.HttpClient.Timeout = TimeSpan.FromSeconds(20);
-        return _service;
+            if (_service is not null) return _service;
+
+            using var stream = await FileSystem.OpenAppPackageFileAsync("service-account.json");
+            var credential = GoogleCredential.FromStream(stream)
+                .CreateScoped(SheetsService.Scope.Spreadsheets);
+
+            var service = new SheetsService(new BaseClientService.Initializer
+            {
+                HttpClientInitializer = credential,
+                ApplicationName = "JAHC Manager"
+            });
+            // Fail faster than the default 100 s, so users get a clearer error sooner.
+            service.HttpClient.Timeout = TimeSpan.FromSeconds(20);
+            _service = service;
+            return _service;
+        }
+        finally { _serviceGate.Release(); }
     }
 
     private async Task<IList<IList<object>>> ReadAsync(string range)

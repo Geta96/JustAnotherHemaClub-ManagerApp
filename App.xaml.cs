@@ -1,3 +1,4 @@
+using JustAnotherHemaClub.Services;
 using JustAnotherHemaClub.Views;
 
 namespace JustAnotherHemaClub;
@@ -13,6 +14,19 @@ public partial class App : Application
             ShowError(e.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, e) =>
             ShowError(e.Exception);
+
+        // Warm the Google Sheets client at launch (service-account auth needs no
+        // user login), so the OAuth handshake + HttpClient setup is already done
+        // by the time the user signs in. Fire-and-forget; failures are ignored
+        // and the first real read will simply build the client itself.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await services.GetRequiredService<GoogleSheetsService>().InitializeAsync();
+            }
+            catch { /* best-effort launch warm-up */ }
+        });
 
         try
         {

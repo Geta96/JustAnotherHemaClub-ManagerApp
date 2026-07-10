@@ -10,6 +10,10 @@ public partial class TournamentsViewModel : ObservableObject
     private readonly IGoogleSheetsService _sheets;
     private readonly ICacheControl _cache;
 
+    // Suppress silent re-loads for 30 seconds after the last successful fetch.
+    private static readonly TimeSpan SilentReloadThrottle = TimeSpan.FromSeconds(30);
+    private DateTime _lastLoadedUtc = DateTime.MinValue;
+
     public ObservableCollection<TournamentRow> Tournaments { get; } = new();
     public ObservableCollection<TournamentRow> FilteredTournaments { get; } = new();
 
@@ -27,6 +31,11 @@ public partial class TournamentsViewModel : ObservableObject
     [RelayCommand]
     public async Task LoadAsync(bool showSpinner = false)
     {
+        // Skip silent refreshes that arrive within the throttle window — e.g.
+        // rapid back-navigation that fires OnAppearing multiple times.
+        if (!showSpinner && DateTime.UtcNow - _lastLoadedUtc < SilentReloadThrottle)
+            return;
+
         if (showSpinner) IsLoading = true;
         try
         {
@@ -36,6 +45,7 @@ public partial class TournamentsViewModel : ObservableObject
                 Tournaments.Add(new TournamentRow(t));
             ApplyFilter();
             OnPropertyChanged(nameof(HasNoTournaments));
+            _lastLoadedUtc = DateTime.UtcNow;
         }
         finally { if (showSpinner) IsLoading = false; }
     }
@@ -44,6 +54,7 @@ public partial class TournamentsViewModel : ObservableObject
     public async Task RefreshAsync()
     {
         _cache.InvalidateTournaments();
+        _lastLoadedUtc = DateTime.MinValue; // force a real fetch
         await LoadAsync(showSpinner: true);
     }
 
@@ -63,8 +74,6 @@ public partial class TournamentsViewModel : ObservableObject
     {
         try
         {
-            // Refetch so we validate against the latest password — someone may have
-            // rotated it since this list was last loaded.
             var fresh = await _sheets.GetTournamentAsync(tournamentId);
             if (fresh is null) return (DeleteOutcome.NotFound, null);
 
@@ -73,16 +82,13 @@ public partial class TournamentsViewModel : ObservableObject
             if (entered.Length == 0 || entered != expected)
                 return (DeleteOutcome.WrongPassword, null);
 
-            // Drop the row locally so the list updates immediately, and invalidate
-            // the cache so other surfaces (HomePage etc.) won't show it either.
             var row = Tournaments.FirstOrDefault(r => r.Id == tournamentId);
             if (row is not null) Tournaments.Remove(row);
             ApplyFilter();
             OnPropertyChanged(nameof(HasNoTournaments));
             _cache.InvalidateTournaments();
+            _lastLoadedUtc = DateTime.MinValue;
 
-            // Persist in background. The user already sees "Deleted"; if the
-            // backend call fails the tournament will reappear on the next refresh.
             _ = Task.Run(async () =>
             {
                 try { await _sheets.DeleteTournamentAsync(tournamentId); }

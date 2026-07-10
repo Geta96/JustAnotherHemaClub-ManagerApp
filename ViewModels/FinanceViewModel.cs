@@ -17,6 +17,10 @@ public partial class FinanceViewModel : ObservableObject
     private readonly IGoogleSheetsService _sheets;
     private readonly AuthService _auth;
 
+    // Suppress silent re-loads for 30 seconds after the last successful fetch.
+    private static readonly TimeSpan SilentReloadThrottle = TimeSpan.FromSeconds(30);
+    private DateTime _lastLoadedUtc = DateTime.MinValue;
+
     public ObservableCollection<MonthFinanceVm> Months { get; } = new();
 
     public PricesViewModel PricesVm { get; }
@@ -95,11 +99,24 @@ public partial class FinanceViewModel : ObservableObject
     [RelayCommand]
     public async Task LoadAsync(bool showSpinner = false)
     {
+        // Skip silent refreshes within the throttle window (rapid back-navigation).
+        if (!showSpinner && DateTime.UtcNow - _lastLoadedUtc < SilentReloadThrottle)
+            return;
+
         if (showSpinner) IsLoading = true;
         try
         {
             var rangeFrom = new DateTime(2000, 1, 1);
             var rangeTo   = new DateTime(DateTime.Today.Year + 5, 12, 31);
+
+            var isInstructorEarly = _auth.IsLoggedInInstructor;
+
+            // Kick off the Prices load concurrently with the finance aggregation —
+            // it hits a different sheet range and doesn't depend on any of the
+            // finance math, so there's no reason to await it serially at the end.
+            var pricesLoadTask = isInstructorEarly
+                ? PricesVm.LoadAsync(showSpinner: false)
+                : Task.CompletedTask;
 
             var fencersTask   = _sheets.GetFencersAsync();
             var trainingsTask = _sheets.GetTrainingsAsync();
@@ -135,169 +152,43 @@ public partial class FinanceViewModel : ObservableObject
                 .ToArray();
             await Task.WhenAll(paymentTasks);
 
-            // ===== Per-month inputs (computed once, reused by both the credit
-            // pre-pass and the row-building loop). =====
-            var rulesByMonth      = new Dictionary<(int Y, int M), List<PriceRule>>(ordered.Count);
-            var attendanceByMonth = new Dictionary<(int Y, int M), Dictionary<string, int>>(ordered.Count);
-            var paidByMonth       = new Dictionary<(int Y, int M), Dictionary<string, decimal>>(ordered.Count);
+            // Everything from here to the UI assignment is pure CPU work
+            // (grouping, the credit-carry pre-pass, per-month VM building and the
+            // reduction). Run it OFF the UI thread so the parallel loops don't
+            // block the dispatcher — otherwise the UI freezes even though the
+            // work itself is parallelised. Only the final collection mutation is
+            // marshalled back onto the UI thread.
+            var payments = paymentTasks.Select(t => t.Result).ToArray();
 
-            for (int i = 0; i < ordered.Count; i++)
-            {
-                var ym = ordered[i];
-                var from = new DateTime(ym.Y, ym.M, 1);
-                var to   = from.AddMonths(1).AddDays(-1);
+            var computed = await Task.Run(() => ComputeFinance(
+                fencers, trainings, expensesAll, incomesAll, allRules,
+                ordered, payments, today, isInstructor, currentFencerId, Year));
 
-                rulesByMonth[ym] = allRules
-                    .Where(r => r.StartDate.Date <= to &&
-                                (r.EndDate is null || r.EndDate.Value.Date >= from))
-                    .ToList();
-
-                attendanceByMonth[ym] = trainings
-                    .Where(s => s.Date.Year == ym.Y && s.Date.Month == ym.M)
-                    .SelectMany(s => s.AttendeeFencerIds)
-                    .GroupBy(id => id)
-                    .ToDictionary(g => g.Key, g => g.Count());
-
-                paidByMonth[ym] = paymentTasks[i].Result
-                    .GroupBy(p => p.FencerId)
-                    .ToDictionary(g => g.Key, g => g.Sum(p => p.Amount));
-            }
-
-            // ===== Credit-carry pre-pass: per fencer, walk months ascending and
-            // accumulate the overpayment that should be applied to each month. =====
-            var ascending = ordered.OrderBy(t => t.Y).ThenBy(t => t.M).ToList();
-            var creditByFencerMonth = BuildCreditCarry(
-                fencers.Where(f => f.Active),
-                ascending,
-                attendanceByMonth,
-                paidByMonth,
-                rulesByMonth);
-
-            decimal totalIncome = 0, totalExpenses = 0;
-            int totalSessions = 0;
-            double weightedAttSum = 0;
-            int weightedAttCount = 0;
-
-            decimal yIncome = 0, yExpenses = 0;
-            int ySessions = 0;
-            double yWeightedAttSum = 0;
-            int yWeightedAttCount = 0;
-
-            var built = new List<MonthFinanceVm>(ordered.Count);
-            for (int i = 0; i < ordered.Count; i++)
-            {
-                var ym = ordered[i];
-                var (y, m) = ym;
-                var monthVm = new MonthFinanceVm(y, m);
-
-                var monthSessionsList = trainings
-                    .Where(s => s.Date.Year == y && s.Date.Month == m)
-                    .ToList();
-                var attendance   = attendanceByMonth[ym];
-                var payments     = paymentTasks[i].Result;
-                var paidByFencer = paidByMonth[ym];
-                var monthRules   = rulesByMonth[ym];
-
-                var from         = new DateTime(y, m, 1);
-                var to           = from.AddMonths(1).AddDays(-1);
-                var monthOneOffIncomes = incomesAll
-                    .Where(x => x.Date >= from && x.Date <= to)
-                    .Sum(x => x.Amount);
-
-                // Total cash in for the month = member dues paid + one-off incomes.
-                var monthIncome   = payments.Sum(p => p.Amount) + monthOneOffIncomes;
-                var monthExpenses = expensesAll
-                    .Where(e => e.Date >= from && e.Date <= to)
-                    .Sum(e => e.Amount);
-
-                var avg = monthSessionsList.Count == 0
-                    ? 0
-                    : monthSessionsList.Average(s => s.AttendeeFencerIds.Count);
-
-                totalIncome   += monthIncome;
-                totalExpenses += monthExpenses;
-                totalSessions += monthSessionsList.Count;
-                if (monthSessionsList.Count > 0)
-                {
-                    weightedAttSum   += avg * monthSessionsList.Count;
-                    weightedAttCount += monthSessionsList.Count;
-                }
-                if (y == Year)
-                {
-                    yIncome   += monthIncome;
-                    yExpenses += monthExpenses;
-                    ySessions += monthSessionsList.Count;
-                    if (monthSessionsList.Count > 0)
-                    {
-                        yWeightedAttSum   += avg * monthSessionsList.Count;
-                        yWeightedAttCount += monthSessionsList.Count;
-                    }
-                }
-
-                var fencersForMonth = isInstructor
-                    ? fencers.Where(f => f.Active)
-                    : fencers.Where(f => f.Active && f.Id == currentFencerId);
-
-                foreach (var f in fencersForMonth)
-                {
-                    attendance.TryGetValue(f.Id, out var count);
-                    paidByFencer.TryGetValue(f.Id, out var cashPaid);
-                    creditByFencerMonth.TryGetValue((f.Id, y, m), out var creditIn);
-
-                    // Pass cash + credit as alreadyPaid so the calculator can
-                    // surface Outstanding and Overpayment correctly.
-                    var quote = DuesCalculator.Calculate(
-                        count, f.IsStudent, monthRules, cashPaid + creditIn);
-
-                    var isMineThisMonth = !isInstructor
-                                          && f.Id == currentFencerId
-                                          && y == today.Year && m == today.Month;
-
-                    // Hide rows that have nothing to say: no sessions, no cash,
-                    // no carry. Always include the logged-in fencer's current
-                    // month so they see their status.
-                    if (count == 0 && cashPaid == 0m && creditIn == 0m && !isMineThisMonth)
-                        continue;
-
-                    monthVm.Dues.Add(new FencerDueRow(f, quote, cashPaid));
-                }
-
-                if (isInstructor)
-                {
-                    foreach (var e in expensesAll.Where(e => e.Date >= from && e.Date <= to))
-                        monthVm.Expenses.Add(e);
-                    foreach (var inc in incomesAll.Where(x => x.Date >= from && x.Date <= to))
-                        monthVm.Incomes.Add(inc);
-                }
-
-                monthVm.RaiseTotals();
-                built.Add(monthVm);
-            }
-
+            // ----- UI-thread section: publish the results -----
+            var built = computed.Months;
             if (built.Count > 0) built[0].IsExpanded = true;
 
             Months.Clear();
             foreach (var mv in built) Months.Add(mv);
 
-            AllTimeIncome        = totalIncome;
-            AllTimeExpenses      = totalExpenses;
-            AllTimeBalance       = totalIncome - totalExpenses;
-            AllTimeSessions      = totalSessions;
+            AllTimeIncome        = computed.TotalIncome;
+            AllTimeExpenses      = computed.TotalExpenses;
+            AllTimeBalance       = computed.TotalIncome - computed.TotalExpenses;
+            AllTimeSessions      = computed.TotalSessions;
             ActiveFencers        = fencers.Count(f => f.Active);
-            AllTimeAvgAttendance = weightedAttCount == 0 ? 0 : weightedAttSum / weightedAttCount;
+            AllTimeAvgAttendance = computed.WeightedAttCount == 0 ? 0 : computed.WeightedAttSum / computed.WeightedAttCount;
 
-            YearIncome        = yIncome;
-            YearExpenses      = yExpenses;
-            YearBalance       = yIncome - yExpenses;
-            YearSessions      = ySessions;
-            YearAvgAttendance = yWeightedAttCount == 0 ? 0 : yWeightedAttSum / yWeightedAttCount;
+            YearIncome        = computed.YIncome;
+            YearExpenses      = computed.YExpenses;
+            YearBalance       = computed.YIncome - computed.YExpenses;
+            YearSessions      = computed.YSessions;
+            YearAvgAttendance = computed.YWeightedAttCount == 0 ? 0 : computed.YWeightedAttSum / computed.YWeightedAttCount;
 
             RecomputePersonalSummary();
             OnPropertyChanged(nameof(ShowPersonalSummary));
             OnPropertyChanged(nameof(IsLoggedInInstructor));
 
-            if (isInstructor)
-                await PricesVm.LoadAsync(showSpinner: false);
+            _lastLoadedUtc = DateTime.UtcNow;
         }
         catch (Exception ex)
         {
@@ -310,6 +201,180 @@ public partial class FinanceViewModel : ObservableObject
                                         "OK");
         }
         finally { if (showSpinner) IsLoading = false; }
+    }
+
+    /// <summary>Aggregated result of the off-UI-thread finance computation.</summary>
+    private sealed class FinanceComputation
+    {
+        public List<MonthFinanceVm> Months = new();
+        public decimal TotalIncome, TotalExpenses;
+        public int TotalSessions;
+        public double WeightedAttSum;
+        public int WeightedAttCount;
+        public decimal YIncome, YExpenses;
+        public int YSessions;
+        public double YWeightedAttSum;
+        public int YWeightedAttCount;
+    }
+
+    /// <summary>
+    /// Pure CPU aggregation — safe to run on a background thread. Builds the
+    /// per-month view models (in parallel) and reduces the running totals. No
+    /// UI-bound state is touched here; the caller publishes the result on the UI
+    /// thread.
+    /// </summary>
+    private FinanceComputation ComputeFinance(
+        List<Fencer> fencers,
+        List<TrainingSession> trainings,
+        List<Expense> expensesAll,
+        List<Income> incomesAll,
+        List<PriceRule> allRules,
+        List<(int Y, int M)> ordered,
+        List<Payment>[] payments,
+        DateTime today,
+        bool isInstructor,
+        string? currentFencerId,
+        int yearSnapshot)
+    {
+        // ===== Per-month inputs (computed once, reused by both the credit
+        // pre-pass and the row-building loop). =====
+        var rulesByMonth      = new Dictionary<(int Y, int M), List<PriceRule>>(ordered.Count);
+        var attendanceByMonth = new Dictionary<(int Y, int M), Dictionary<string, int>>(ordered.Count);
+        var paidByMonth       = new Dictionary<(int Y, int M), Dictionary<string, decimal>>(ordered.Count);
+
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            var ym = ordered[i];
+            var from = new DateTime(ym.Y, ym.M, 1);
+            var to   = from.AddMonths(1).AddDays(-1);
+
+            rulesByMonth[ym] = allRules
+                .Where(r => r.StartDate.Date <= to &&
+                            (r.EndDate is null || r.EndDate.Value.Date >= from))
+                .ToList();
+
+            attendanceByMonth[ym] = trainings
+                .Where(s => s.Date.Year == ym.Y && s.Date.Month == ym.M)
+                .SelectMany(s => s.AttendeeFencerIds)
+                .GroupBy(id => id)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            paidByMonth[ym] = payments[i]
+                .GroupBy(p => p.FencerId)
+                .ToDictionary(g => g.Key, g => g.Sum(p => p.Amount));
+        }
+
+        // ===== Credit-carry pre-pass =====
+        var ascending = ordered.OrderBy(t => t.Y).ThenBy(t => t.M).ToList();
+        var creditByFencerMonth = BuildCreditCarry(
+            fencers.Where(f => f.Active),
+            ascending,
+            attendanceByMonth,
+            paidByMonth,
+            rulesByMonth);
+
+        var perMonth = new (MonthFinanceVm Vm,
+                            decimal Income, decimal Expenses, int Sessions,
+                            double Avg)[ordered.Count];
+
+        Parallel.For(0, ordered.Count, i =>
+        {
+            var ym = ordered[i];
+            var (y, m) = ym;
+            var monthVm = new MonthFinanceVm(y, m);
+
+            var monthSessionsList = trainings
+                .Where(s => s.Date.Year == y && s.Date.Month == m)
+                .ToList();
+            var attendance   = attendanceByMonth[ym];
+            var monthPayments = payments[i];
+            var paidByFencer = paidByMonth[ym];
+            var monthRules   = rulesByMonth[ym];
+
+            var from         = new DateTime(y, m, 1);
+            var to           = from.AddMonths(1).AddDays(-1);
+            var monthOneOffIncomes = incomesAll
+                .Where(x => x.Date >= from && x.Date <= to)
+                .Sum(x => x.Amount);
+
+            var monthIncome   = monthPayments.Sum(p => p.Amount) + monthOneOffIncomes;
+            var monthExpenses = expensesAll
+                .Where(e => e.Date >= from && e.Date <= to)
+                .Sum(e => e.Amount);
+
+            var avg = monthSessionsList.Count == 0
+                ? 0
+                : monthSessionsList.Average(s => s.AttendeeFencerIds.Count);
+
+            var fencersForMonth = isInstructor
+                ? fencers.Where(f => f.Active)
+                : fencers.Where(f => f.Active && f.Id == currentFencerId);
+
+            foreach (var f in fencersForMonth)
+            {
+                attendance.TryGetValue(f.Id, out var count);
+                paidByFencer.TryGetValue(f.Id, out var cashPaid);
+                creditByFencerMonth.TryGetValue((f.Id, y, m), out var creditIn);
+
+                var quote = DuesCalculator.Calculate(
+                    count, f.IsStudent, monthRules, cashPaid + creditIn);
+
+                var isMineThisMonth = !isInstructor
+                                      && f.Id == currentFencerId
+                                      && y == today.Year && m == today.Month;
+
+                if (count == 0 && cashPaid == 0m && creditIn == 0m && !isMineThisMonth)
+                    continue;
+
+                monthVm.Dues.Add(new FencerDueRow(f, quote, cashPaid));
+            }
+
+            if (isInstructor)
+            {
+                foreach (var e in expensesAll.Where(e => e.Date >= from && e.Date <= to))
+                    monthVm.Expenses.Add(e);
+                foreach (var inc in incomesAll.Where(x => x.Date >= from && x.Date <= to))
+                    monthVm.Incomes.Add(inc);
+            }
+
+            monthVm.RaiseTotals();
+            perMonth[i] = (monthVm, monthIncome, monthExpenses, monthSessionsList.Count, avg);
+        });
+
+        var result = new FinanceComputation
+        {
+            Months = new List<MonthFinanceVm>(ordered.Count)
+        };
+
+        for (int i = 0; i < perMonth.Length; i++)
+        {
+            var (vm, monthIncome, monthExpenses, sessions, avg) = perMonth[i];
+            var y = vm.Year;
+
+            result.TotalIncome   += monthIncome;
+            result.TotalExpenses += monthExpenses;
+            result.TotalSessions += sessions;
+            if (sessions > 0)
+            {
+                result.WeightedAttSum   += avg * sessions;
+                result.WeightedAttCount += sessions;
+            }
+            if (y == yearSnapshot)
+            {
+                result.YIncome   += monthIncome;
+                result.YExpenses += monthExpenses;
+                result.YSessions += sessions;
+                if (sessions > 0)
+                {
+                    result.YWeightedAttSum   += avg * sessions;
+                    result.YWeightedAttCount += sessions;
+                }
+            }
+
+            result.Months.Add(vm);
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -326,13 +391,22 @@ public partial class FinanceViewModel : ObservableObject
         Dictionary<(int Y, int M), Dictionary<string, decimal>> paidByMonth,
         Dictionary<(int Y, int M), List<PriceRule>> rulesByMonth)
     {
-        var result = new Dictionary<(string Fid, int Y, int M), decimal>();
-        foreach (var f in activeFencers)
+        var fencerList = activeFencers as IList<Fencer> ?? activeFencers.ToList();
+
+        // Each fencer's credit chain is fully independent, so we can fan the
+        // computation out across CPU cores. Each parallel body writes only to
+        // its own partial dictionary; results are merged single-threaded after.
+        var partials = new Dictionary<(string, int, int), decimal>[fencerList.Count];
+
+        Parallel.For(0, fencerList.Count, idx =>
         {
+            var f = fencerList[idx];
+            var local = new Dictionary<(string, int, int), decimal>(monthsAscending.Count);
+
             decimal credit = 0m;
             foreach (var ym in monthsAscending)
             {
-                result[(f.Id, ym.Y, ym.M)] = credit;
+                local[(f.Id, ym.Y, ym.M)] = credit;
 
                 attendanceByMonth[ym].TryGetValue(f.Id, out var att);
                 paidByMonth[ym].TryGetValue(f.Id, out var paid);
@@ -343,7 +417,16 @@ public partial class FinanceViewModel : ObservableObject
                 var quote = DuesCalculator.Calculate(att, f.IsStudent, rulesByMonth[ym], paid + credit);
                 credit = quote.Overpayment;
             }
-        }
+
+            partials[idx] = local;
+        });
+
+        var result = new Dictionary<(string Fid, int Y, int M), decimal>(
+            fencerList.Count * Math.Max(1, monthsAscending.Count));
+        foreach (var local in partials)
+            foreach (var kv in local)
+                result[kv.Key] = kv.Value;
+
         return result;
     }
 

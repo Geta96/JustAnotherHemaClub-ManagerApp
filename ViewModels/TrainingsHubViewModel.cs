@@ -33,6 +33,10 @@ public partial class TrainingsHubViewModel : ObservableObject
 
     [ObservableProperty] private bool isLoading;
 
+    // Suppress silent re-loads for 30 seconds after the last successful fetch.
+    private static readonly TimeSpan SilentReloadThrottle = TimeSpan.FromSeconds(30);
+    private DateTime _lastLoadedUtc = DateTime.MinValue;
+
     public TrainingsHubViewModel(
         TrainingsViewModel trainingsVm,
         WeeklyViewModel weeklyVm,
@@ -46,6 +50,10 @@ public partial class TrainingsHubViewModel : ObservableObject
 
     public async Task LoadAllAsync(bool showSpinner = false)
     {
+        // Skip silent refreshes within the throttle window (rapid tab/back navigation).
+        if (!showSpinner && DateTime.UtcNow - _lastLoadedUtc < SilentReloadThrottle)
+            return;
+
         if (showSpinner) IsLoading = true;
         try
         {
@@ -53,6 +61,7 @@ public partial class TrainingsHubViewModel : ObservableObject
                 TrainingsVm.LoadAsync(false),
                 WeeklyVm.LoadAsync(false),
                 LessonsVm.LoadAsync(false));
+            _lastLoadedUtc = DateTime.UtcNow;
         }
         finally { if (showSpinner) IsLoading = false; }
     }

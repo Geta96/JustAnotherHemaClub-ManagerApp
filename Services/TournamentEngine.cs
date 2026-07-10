@@ -600,7 +600,7 @@ public static class TournamentEngine
     /// <summary>
     /// Build the bracket from per-pool standings using the same criteria the Pool
     /// Standings tab shows (Win% → AvgFor desc → AvgAgainst asc → RedCards asc).
-    /// Qualification rules are owned by <see cref="ComputeQualifyingFencerIds"/>.
+    /// Qualification rules are owned by <see cref="ComputeQualifyingFencerIds(Tournament)"/>.
     /// </summary>
     public static EliminationBracket BuildBracketFromPoolStandings(Tournament t)
         => BuildBracketFromPoolStandings(t, 0.6);

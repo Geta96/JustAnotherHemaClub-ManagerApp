@@ -64,8 +64,9 @@ public partial class TournamentHubPage : ContentPage
     {
         if (_session.Current is null) return;
         var page = _services.GetRequiredService<TournamentEditorPage>();
-        await page.PrepareForExistingAsync(_session.Current.Id);
+        // Push first so the navigation animation is not blocked by the network call.
         await Navigation.PushAsync(page);
+        await page.PrepareForExistingAsync(_session.Current.Id);
     }
 
     private async void OnPoolMatchSelected(PoolMatchRowVm row)
@@ -83,9 +84,10 @@ public partial class TournamentHubPage : ContentPage
     private async Task PushMatchAsync(Match match)
     {
         var page = _services.GetRequiredService<MatchPage>();
-        await page.PrepareForMatchAsync(match.Id);
-        _returningFromMatch = true;     // OnAppearing will use the fast path on return
+        _returningFromMatch = true;
+        // Push first so the navigation animation is not blocked by the network call.
         await Navigation.PushAsync(page);
+        await page.PrepareForMatchAsync(match.Id);
     }
 
     private async Task<TournamentFencer?> PickFencerAsync(IReadOnlyList<TournamentFencer> candidates)

@@ -287,6 +287,7 @@ public sealed class TestDataService : IGoogleSheetsService, ICacheControl
     // ======================== ICacheControl (no-op for in-memory) ========================
 
     public Task WarmAsync() => Task.CompletedTask;
+    public Task PrefetchAsync() => Task.CompletedTask;
     public void InvalidateAll() { }
     public void InvalidateFencers() { }
     public void InvalidateTrainings() { }
