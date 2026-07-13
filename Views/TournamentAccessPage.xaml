@@ -7,7 +7,9 @@
              Title="Enter tournament">
 
     <ScrollView>
-        <VerticalStackLayout Padding="24" Spacing="16" VerticalOptions="Center">
+        <VerticalStackLayout Padding="24" Spacing="16"
+                             VerticalOptions="Center"
+                             TranslationY="-80">
 
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="6">
@@ -25,14 +27,14 @@
                     IsVisible="{Binding IsPasswordPromptVisible, Converter={StaticResource InverseBoolConverter}}">
                 <VerticalStackLayout Spacing="12">
                     <Label Text="How do you want to enter?" Style="{StaticResource H2}" />
-                    <Button Text="Enter as Fencer (view only)"
-                            BackgroundColor="{StaticResource Wine}"
-                            TextColor="{StaticResource Cream}"
-                            Command="{Binding EnterAsFencerCommand}" />
                     <Button Text="Enter as Organiser"
                             BackgroundColor="#476FB5"
                             TextColor="{StaticResource Cream}"
                             Command="{Binding ShowOrganiserPromptCommand}" />
+                    <Button Text="Enter as Fencer (view only)"
+                            BackgroundColor="{StaticResource Wine}"
+                            TextColor="{StaticResource Cream}"
+                            Command="{Binding EnterAsFencerCommand}" />
                 </VerticalStackLayout>
             </Border>
 

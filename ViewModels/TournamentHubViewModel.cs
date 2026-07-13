@@ -77,7 +77,8 @@ public partial class TournamentHubViewModel : ObservableObject
         _                        => "Viewer"
     };
 
-    public bool ShowSetupHint => Tournament?.State == TournamentState.Setup;
+    public bool ShowSetupHint =>
+        _session.IsOrganiser && Tournament?.State == TournamentState.Setup;
     public bool CanManageRoster => CanEdit;
 
     /// <summary>Editor button: visible for organisers in any state (the editor handles all operations).</summary>

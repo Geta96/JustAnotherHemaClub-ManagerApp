@@ -67,11 +67,15 @@ public sealed class ElimMatchRowVm : ObservableObject
         _                      => "#8A8A8A"
     };
 
-    /// <summary>Tappable only when both sides are populated (i.e. not a placeholder for a future winner).</summary>
+    /// <summary>
+    /// Tappable when both sides are populated (i.e. not a placeholder for a future
+    /// winner). Finished matches are also tappable so an organiser can open them
+    /// and reopen/correct the result while the downstream match is still Pending —
+    /// the MatchViewModel enforces whether reopening is actually allowed.
+    /// </summary>
     public bool IsTappable =>
         !string.IsNullOrEmpty(Match.LeftFencerId) &&
-        !string.IsNullOrEmpty(Match.RightFencerId) &&
-        Match.Status != MatchStatus.Finished;
+        !string.IsNullOrEmpty(Match.RightFencerId);
 
     public bool HasTag    => !string.IsNullOrEmpty(Tag);
     public bool LeftWon   => Match.Status == MatchStatus.Finished && Match.WinnerFencerId == Match.LeftFencerId;

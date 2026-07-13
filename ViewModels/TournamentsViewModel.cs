@@ -31,11 +31,11 @@ public partial class TournamentsViewModel : ObservableObject
     [RelayCommand]
     public async Task LoadAsync(bool showSpinner = false)
     {
-        // Skip silent refreshes that arrive within the throttle window — e.g.
-        // rapid back-navigation that fires OnAppearing multiple times.
-        if (!showSpinner && DateTime.UtcNow - _lastLoadedUtc < SilentReloadThrottle)
-            return;
-
+        // NOTE: we intentionally do NOT throttle-skip here. A silent reload after
+        // creating/editing a tournament must still rebuild the list, otherwise a
+        // freshly-created (not-yet-started) tournament won't appear until the
+        // window expires. Redundant network reads are already de-duplicated by
+        // the caching layer, so an unconditional reload is cheap.
         if (showSpinner) IsLoading = true;
         try
         {

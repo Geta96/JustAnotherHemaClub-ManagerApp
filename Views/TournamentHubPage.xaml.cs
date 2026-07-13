@@ -62,7 +62,10 @@ public partial class TournamentHubPage : ContentPage
 
     private async void OnManageRosterClicked(object? sender, EventArgs e)
     {
-        if (_session.Current is null) return;
+        // Hard gate: only organisers may open the roster editor, regardless of
+        // any button-visibility binding state.
+        if (_session.Current is null || !_session.IsOrganiser) return;
+
         var page = _services.GetRequiredService<TournamentEditorPage>();
         // Push first so the navigation animation is not blocked by the network call.
         await Navigation.PushAsync(page);
@@ -85,9 +88,11 @@ public partial class TournamentHubPage : ContentPage
     {
         var page = _services.GetRequiredService<MatchPage>();
         _returningFromMatch = true;
-        // Push first so the navigation animation is not blocked by the network call.
-        await Navigation.PushAsync(page);
+        // Assign the match id BEFORE pushing: PushAsync triggers OnAppearing,
+        // which loads the match from _matchId. PrepareForMatchAsync only stores
+        // the id (no I/O), so there's nothing to defer past the animation.
         await page.PrepareForMatchAsync(match.Id);
+        await Navigation.PushAsync(page);
     }
 
     private async Task<TournamentFencer?> PickFencerAsync(IReadOnlyList<TournamentFencer> candidates)

@@ -23,6 +23,13 @@ public partial class LoginViewModel : ObservableObject
     [ObservableProperty] private bool canUseBiometric;
     [ObservableProperty] private bool canTryBiometricLogin;
 
+    // "Keep me logged in" is a substitute for biometric unlock: it is only
+    // offered when biometrics are unavailable on the device.
+    public bool ShowKeepLoggedIn => !CanUseBiometric;
+
+    partial void OnCanUseBiometricChanged(bool value)
+        => OnPropertyChanged(nameof(ShowKeepLoggedIn));
+
     [ObservableProperty] private bool isSilentLoggingIn;
 
     public bool HasError => !string.IsNullOrWhiteSpace(Error);
@@ -120,7 +127,7 @@ public partial class LoginViewModel : ObservableObject
                     ServiceSwap.Activate(testService);
                 }
 
-                if (KeepLoggedIn)
+                if (KeepLoggedIn || (UseBiometric && CanUseBiometric))
                 {
                     var hash = AuthService.Hash(Password);
                     var enableBio = UseBiometric && CanUseBiometric;

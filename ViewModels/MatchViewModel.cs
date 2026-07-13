@@ -621,6 +621,11 @@ public partial class MatchViewModel : ObservableObject, IDisposable
     {
         if (!CanEdit || Match is null || _session.Current is null) return;
 
+        // Clear any stale error from a previous attempt (e.g. a tied-score
+        // rejection). Otherwise a later, valid finish would leave the old
+        // message visible and block the page's post-finish navigation.
+        ErrorMessage = "";
+
         // Draws are only forbidden in elimination matches (someone must be eliminated).
         // Pool matches may finish with equal scores — WinnerFencerId stays null.
         bool isEliminationMatch = Match.BracketRound.HasValue;
