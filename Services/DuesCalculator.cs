@@ -33,7 +33,7 @@ public readonly record struct DuesQuote(
 ///      keep only the newest one — latest StartDate, then highest FullPrice
 ///      as a deterministic secondary tie-break.
 ///   3. Across tiers the cheapest per-month cost wins.
-///   4. The caller passes <paramref name="alreadyPaid"/> as the total funds
+///   4. The caller passes <c>alreadyPaid</c> as the total funds
 ///      available for this month (cash this month + credit carried forward
 ///      from prior overpayments). The calculator returns Outstanding =
 ///      max(0, cost − alreadyPaid) and Overpayment = max(0, alreadyPaid −

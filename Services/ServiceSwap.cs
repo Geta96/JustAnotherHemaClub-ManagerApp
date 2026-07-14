@@ -5,7 +5,7 @@ namespace JustAnotherHemaClub.Services;
 /// <see cref="ICacheControl"/> at runtime — used exclusively for the test user
 /// mode where all data stays in memory.
 ///
-/// The singleton <see cref="ServiceProxy"/> registered in DI delegates to
+/// The singleton <c>ServiceProxy</c> registered in DI delegates to
 /// whichever implementation is currently active.
 /// </summary>
 public static class ServiceSwap

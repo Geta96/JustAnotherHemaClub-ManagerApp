@@ -12,7 +12,7 @@ namespace JustAnotherHemaClub.ViewModels;
 ///   2. Average points for / match               — higher is better
 ///   3. Average points against / match           — lower is better
 ///   4. Red card count                           — lower is better
-/// Qualification for the elimination is decided by <see cref="TournamentEngine.ComputeQualifyingFencerIds"/>
+/// Qualification for the elimination is decided by <see cref="TournamentEngine.ComputeQualifyingFencerIds(Tournament)"/>
 /// (per-pool top 60%, topped up to a minimum of 8, or everyone if fewer than 8 fencers exist).
 /// The cut-off separator in each pool and in the overall card is drawn directly under the last
 /// fencer who is in that authoritative set.
