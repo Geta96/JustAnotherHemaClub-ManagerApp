@@ -18,8 +18,21 @@
         <SupportedOSPlatformVersion>24.0</SupportedOSPlatformVersion>
     </PropertyGroup>
 
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+        <AndroidUseAssemblyStore>true</AndroidUseAssemblyStore>
+
+        <!-- Temporarily OFF to isolate the device-only crash -->
+        <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
+        <RunAOTCompilation>false</RunAOTCompilation>
+
+        <!-- Keep shrinking, but drop obfuscation for now -->
+        <AndroidLinkMode>SdkOnly</AndroidLinkMode>
+        <AndroidLinkTool>r8</AndroidLinkTool>
+        <AndroidEnableObfuscation>true</AndroidEnableObfuscation>
+    </PropertyGroup>
+
     <ItemGroup>
-        <PackageReference Include="Microsoft.Maui.Controls" Version="8.0.40" />
+        <PackageReference Include="Microsoft.Maui.Controls" Version="8.0.100" />
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
         <PackageReference Include="Google.Apis.Sheets.v4" Version="1.69.0.3694" />
         <PackageReference Include="Google.Apis.Auth" Version="1.70.0" />
@@ -98,6 +111,14 @@
 
         <!-- All images explicitly included, but exclude the app icon source -->
         <MauiImage Include="Resources\Images\**" Exclude="Resources\Images\app_icon_blue.svg" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(Configuration)' == 'Release'">
+        <ProguardConfiguration Include="Platforms\Android\proguard.cfg" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <TrimmerRootDescriptor Include="Platforms\Android\linker.xml" />
     </ItemGroup>
 
 </Project>
