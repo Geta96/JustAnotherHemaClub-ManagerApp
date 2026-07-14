@@ -39,6 +39,7 @@
     <Compile Include="..\Services\ICacheControl.cs" Link="Shared\Services\ICacheControl.cs" />
     <Compile Include="..\Services\ConcurrencyConflictException.cs" Link="Shared\Services\ConcurrencyConflictException.cs" />
     <Compile Include="..\Services\TournamentAutoSaveService.cs" Link="Shared\Services\TournamentAutoSaveService.cs" />
+    <Compile Include="..\Services\SheetRowMapper.cs" Link="Shared\Services\SheetRowMapper.cs" />
     <Compile Include="..\ViewModels\TournamentEditorVm.cs" Link="Shared\ViewModels\TournamentEditorVm.cs" />
     <Compile Include="..\ViewModels\TournamentFencerRow.cs" Link="Shared\ViewModels\TournamentFencerRow.cs" />
     <Compile Include="..\ViewModels\PricesViewModel.cs" Link="Shared\ViewModels\PricesViewModel.cs" />

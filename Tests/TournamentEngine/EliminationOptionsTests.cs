@@ -1,7 +1,7 @@
 using JustAnotherHemaClub.Models;
-using JustAnotherHemaClub.Services;
+using Engine = global::JustAnotherHemaClub.Services.TournamentEngine;
 
-namespace JustAnotherHemaClub.Tests.TournamentEngine;
+namespace JustAnotherHemaClub.Tests.EngineTests;
 
 /// <summary>
 /// Tests for the elimination bracket options (100%/80%/60%/40% cutoffs),
@@ -18,7 +18,7 @@ public class EliminationOptionsTests
     {
         var t = CreateFinishedPoolTournament(10);
 
-        var options = Services.TournamentEngine.ComputeEliminationOptions(t);
+        var options = Engine.ComputeEliminationOptions(t);
 
         options.Should().NotBeEmpty();
         options.Should().AllSatisfy(o =>
@@ -40,7 +40,7 @@ public class EliminationOptionsTests
     {
         var t = CreateFinishedPoolTournament(10);
 
-        var options   = Services.TournamentEngine.ComputeEliminationOptions(t);
+        var options   = Engine.ComputeEliminationOptions(t);
         var available = options.Where(o => o.IsAvailable).ToList();
         var largest   = available.OrderByDescending(o => o.BracketSize).First();
 
@@ -56,7 +56,7 @@ public class EliminationOptionsTests
     {
         var t = CreateFinishedPoolTournament(10);
 
-        var options = Services.TournamentEngine.ComputeEliminationOptions(t);
+        var options = Engine.ComputeEliminationOptions(t);
         var opt8    = options.FirstOrDefault(o => o.BracketSize == 8);
 
         opt8.Should().NotBeNull();
@@ -70,7 +70,7 @@ public class EliminationOptionsTests
     {
         var t = CreateFinishedPoolTournament(20);
 
-        var options = Services.TournamentEngine.ComputeEliminationOptions(t);
+        var options = Engine.ComputeEliminationOptions(t);
 
         // Options are emitted in canonical size order: 4, 8, 16, 32, 64, 128, 256.
         for (int i = 1; i < options.Count; i++)
@@ -82,7 +82,7 @@ public class EliminationOptionsTests
     {
         var t = CreateFinishedPoolTournament(4);
 
-        var options = Services.TournamentEngine.ComputeEliminationOptions(t);
+        var options = Engine.ComputeEliminationOptions(t);
 
         options.Should().NotBeEmpty();
         options.Should().AllSatisfy(o => o.QualifyingCount.Should().BeGreaterThanOrEqualTo(4));
@@ -93,7 +93,7 @@ public class EliminationOptionsTests
     {
         var t = CreateFinishedPoolTournament(5);
 
-        var options = Services.TournamentEngine.ComputeEliminationOptions(t);
+        var options = Engine.ComputeEliminationOptions(t);
 
         options.Should().AllSatisfy(o => o.QualifyingCount.Should().BeGreaterThanOrEqualTo(4));
     }
@@ -103,7 +103,7 @@ public class EliminationOptionsTests
     {
         var t = CreateFinishedPoolTournament(10);
 
-        var options = Services.TournamentEngine.ComputeEliminationOptions(t);
+        var options = Engine.ComputeEliminationOptions(t);
 
         options.Should().AllSatisfy(o =>
             o.TableLabel.Should().MatchRegex(@"^\d+ place table$"));
@@ -118,7 +118,7 @@ public class EliminationOptionsTests
     {
         var t = CreateFinishedPoolTournament(10);
 
-        var bracket = Services.TournamentEngine.BuildBracketFromPoolStandings(t, 1.0);
+        var bracket = Engine.BuildBracketFromPoolStandings(t, 1.0);
 
         bracket.Size.Should().Be(16);
         var filledSlots = bracket.Rounds[0].Matches
@@ -134,8 +134,8 @@ public class EliminationOptionsTests
     {
         var t = CreateFinishedPoolTournament(20);
 
-        var bracket100 = Services.TournamentEngine.BuildBracketFromPoolStandings(t, 1.0);
-        var bracket40 = Services.TournamentEngine.BuildBracketFromPoolStandings(t, 0.4);
+        var bracket100 = Engine.BuildBracketFromPoolStandings(t, 1.0);
+        var bracket40 = Engine.BuildBracketFromPoolStandings(t, 0.4);
 
         bracket40.Size.Should().BeLessThanOrEqualTo(bracket100.Size);
 
@@ -150,8 +150,8 @@ public class EliminationOptionsTests
     {
         var t = CreateFinishedPoolTournament(20);
 
-        var q100 = Services.TournamentEngine.ComputeQualifyingFencerIds(t, 1.0);
-        var q60 = Services.TournamentEngine.ComputeQualifyingFencerIds(t, 0.6);
+        var q100 = Engine.ComputeQualifyingFencerIds(t, 1.0);
+        var q60 = Engine.ComputeQualifyingFencerIds(t, 0.6);
 
         q100.Count.Should().BeGreaterThan(q60.Count);
     }
@@ -161,7 +161,7 @@ public class EliminationOptionsTests
     {
         var t = CreateFinishedPoolTournament(10);
 
-        var bracket = Services.TournamentEngine.BuildBracketFromPoolStandings(t, 0.8);
+        var bracket = Engine.BuildBracketFromPoolStandings(t, 0.8);
 
         bracket.BronzeMatch.Should().NotBeNull();
         bracket.Rounds[^1].Matches[0].BracketTag.Should().Be("Final");
@@ -175,7 +175,7 @@ public class EliminationOptionsTests
     public void CanRegenerate_FreshBracket_NoMatchesStarted_True()
     {
         var t = CreateFinishedPoolTournament(10);
-        t.Bracket = Services.TournamentEngine.BuildBracketFromPoolStandings(t);
+        t.Bracket = Engine.BuildBracketFromPoolStandings(t);
 
         bool canRegenerate = CanRegenerateBracket(t.Bracket);
 
@@ -186,7 +186,7 @@ public class EliminationOptionsTests
     public void CanRegenerate_RealMatchInProgress_False()
     {
         var t = CreateFinishedPoolTournament(10);
-        t.Bracket = Services.TournamentEngine.BuildBracketFromPoolStandings(t);
+        t.Bracket = Engine.BuildBracketFromPoolStandings(t);
 
         var realMatch = t.Bracket.Rounds[0].Matches
             .First(m => !string.IsNullOrEmpty(m.LeftFencerId) && !string.IsNullOrEmpty(m.RightFencerId)
@@ -202,7 +202,7 @@ public class EliminationOptionsTests
     public void CanRegenerate_RealMatchFinished_False()
     {
         var t = CreateFinishedPoolTournament(10);
-        t.Bracket = Services.TournamentEngine.BuildBracketFromPoolStandings(t);
+        t.Bracket = Engine.BuildBracketFromPoolStandings(t);
 
         var realMatch = t.Bracket.Rounds[0].Matches
             .First(m => !string.IsNullOrEmpty(m.LeftFencerId) && !string.IsNullOrEmpty(m.RightFencerId)
@@ -223,7 +223,7 @@ public class EliminationOptionsTests
         // Use 0.6 cutoff on 10 fencers in 2 pools of 5.
         // 60% of 5 = 3 per pool = 6 qualifiers ? size 8 bracket ? 2 byes.
         var t = CreateFinishedPoolTournament(10);
-        t.Bracket = Services.TournamentEngine.BuildBracketFromPoolStandings(t, 0.6);
+        t.Bracket = Engine.BuildBracketFromPoolStandings(t, 0.6);
 
         var byeMatches = t.Bracket.Rounds[0].Matches
             .Where(m => m.Status == MatchStatus.Finished &&
@@ -254,8 +254,8 @@ public class EliminationOptionsTests
     public void RegenerateBracket_DifferentCutoff_ProducesNewBracket()
     {
         var t = CreateFinishedPoolTournament(20);
-        var bracket1 = Services.TournamentEngine.BuildBracketFromPoolStandings(t, 1.0);
-        var bracket2 = Services.TournamentEngine.BuildBracketFromPoolStandings(t, 0.4);
+        var bracket1 = Engine.BuildBracketFromPoolStandings(t, 1.0);
+        var bracket2 = Engine.BuildBracketFromPoolStandings(t, 0.4);
 
         var seeded1 = CountSeededFencers(bracket1);
         var seeded2 = CountSeededFencers(bracket2);
@@ -268,8 +268,8 @@ public class EliminationOptionsTests
         var t = CreateFinishedPoolTournament(10);
         var poolMatchesBefore = t.Pools.SelectMany(p => p.Matches).Count();
 
-        t.Bracket = Services.TournamentEngine.BuildBracketFromPoolStandings(t, 0.6);
-        t.Bracket = Services.TournamentEngine.BuildBracketFromPoolStandings(t, 1.0);
+        t.Bracket = Engine.BuildBracketFromPoolStandings(t, 0.6);
+        t.Bracket = Engine.BuildBracketFromPoolStandings(t, 1.0);
 
         var poolMatchesAfter = t.Pools.SelectMany(p => p.Matches).Count();
         poolMatchesAfter.Should().Be(poolMatchesBefore);
@@ -288,7 +288,7 @@ public class EliminationOptionsTests
     {
         var t = CreateFinishedPoolTournament(10);
 
-        var qualifiers = Services.TournamentEngine.ComputeQualifyingFencerIds(t, cutoff);
+        var qualifiers = Engine.ComputeQualifyingFencerIds(t, cutoff);
 
         qualifiers.Count.Should().BeGreaterThanOrEqualTo(4);
     }
@@ -298,7 +298,7 @@ public class EliminationOptionsTests
     {
         var t = CreateFinishedPoolTournament(10);
 
-        var qualifiers = Services.TournamentEngine.ComputeQualifyingFencerIds(t, 1.0);
+        var qualifiers = Engine.ComputeQualifyingFencerIds(t, 1.0);
 
         qualifiers.Should().HaveCount(10);
     }
@@ -308,10 +308,10 @@ public class EliminationOptionsTests
     {
         var t = CreateFinishedPoolTournament(20);
 
-        var q100 = Services.TournamentEngine.ComputeQualifyingFencerIds(t, 1.0);
-        var q80 = Services.TournamentEngine.ComputeQualifyingFencerIds(t, 0.8);
-        var q60 = Services.TournamentEngine.ComputeQualifyingFencerIds(t, 0.6);
-        var q40 = Services.TournamentEngine.ComputeQualifyingFencerIds(t, 0.4);
+        var q100 = Engine.ComputeQualifyingFencerIds(t, 1.0);
+        var q80 = Engine.ComputeQualifyingFencerIds(t, 0.8);
+        var q60 = Engine.ComputeQualifyingFencerIds(t, 0.6);
+        var q40 = Engine.ComputeQualifyingFencerIds(t, 0.4);
 
         q100.Count.Should().BeGreaterThanOrEqualTo(q80.Count);
         q80.Count.Should().BeGreaterThanOrEqualTo(q60.Count);
@@ -329,7 +329,7 @@ public class EliminationOptionsTests
             .ToList();
 
         var t = new Tournament { Fencers = fencers, State = TournamentState.PoolsClosed };
-        t.Pools = Services.TournamentEngine.BuildPools(fencers, new Random(42));
+        t.Pools = Engine.BuildPools(fencers, new Random(42));
 
         foreach (var pool in t.Pools)
             foreach (var m in pool.Matches)

@@ -206,6 +206,7 @@ public partial class TrainingsViewModel : ObservableObject
             {
                 var rule = new RecurringTrainingRule
                 {
+                    Id                 = Guid.NewGuid().ToString("N"),
                     DayOfWeek          = TrainingDate.DayOfWeek,
                     TimeOfDay          = RecurringTime,
                     EndTimeOfDay       = RecurringEndTime,

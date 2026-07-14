@@ -1,7 +1,7 @@
 using JustAnotherHemaClub.Models;
-using JustAnotherHemaClub.Services;
+using Engine = global::JustAnotherHemaClub.Services.TournamentEngine;
 
-namespace JustAnotherHemaClub.Tests.TournamentEngine;
+namespace JustAnotherHemaClub.Tests.EngineTests;
 
 public class BracketTests
 {
@@ -15,7 +15,7 @@ public class BracketTests
     [InlineData(17, 32)]
     public void PickBracketSize_RoundsUpToNextPowerOf2(int seeded, int expected)
     {
-        Services.TournamentEngine.PickBracketSize(seeded).Should().Be(expected);
+        Engine.PickBracketSize(seeded).Should().Be(expected);
     }
 
     [Theory]
@@ -25,13 +25,13 @@ public class BracketTests
     [InlineData(16, "Round of 16")]
     public void RoundName_ReturnsExpected(int participants, string expected)
     {
-        Services.TournamentEngine.RoundName(participants).Should().Be(expected);
+        Engine.RoundName(participants).Should().Be(expected);
     }
 
     [Fact]
     public void BuildBracketSeedOrder_Size8_SeparatesTopSeeds()
     {
-        var order = Services.TournamentEngine.BuildBracketSeedOrder(8);
+        var order = Engine.BuildBracketSeedOrder(8);
 
         order.Should().HaveCount(8);
         // Seeds 1 and 2 should be in different halves
@@ -43,7 +43,7 @@ public class BracketTests
     [Fact]
     public void BuildBracketSeedOrder_ContainsAllSeeds()
     {
-        var order = Services.TournamentEngine.BuildBracketSeedOrder(16);
+        var order = Engine.BuildBracketSeedOrder(16);
 
         order.Should().HaveCount(16);
         order.Should().BeEquivalentTo(Enumerable.Range(1, 16));
@@ -74,7 +74,7 @@ public class BracketTests
 
         bracket.BronzeMatch = new Match { BracketTag = "Bronze" };
 
-        Services.TournamentEngine.PropagateAdvancements(bracket);
+        Engine.PropagateAdvancements(bracket);
 
         var finalMatch = bracket.Rounds[1].Matches[0];
         finalMatch.LeftFencerId.Should().Be("A");
@@ -109,7 +109,7 @@ public class BracketTests
 
         bracket.BronzeMatch = new Match { BracketTag = "Bronze" };
 
-        Services.TournamentEngine.PropagateAdvancements(bracket);
+        Engine.PropagateAdvancements(bracket);
 
         var finalMatch = bracket.Rounds[1].Matches[0];
         finalMatch.LeftFencerId.Should().Be("A");
@@ -132,7 +132,7 @@ public class BracketTests
         });
         bracket.BronzeMatch = new Match { Status = MatchStatus.Finished, BracketTag = "Bronze" };
 
-        Services.TournamentEngine.IsBracketComplete(bracket).Should().BeFalse();
+        Engine.IsBracketComplete(bracket).Should().BeFalse();
     }
 
     [Fact]
@@ -151,6 +151,6 @@ public class BracketTests
         });
         bracket.BronzeMatch = new Match { Status = MatchStatus.Finished, BracketTag = "Bronze" };
 
-        Services.TournamentEngine.IsBracketComplete(bracket).Should().BeTrue();
+        Engine.IsBracketComplete(bracket).Should().BeTrue();
     }
 }

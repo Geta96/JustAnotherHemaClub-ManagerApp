@@ -49,7 +49,7 @@ public partial class GoogleSheetsService
     }
 
     public Task AddIncomeAsync(Income i) =>
-        AppendAsync("Incomes!A:E", new List<object>
+        AppendAsync("Incomes!A1", new List<object>
         {
             i.Id,
             i.Date.ToString("o", CultureInfo.InvariantCulture),

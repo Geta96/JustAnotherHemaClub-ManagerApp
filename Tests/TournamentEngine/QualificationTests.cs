@@ -1,7 +1,7 @@
 using JustAnotherHemaClub.Models;
-using JustAnotherHemaClub.Services;
+using Engine = global::JustAnotherHemaClub.Services.TournamentEngine;
 
-namespace JustAnotherHemaClub.Tests.TournamentEngine;
+namespace JustAnotherHemaClub.Tests.EngineTests;
 
 public class QualificationTests
 {
@@ -18,7 +18,7 @@ public class QualificationTests
                 pool.FencerIds.Add(id);
             }
             // Generate round-robin and finish all matches (first fencer always wins)
-            Services.TournamentEngine.GeneratePoolMatches(new List<Pool> { pool });
+            Engine.GeneratePoolMatches(new List<Pool> { pool });
             foreach (var m in pool.Matches)
             {
                 m.Status = MatchStatus.Finished;
@@ -36,7 +36,7 @@ public class QualificationTests
     {
         var t = CreateTournamentWithPools(fencersPerPool: 4, poolCount: 1); // 4 total
 
-        var qualifiers = Services.TournamentEngine.ComputeQualifyingFencerIds(t);
+        var qualifiers = Engine.ComputeQualifyingFencerIds(t);
 
         qualifiers.Should().HaveCount(4); // all qualify
     }
@@ -46,7 +46,7 @@ public class QualificationTests
     {
         var t = CreateTournamentWithPools(fencersPerPool: 5, poolCount: 3); // 15 total
 
-        var qualifiers = Services.TournamentEngine.ComputeQualifyingFencerIds(t);
+        var qualifiers = Engine.ComputeQualifyingFencerIds(t);
 
         qualifiers.Count.Should().BeGreaterThanOrEqualTo(8);
     }
@@ -56,7 +56,7 @@ public class QualificationTests
     {
         var t = CreateTournamentWithPools(fencersPerPool: 5, poolCount: 2);
 
-        var qualifiers = Services.TournamentEngine.ComputeQualifyingFencerIds(t);
+        var qualifiers = Engine.ComputeQualifyingFencerIds(t);
 
         qualifiers.Should().OnlyHaveUniqueItems();
     }
@@ -65,7 +65,7 @@ public class QualificationTests
     public void ComputeQualifyingFencerIds_EmptyPools_ReturnsEmpty()
     {
         var t = new Tournament { Pools = new() };
-        Services.TournamentEngine.ComputeQualifyingFencerIds(t).Should().BeEmpty();
+        Engine.ComputeQualifyingFencerIds(t).Should().BeEmpty();
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public class QualificationTests
     {
         var t = CreateTournamentWithPools(fencersPerPool: 5, poolCount: 2);
 
-        var bracket = Services.TournamentEngine.BuildBracketFromPoolStandings(t);
+        var bracket = Engine.BuildBracketFromPoolStandings(t);
 
         bracket.Should().NotBeNull();
         bracket.Rounds.Should().NotBeEmpty();

@@ -127,7 +127,7 @@ public partial class GoogleSheetsService
     public async Task<List<Match>> GetMatchesAsync(string tournamentId)
     {
         var rows = await ReadAsync(MatchesRange);
-        return rows.Where(r => S(r, 0) == tournamentId)
+        return rows.Where(r => !string.IsNullOrWhiteSpace(S(r, 0)) && S(r, 0) == tournamentId)
                    .Select(ParseMatch)
                    .ToList();
     }
@@ -160,7 +160,7 @@ public partial class GoogleSheetsService
         };
 
         if (rowIndex >= 0) await UpdateAsync($"Tournaments!A{rowIndex + 2}:F{rowIndex + 2}", values);
-        else                await AppendAsync("Tournaments!A:F", values);
+        else                await AppendAsync("Tournaments!A1", values);
 
         t.Version = nextVersion;
     }
@@ -191,7 +191,7 @@ public partial class GoogleSheetsService
             tournamentId, f.Id, f.Name ?? "", f.IsWithdrawn, f.OrderIndex
         };
         if (rowIndex >= 0) await UpdateAsync($"TournamentFencers!A{rowIndex + 2}:E{rowIndex + 2}", values);
-        else                await AppendAsync("TournamentFencers!A:E", values);
+        else                await AppendAsync("TournamentFencers!A1", values);
     }
 
     public async Task DeleteTournamentFencerAsync(string tournamentId, string fencerId)
@@ -232,7 +232,7 @@ public partial class GoogleSheetsService
             pool.IsClosed, nextVersion
         };
         if (rowIndex >= 0) await UpdateAsync($"Pools!A{rowIndex + 2}:F{rowIndex + 2}", values);
-        else                await AppendAsync("Pools!A:F", values);
+        else                await AppendAsync("Pools!A1", values);
 
         pool.Version = nextVersion;
     }
@@ -281,7 +281,7 @@ public partial class GoogleSheetsService
         };
 
         if (rowIndex >= 0) await UpdateAsync($"Matches!A{rowIndex + 2}:Y{rowIndex + 2}", values);
-        else                await AppendAsync("Matches!A:Y", values);
+        else                await AppendAsync("Matches!A1", values);
 
         match.Version = nextVersion;
     }
@@ -299,9 +299,11 @@ public partial class GoogleSheetsService
                 .Select((id, i) => (IList<object>)new List<object> { tournamentId, i + 1, id })
                 .ToList()
         };
-        var req = svc.Spreadsheets.Values.Append(body, _spreadsheetId, "FinalStandings!A:C");
+        var req = svc.Spreadsheets.Values.Append(body, _spreadsheetId, "FinalStandings!A1");
         req.ValueInputOption =
             SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.USERENTERED;
+        req.InsertDataOption =
+            SpreadsheetsResource.ValuesResource.AppendRequest.InsertDataOptionEnum.INSERTROWS;
         await req.ExecuteAsync();
     }
 
@@ -339,9 +341,11 @@ public partial class GoogleSheetsService
         }
 
         var body = new ValueRange { Values = rows };
-        var req  = svc.Spreadsheets.Values.Append(body, _spreadsheetId, "Pools!A:F");
+        var req  = svc.Spreadsheets.Values.Append(body, _spreadsheetId, "Pools!A1");
         req.ValueInputOption =
             SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.USERENTERED;
+        req.InsertDataOption =
+            SpreadsheetsResource.ValuesResource.AppendRequest.InsertDataOptionEnum.INSERTROWS;
         await req.ExecuteAsync();
     }
 
@@ -382,9 +386,11 @@ public partial class GoogleSheetsService
         }
 
         var body = new ValueRange { Values = rows };
-        var req  = svc.Spreadsheets.Values.Append(body, _spreadsheetId, "Matches!A:Y");
+        var req  = svc.Spreadsheets.Values.Append(body, _spreadsheetId, "Matches!A1");
         req.ValueInputOption =
             SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.USERENTERED;
+        req.InsertDataOption =
+            SpreadsheetsResource.ValuesResource.AppendRequest.InsertDataOptionEnum.INSERTROWS;
         await req.ExecuteAsync();
     }
 
@@ -404,6 +410,8 @@ public partial class GoogleSheetsService
         var req  = svc.Spreadsheets.Values.Append(body, _spreadsheetId, "TournamentFencers!A:E");
         req.ValueInputOption =
             SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.USERENTERED;
+        req.InsertDataOption =
+            SpreadsheetsResource.ValuesResource.AppendRequest.InsertDataOptionEnum.INSERTROWS;
         await req.ExecuteAsync();
     }
 

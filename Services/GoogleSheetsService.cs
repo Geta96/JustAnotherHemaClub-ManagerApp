@@ -68,6 +68,7 @@ public partial class GoogleSheetsService : IGoogleSheetsService
         var body = new ValueRange { Values = new List<IList<object>> { row } };
         var req = svc.Spreadsheets.Values.Append(body, _spreadsheetId, range);
         req.ValueInputOption = SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.USERENTERED;
+        req.InsertDataOption = SpreadsheetsResource.ValuesResource.AppendRequest.InsertDataOptionEnum.INSERTROWS;
         await req.ExecuteAsync();
     }
 
@@ -110,7 +111,7 @@ public partial class GoogleSheetsService : IGoogleSheetsService
     }
 
     public Task AddFencerAsync(Fencer f) =>
-        AppendAsync("Fencers!A:J", new List<object>
+        AppendAsync("Fencers!A1", new List<object>
         {
             f.Id, f.Username ?? "", f.PasswordHash ?? "",
             f.Name, f.Email ?? "",
@@ -134,7 +135,7 @@ public partial class GoogleSheetsService : IGoogleSheetsService
         if (rowIndex >= 0)
             await UpdateAsync($"Fencers!A{rowIndex + 2}:J{rowIndex + 2}", values);
         else
-            await AppendAsync("Fencers!A:J", values);
+            await AppendAsync("Fencers!A1", values);
     }
 
     // --- Trainings ---
@@ -155,7 +156,9 @@ public partial class GoogleSheetsService : IGoogleSheetsService
             var id = S(r, 0);
             if (string.IsNullOrWhiteSpace(id)) continue;
 
-            var date = DateTime.Parse(S(r, 1), CultureInfo.InvariantCulture);
+            if (!DateTime.TryParse(S(r, 1), CultureInfo.InvariantCulture,
+                                   DateTimeStyles.RoundtripKind, out var date))
+                continue; // skip rows with an unparseable start date instead of throwing
 
             DateTime end;
             var endStr = S(r, 4);
@@ -214,7 +217,7 @@ public partial class GoogleSheetsService : IGoogleSheetsService
         if (rowIndex >= 0)
             await UpdateAsync($"Trainings!A{rowIndex + 2}:E{rowIndex + 2}", values);
         else
-            await AppendAsync("Trainings!A:E", values);
+            await AppendAsync("Trainings!A1", values);
     }
 
     public async Task DeleteTrainingAsync(string trainingId)
@@ -222,34 +225,38 @@ public partial class GoogleSheetsService : IGoogleSheetsService
         if (string.IsNullOrWhiteSpace(trainingId)) return;
 
         var rows = await ReadAsync("Trainings!A2:E");
-        var svc = await GetServiceAsync();
 
+        var rangesToClear = new List<string>();
         for (int i = 0; i < rows.Count; i++)
-        {
-            if (S(rows[i], 0) != trainingId) continue;
+            if (S(rows[i], 0) == trainingId)
+                rangesToClear.Add($"Trainings!A{i + 2}:E{i + 2}");
+        if (rangesToClear.Count == 0) return;
 
-            var range = $"Trainings!A{i + 2}:E{i + 2}";
-            await svc.Spreadsheets.Values.Clear(new Google.Apis.Sheets.v4.Data.ClearValuesRequest(),
-                                                _spreadsheetId, range).ExecuteAsync();
-        }
+        var svc = await GetServiceAsync();
+        var batch = new Google.Apis.Sheets.v4.Data.BatchClearValuesRequest { Ranges = rangesToClear };
+        await svc.Spreadsheets.Values.BatchClear(batch, _spreadsheetId).ExecuteAsync();
     }
 
     // --- Payments ---
     public async Task<List<Payment>> GetPaymentsAsync(int year, int month)
     {
         var rows = await ReadAsync("Payments!A2:E");
-        return rows.Select(r => new Payment
-        {
-            FencerId = S(r, 0),
-            Year = int.Parse(S(r, 1)),
-            Month = int.Parse(S(r, 2)),
-            Amount = decimal.Parse(S(r, 3), CultureInfo.InvariantCulture),
-            PaidOn = DateTime.Parse(S(r, 4), CultureInfo.InvariantCulture)
-        }).Where(p => p.Year == year && p.Month == month).ToList();
+        return rows
+            .Where(r => !string.IsNullOrWhiteSpace(S(r, 0)))   // skip blank/partial rows
+            .Select(r => new Payment
+            {
+                FencerId = S(r, 0),
+                Year = int.TryParse(S(r, 1), out var y) ? y : 0,
+                Month = int.TryParse(S(r, 2), out var mo) ? mo : 0,
+                Amount = decimal.TryParse(S(r, 3), NumberStyles.Any, CultureInfo.InvariantCulture, out var a) ? a : 0m,
+                PaidOn = DateTime.TryParse(S(r, 4), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var d) ? d : default
+            })
+            .Where(p => p.Year == year && p.Month == month)
+            .ToList();
     }
 
     public Task MarkPaidAsync(Payment p) =>
-        AppendAsync("Payments!A:E", new List<object>
+        AppendAsync("Payments!A1", new List<object>
         {
             p.FencerId, p.Year, p.Month,
             p.Amount.ToString(CultureInfo.InvariantCulture),
@@ -260,18 +267,22 @@ public partial class GoogleSheetsService : IGoogleSheetsService
     public async Task<List<Expense>> GetExpensesAsync(DateTime from, DateTime to)
     {
         var rows = await ReadAsync("Expenses!A2:E");
-        return rows.Select(r => new Expense
-        {
-            Id = S(r, 0),
-            Date = DateTime.Parse(S(r, 1), CultureInfo.InvariantCulture),
-            Category = S(r, 2),
-            Description = S(r, 3),
-            Amount = decimal.Parse(S(r, 4), CultureInfo.InvariantCulture)
-        }).Where(e => e.Date >= from && e.Date <= to).ToList();
+        return rows
+            .Where(r => !string.IsNullOrWhiteSpace(S(r, 0)))   // skip blank/partial rows
+            .Select(r => new Expense
+            {
+                Id = S(r, 0),
+                Date = DateTime.TryParse(S(r, 1), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var d) ? d : default,
+                Category = S(r, 2),
+                Description = S(r, 3),
+                Amount = decimal.TryParse(S(r, 4), NumberStyles.Any, CultureInfo.InvariantCulture, out var a) ? a : 0m
+            })
+            .Where(e => e.Date >= from && e.Date <= to)
+            .ToList();
     }
 
     public Task AddExpenseAsync(Expense e) =>
-        AppendAsync("Expenses!A:E", new List<object>
+        AppendAsync("Expenses!A1", new List<object>
         {
             e.Id,
             e.Date.ToString("o", CultureInfo.InvariantCulture),
@@ -293,7 +304,7 @@ public partial class GoogleSheetsService : IGoogleSheetsService
 
     // Append-only; the latest row wins when read via GetMonthNotesAsync filtering by (Year, Month).
     public Task UpsertMonthNoteAsync(MonthNote note) =>
-        AppendAsync("MonthNotes!A:C", new List<object> { note.Year, note.Month, note.Note });
+        AppendAsync("MonthNotes!A1", new List<object> { note.Year, note.Month, note.Note });
 
     // --- Individual lessons ---
     // Columns: A=Id, B=Date, C=StudentId, D=InstructorId, E=Topic,
@@ -356,7 +367,7 @@ public partial class GoogleSheetsService : IGoogleSheetsService
         if (rowIndex >= 0)
             await UpdateAsync($"IndividualLessons!A{rowIndex + 2}:I{rowIndex + 2}", values);
         else
-            await AppendAsync("IndividualLessons!A:I", values);
+            await AppendAsync("IndividualLessons!A1", values);
     }
 
     // --- Recurring trainings ---
@@ -365,45 +376,11 @@ public partial class GoogleSheetsService : IGoogleSheetsService
     public async Task<List<RecurringTrainingRule>> GetRecurringTrainingsAsync()
     {
         var rows = await ReadAsync("RecurringTrainings!A2:H");
-        var list = new List<RecurringTrainingRule>();
-        foreach (var r in rows)
-        {
-            var id = S(r, 0);
-            if (string.IsNullOrWhiteSpace(id)) continue;
-
-            if (!Enum.TryParse<DayOfWeek>(S(r, 1), true, out var dow)) continue;
-            if (!TimeSpan.TryParse(S(r, 2), CultureInfo.InvariantCulture, out var tod)) tod = TimeSpan.Zero;
-            if (!DateTime.TryParse(S(r, 4), CultureInfo.InvariantCulture,
-                                   DateTimeStyles.RoundtripKind, out var start)) start = DateTime.Today;
-
-            DateTime? end = null;
-            var endStr = S(r, 5);
-            if (!string.IsNullOrWhiteSpace(endStr) &&
-                DateTime.TryParse(endStr, CultureInfo.InvariantCulture,
-                                  DateTimeStyles.RoundtripKind, out var e))
-                end = e;
-
-            TimeSpan endTod;
-            var endTodStr = S(r, 7);
-            if (!string.IsNullOrWhiteSpace(endTodStr) &&
-                TimeSpan.TryParse(endTodStr, CultureInfo.InvariantCulture, out var parsedEnd))
-                endTod = parsedEnd;
-            else
-                endTod = tod.Add(TimeSpan.FromMinutes(90)); // legacy rules default to 90 min
-
-            list.Add(new RecurringTrainingRule
-            {
-                Id = id,
-                DayOfWeek = dow,
-                TimeOfDay = tod,
-                EndTimeOfDay = endTod,
-                Topic = S(r, 3),
-                StartDate = start,
-                EndDate = end,
-                CreatedByFencerId = S(r, 6)
-            });
-        }
-        return list;
+        return rows
+            .Select(SheetRowMapper.MapRecurring)
+            .Where(r => r is not null)
+            .Select(r => r!)
+            .ToList();
     }
 
     public async Task UpsertRecurringTrainingAsync(RecurringTrainingRule rule)
@@ -428,7 +405,7 @@ public partial class GoogleSheetsService : IGoogleSheetsService
         if (rowIndex >= 0)
             await UpdateAsync($"RecurringTrainings!A{rowIndex + 2}:H{rowIndex + 2}", values);
         else
-            await AppendAsync("RecurringTrainings!A:H", values);
+            await AppendAsync("RecurringTrainings!A1", values);
     }
 
     public async Task DeleteRecurringTrainingAsync(string ruleId)
