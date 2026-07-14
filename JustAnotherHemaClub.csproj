@@ -12,8 +12,8 @@
 
         <ApplicationTitle>JAHC Manager</ApplicationTitle>
         <ApplicationId>com.jahc.manager</ApplicationId>
-        <ApplicationVersion>2</ApplicationVersion>
-        <ApplicationDisplayVersion>1.0.6</ApplicationDisplayVersion>
+        <ApplicationVersion>3</ApplicationVersion>
+        <ApplicationDisplayVersion>1.0.7</ApplicationDisplayVersion>
 
         <SupportedOSPlatformVersion>24.0</SupportedOSPlatformVersion>
     </PropertyGroup>
@@ -21,8 +21,8 @@
     <ItemGroup>
         <PackageReference Include="Microsoft.Maui.Controls" Version="8.0.40" />
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
-        <PackageReference Include="Google.Apis.Sheets.v4" Version="1.68.0.3393" />
-        <PackageReference Include="Google.Apis.Auth" Version="1.68.0.3331" />
+        <PackageReference Include="Google.Apis.Sheets.v4" Version="1.69.0.3694" />
+        <PackageReference Include="Google.Apis.Auth" Version="1.70.0" />
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
         <PackageReference Include="Plugin.Fingerprint" Version="3.0.0-beta.1" />
     </ItemGroup>
