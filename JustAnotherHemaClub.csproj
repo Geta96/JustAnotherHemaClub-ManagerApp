@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFrameworks>net8.0-android</TargetFrameworks>
+        <TargetFrameworks>net9.0-android</TargetFrameworks>
         <OutputType>Exe</OutputType>
         <RootNamespace>JustAnotherHemaClub</RootNamespace>
         <UseMaui>true</UseMaui>
@@ -29,14 +29,17 @@
         <AndroidLinkMode>SdkOnly</AndroidLinkMode>
         <AndroidLinkTool>r8</AndroidLinkTool>
         <AndroidEnableObfuscation>true</AndroidEnableObfuscation>
+        <AndroidCreateSymbolArchive>true</AndroidCreateSymbolArchive>
+        <DebugSymbols>true</DebugSymbols>
+        <DebugType>portable</DebugType>
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.Maui.Controls" Version="8.0.100" />
+        <PackageReference Include="Microsoft.Maui.Controls" Version="9.0.0" />
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
         <PackageReference Include="Google.Apis.Sheets.v4" Version="1.69.0.3694" />
         <PackageReference Include="Google.Apis.Auth" Version="1.70.0" />
-        <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.0" />
         <PackageReference Include="Plugin.Fingerprint" Version="3.0.0-beta.1" />
     </ItemGroup>
 
