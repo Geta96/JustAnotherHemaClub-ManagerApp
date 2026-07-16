@@ -184,14 +184,16 @@ public partial class LoginViewModel : ObservableObject
     private async Task GoToRegisterAsync()
     {
         var page = _services.GetRequiredService<Views.RegisterPage>();
-        await Application.Current!.MainPage!.Navigation.PushAsync(page);
+        var nav = Services.AppNavigationHelper.RootPage?.Navigation;
+        if (nav is not null)
+            await nav.PushAsync(page);
     }
 
     [RelayCommand]
     private async Task ForgotPasswordAsync()
     {
         Error = null;
-        var page = Application.Current?.MainPage;
+        var page = Services.AppNavigationHelper.RootPage;
         if (page is null) return;
 
         try
@@ -269,7 +271,7 @@ public partial class LoginViewModel : ObservableObject
     private void EnterShell()
     {
         var shell = _services.GetRequiredService<AppShell>();
-        Application.Current!.MainPage = shell;
+        Services.AppNavigationHelper.SetRootPage(shell);
     }
 
     private async Task WarmCacheAsync()

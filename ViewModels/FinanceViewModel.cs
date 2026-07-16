@@ -194,7 +194,7 @@ public partial class FinanceViewModel : ObservableObject
         {
             System.Diagnostics.Debug.WriteLine($"[FinanceViewModel.LoadAsync] {ex}");
 
-            var page = Application.Current?.MainPage;
+            var page = Services.AppNavigationHelper.RootPage;
             if (page is not null)
                 await page.DisplayAlert("Couldn't load Finance",
                                         ex.Message,

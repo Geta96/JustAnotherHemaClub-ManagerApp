@@ -5,9 +5,13 @@ namespace JustAnotherHemaClub;
 
 public partial class App : Application
 {
+    private readonly IServiceProvider _services;
+    private Page _rootPage;
+
     public App(IServiceProvider services)
     {
         InitializeComponent();
+        _services = services;
         UserAppTheme = AppTheme.Light;   // force light theme app-wide
 
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
@@ -30,18 +34,28 @@ public partial class App : Application
 
         try
         {
-            MainPage = new NavigationPage(services.GetRequiredService<LoginPage>());
+            _rootPage = new NavigationPage(services.GetRequiredService<LoginPage>());
         }
         catch (Exception ex)
         {
-            ShowError(ex);
+            _rootPage = BuildErrorPage(ex);
         }
     }
 
+    protected override Window CreateWindow(IActivationState? activationState)
+        => new Window(_rootPage);
+
     private void ShowError(Exception? ex)
     {
+        var page = BuildErrorPage(ex);
+        _rootPage = page;
+        AppNavigationHelper.SetRootPage(page);
+    }
+
+    private static Page BuildErrorPage(Exception? ex)
+    {
         var text = ex?.ToString() ?? "Unknown startup error.";
-        MainPage = new ContentPage
+        return new ContentPage
         {
             BackgroundColor = Colors.White,
             Content = new ScrollView

@@ -357,7 +357,7 @@ public partial class IndividualLessonsViewModel : ObservableObject
     {
         if (row is null || !IsInstructor) return;
 
-        var page = Application.Current?.MainPage;
+        var page = Services.AppNavigationHelper.RootPage;
         if (page is not null)
         {
             var ok = await page.DisplayAlert(

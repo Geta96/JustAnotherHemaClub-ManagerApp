@@ -88,7 +88,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<TournamentAutoSaveService>();
         builder.Services.AddSingleton<TournamentSession>();
         builder.Services.AddSingleton<TournamentRefreshService>();
-
+        builder.Services.AddSingleton<IDialogService, DialogService>();
 #if DEBUG
         builder.Logging.AddDebug();
 #endif

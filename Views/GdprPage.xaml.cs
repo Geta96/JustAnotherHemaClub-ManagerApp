@@ -20,7 +20,7 @@ public partial class GdprPage : ContentPage
 
         var secondary = (Style?)Application.Current?.Resources["SecondaryButton"];
 
-        EnglishButton.Style = english ? null : secondary;
-        HungarianButton.Style = english ? secondary : null;
+        EnglishButton.Style = english ? null! : secondary!;
+        HungarianButton.Style = english ? secondary! : null!;
     }
 }

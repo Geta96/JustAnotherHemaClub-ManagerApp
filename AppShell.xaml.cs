@@ -27,7 +27,7 @@ public partial class AppShell : Shell
         _auth.Logout();
 
         var login = _services.GetRequiredService<LoginPage>();
-        Application.Current!.MainPage = new NavigationPage(login);
+        Services.AppNavigationHelper.SetRootPage(new NavigationPage(login));
 
         // Re-apply for the NavigationPage that just took over
         MainActivity.ApplyWineStatusBar();

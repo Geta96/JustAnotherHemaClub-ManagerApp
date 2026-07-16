@@ -181,14 +181,14 @@ public partial class RegisterViewModel : ObservableObject
 
     private static async Task GoBackAsync()
     {
-        var nav = Application.Current?.MainPage?.Navigation;
+        var nav = Services.AppNavigationHelper.RootPage?.Navigation;
         if (nav is not null && nav.NavigationStack.Count > 1)
             await nav.PopAsync();
     }
 
     private static Task ShowAsync(string title, string message)
     {
-        var page = Application.Current?.MainPage;
+        var page = Services.AppNavigationHelper.RootPage;
         return page is null ? Task.CompletedTask : page.DisplayAlert(title, message, "OK");
     }
 }

@@ -121,7 +121,7 @@ public partial class WeeklyViewModel : ObservableObject
     {
         if (row is null || !IsLoggedInInstructor) return;
 
-        var page = Application.Current?.MainPage;
+        var page = Services.AppNavigationHelper.RootPage;
         if (page is not null)
         {
             var ok = await page.DisplayAlert(

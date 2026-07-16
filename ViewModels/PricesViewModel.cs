@@ -151,6 +151,7 @@ public partial class PricesViewModel : ObservableObject
 {
     private readonly IGoogleSheetsService _sheets;
     private readonly AuthService _auth;
+    private readonly IDialogService _dialogs;
 
     public ObservableCollection<PriceRuleRow> Rules { get; } = new();
 
@@ -176,10 +177,11 @@ public partial class PricesViewModel : ObservableObject
     public bool IsLoggedInInstructor => _auth.IsLoggedInInstructor;
     public bool HasNoRules => Rules.Count == 0;
 
-    public PricesViewModel(IGoogleSheetsService sheets, AuthService auth)
+    public PricesViewModel(IGoogleSheetsService sheets, AuthService auth, IDialogService dialogs)
     {
         _sheets = sheets;
         _auth = auth;
+        _dialogs = dialogs;
         Rules.CollectionChanged += (_, __) => OnPropertyChanged(nameof(HasNoRules));
     }
 
@@ -308,15 +310,11 @@ public partial class PricesViewModel : ObservableObject
     {
         if (row is null || !IsLoggedInInstructor) return;
 
-        var page = Application.Current?.MainPage;
-        if (page is not null)
-        {
-            var ok = await page.DisplayAlert(
-                "Delete price rule",
-                $"Delete the {row.TierName.ToLowerInvariant()} ({row.PriceSummary})?",
-                "Delete", "Cancel");
-            if (!ok) return;
-        }
+        var ok = await _dialogs.ConfirmAsync(
+            "Delete price rule",
+            $"Delete the {row.TierName.ToLowerInvariant()} ({row.PriceSummary})?",
+            "Delete", "Cancel");
+        if (!ok) return;
 
         await _sheets.DeletePriceRuleAsync(row.Rule.Id);
         Rules.Remove(row);
@@ -351,11 +349,8 @@ public partial class PricesViewModel : ObservableObject
         return aStart <= bEnd && bStart <= aEnd;
     }
 
-    private static async Task<bool> ConfirmOverlapAsync(PriceRule candidate, PriceRule existing)
+    private async Task<bool> ConfirmOverlapAsync(PriceRule candidate, PriceRule existing)
     {
-        var page = Application.Current?.MainPage;
-        if (page is null) return true; // headless — don't block.
-
         static string TierLabel(PriceRule r) => (r.SessionCount, r.MonthCount) switch
         {
             (0, 2) => "2-month unlimited pass",
@@ -370,7 +365,7 @@ public partial class PricesViewModel : ObservableObject
 
         var tier = TierLabel(candidate).ToLowerInvariant();
 
-        return await page.DisplayAlert(
+        return await _dialogs.ConfirmAsync(
             "⚠ Overlaps with another rule",
             $"A {tier} already exists for {Range(existing)} at {existing.FullPrice:N0} Ft.\n\n" +
             $"This rule covers {Range(candidate)} at {candidate.FullPrice:N0} Ft and overlaps with it.\n\n" +
@@ -378,9 +373,6 @@ public partial class PricesViewModel : ObservableObject
             "Save anyway", "Cancel");
     }
 
-    private static Task ShowAsync(string title, string message)
-    {
-        var page = Application.Current?.MainPage;
-        return page is null ? Task.CompletedTask : page.DisplayAlert(title, message, "OK");
-    }
+    private Task ShowAsync(string title, string message)
+        => _dialogs.ShowAsync(title, message);
 }
