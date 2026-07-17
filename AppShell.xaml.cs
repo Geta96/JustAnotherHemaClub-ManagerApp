@@ -18,8 +18,26 @@ public partial class AppShell : Shell
             ? "Signed in as Guest"
             : $"Signed in as {_auth.CurrentFencer?.Name ?? _auth.CurrentFencer?.Username ?? "user"}";
 
+        ApplyStatusBarInset();
+
         // Re-apply after the Shell handler has finished setting up its Android views
         Loaded += (_, _) => MainActivity.ApplyWineStatusBar();
+    }
+
+    /// <summary>
+    /// Pads the flyout header below the device's real status bar so the crest
+    /// is never clipped, then grows the header to fit the logo + user line.
+    /// </summary>
+    private void ApplyStatusBarInset()
+    {
+#if ANDROID
+        var top = MainActivity.StatusBarHeightDip;
+        // Small extra gap between the status bar and the crest for breathing room.
+        var padTop = top + 16;
+        FlyoutHeaderGrid.Padding = new Thickness(16, padTop, 16, 16);
+        // 170 logo + ~24 label + top inset + bottom padding, with a little slack.
+        FlyoutHeaderGrid.HeightRequest = 170 + 24 + padTop + 16 + 12;
+#endif
     }
 
     private async void OnLogoutClicked(object? sender, EventArgs e)

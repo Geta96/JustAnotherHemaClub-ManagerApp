@@ -12,10 +12,11 @@
 
     <!-- Flyout header: crest + user line -->
     <Shell.FlyoutHeader>
-        <Grid BackgroundColor="{StaticResource Wine}" HeightRequest="240" Padding="16">
-            <VerticalStackLayout VerticalOptions="Center"
+        <Grid x:Name="FlyoutHeaderGrid"
+              BackgroundColor="{StaticResource Wine}" HeightRequest="300" Padding="16,48,16,16">
+            <VerticalStackLayout VerticalOptions="Start"
                                  HorizontalOptions="Center"
-                                 Spacing="10">
+                                 Spacing="6">
                 <Image Source="monochrome_logo.jpg"
                        HeightRequest="170"
                        Aspect="AspectFit"
