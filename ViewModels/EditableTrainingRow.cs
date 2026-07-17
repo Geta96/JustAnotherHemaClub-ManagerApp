@@ -48,7 +48,18 @@ public partial class EditableTrainingRow : ObservableObject
                 t.PropertyChanged += (_, e) =>
                 {
                     if (e.PropertyName == nameof(FencerToggle.IsAttending))
+                    {
                         IsDirty = true;
+
+                        // If the instructor (the current user) toggles their own
+                        // row, keep CurrentUserAttending in sync so the header
+                        // Attend button / green tick reflect it immediately.
+                        if (!string.IsNullOrEmpty(_currentUserFencerId) &&
+                            f.Id == _currentUserFencerId)
+                        {
+                            CurrentUserAttending = t.IsAttending;
+                        }
+                    }
                 };
                 return t;
             }));
