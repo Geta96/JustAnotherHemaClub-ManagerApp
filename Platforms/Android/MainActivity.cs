@@ -28,6 +28,28 @@ public class MainActivity : MauiAppCompatActivity
     public static void ApplyWineStatusBar() => ApplyGradientStatusBar();
 
     /// <summary>
+    /// Status-bar height in device-independent units (DIPs), resolved from the
+    /// Android system resource. Falls back to 24 when unavailable. Used by the
+    /// Shell flyout header to pad its content below the status bar.
+    /// </summary>
+    public static double StatusBarHeightDip
+    {
+        get
+        {
+            var res = Platform.CurrentActivity?.Resources ?? Android.App.Application.Context.Resources;
+            if (res is null) return 24;
+
+            int px = 0;
+            int id = res.GetIdentifier("status_bar_height", "dimen", "android");
+            if (id > 0) px = res.GetDimensionPixelSize(id);
+
+            var density = res.DisplayMetrics?.Density ?? 1f;
+            if (px <= 0) return 24;
+            return px / density;
+        }
+    }
+
+    /// <summary>
     /// Overlays a black→wine (top→bottom) gradient view on the DecorView so it
     /// sits precisely over the transparent status bar area.
     /// </summary>
