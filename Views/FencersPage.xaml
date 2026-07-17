@@ -38,7 +38,7 @@
                             <Label Text="Select a fencer" Style="{StaticResource H2}" />
                             <Picker Title="Pick a fencer..."
                                     ItemsSource="{Binding Fencers}"
-                                    ItemDisplayBinding="{Binding Name}"
+                                    ItemDisplayBinding="{Binding Name, x:DataType=m:Fencer}"
                                     SelectedItem="{Binding SelectedFencer, Mode=TwoWay}" />
                         </VerticalStackLayout>
                     </Border>

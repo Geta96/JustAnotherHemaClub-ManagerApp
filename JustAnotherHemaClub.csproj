@@ -8,12 +8,17 @@
         <SingleProject>true</SingleProject>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <!-- XC0025 is a compiled-binding optimization *hint* for bindings that use an
+             explicit Source/RelativeSource. These bindings work correctly at runtime;
+             enabling MauiEnableXamlCBindingWithSourceCompilation would require adding a
+             correct x:DataType to ~44 RelativeSource bindings, so we suppress the hint. -->
+        <NoWarn>$(NoWarn);XC0025</NoWarn>
         <DefaultItemExcludes>$(DefaultItemExcludes);Tests\**;UITests\**</DefaultItemExcludes>
 
         <ApplicationTitle>JAHC Manager</ApplicationTitle>
         <ApplicationId>com.jahc.manager</ApplicationId>
-        <ApplicationVersion>4</ApplicationVersion>
-        <ApplicationDisplayVersion>1.0.8</ApplicationDisplayVersion>
+        <ApplicationVersion>5</ApplicationVersion>
+        <ApplicationDisplayVersion>1.0.9</ApplicationDisplayVersion>
 
         <SupportedOSPlatformVersion>24.0</SupportedOSPlatformVersion>
 

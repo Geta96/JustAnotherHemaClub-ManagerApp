@@ -218,7 +218,7 @@ public partial class TrainingsViewModel : ObservableObject
             }
             catch (Exception ex)
             {
-                var page = Application.Current?.MainPage;
+                var page = AppNavigationHelper.RootPage;
                 if (page is not null)
                     await page.DisplayAlert(
                         "Recurring rule not saved",

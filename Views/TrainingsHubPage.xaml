@@ -294,12 +294,12 @@
                                 <Picker Grid.Row="1" Grid.Column="0"
                                         Title="(all)"
                                         ItemsSource="{Binding FilterStudents}"
-                                        ItemDisplayBinding="{Binding Name}"
+                                        ItemDisplayBinding="{Binding Name, x:DataType=m:Fencer}"
                                         SelectedItem="{Binding FilterStudent}" />
                                 <Picker Grid.Row="1" Grid.Column="1"
                                         Title="(all)"
                                         ItemsSource="{Binding Instructors}"
-                                        ItemDisplayBinding="{Binding Name}"
+                                        ItemDisplayBinding="{Binding Name, x:DataType=m:Fencer}"
                                         SelectedItem="{Binding FilterInstructor}" />
                             </Grid>
                         </VerticalStackLayout>
@@ -337,12 +337,12 @@
                                 <Label Text="Student" Style="{StaticResource Caption}" />
                                 <Picker Title="Select student"
                                         ItemsSource="{Binding Students}"
-                                        ItemDisplayBinding="{Binding Name}"
+                                        ItemDisplayBinding="{Binding Name, x:DataType=m:Fencer}"
                                         SelectedItem="{Binding NewStudent}" />
                                 <Label Text="Instructor" Style="{StaticResource Caption}" />
                                 <Picker Title="Select instructor"
                                         ItemsSource="{Binding Instructors}"
-                                        ItemDisplayBinding="{Binding Name}"
+                                        ItemDisplayBinding="{Binding Name, x:DataType=m:Fencer}"
                                         SelectedItem="{Binding NewInstructor}" />
                             </VerticalStackLayout>
 

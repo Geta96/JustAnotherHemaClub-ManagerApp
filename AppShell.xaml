@@ -38,7 +38,7 @@
 
     <!-- Custom flyout item template for a sharper look -->
     <Shell.ItemTemplate>
-        <DataTemplate>
+        <DataTemplate x:DataType="BaseShellItem">
             <Grid HeightRequest="52" Padding="16,0"
                   ColumnDefinitions="28,*" ColumnSpacing="12">
 
@@ -94,7 +94,7 @@
     </Shell.ItemTemplate>
 
     <Shell.MenuItemTemplate>
-        <DataTemplate>
+        <DataTemplate x:DataType="MenuItem">
             <Grid HeightRequest="48" Padding="16,0"
                   ColumnDefinitions="28,*" ColumnSpacing="12">
                 <Label Grid.Column="0" Text="⎋"
@@ -103,7 +103,7 @@
                        HorizontalOptions="Center"
                        VerticalOptions="Center" />
                 <Label Grid.Column="1"
-                       Text="{Binding Title}"
+                       Text="{Binding Text}"
                        TextColor="{StaticResource DangerRed}"
                        FontSize="15" FontAttributes="Bold"
                        VerticalOptions="Center" />
