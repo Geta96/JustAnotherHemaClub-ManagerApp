@@ -261,18 +261,29 @@ public partial class TrainingsViewModel : ObservableObject
     public async Task AttendTrainingAsync(EditableTrainingRow row)
     {
         if (row is null) return;
-        if (_auth.IsLoggedInInstructor) return;
         var me = _auth.CurrentFencer;
         if (me is null) return;
-        if (row.Training.AttendeeFencerIds.Contains(me.Id)) return;
 
-        row.Training.AttendeeFencerIds.Add(me.Id);
+        // Already attending (per the live UI state)? Nothing to do.
+        if (row.CurrentUserAttending) return;
+
+        // Ensure the underlying attendee list contains the current user. It may
+        // already be present if it was unticked-but-not-yet-saved in the list,
+        // so guard the Add to avoid duplicates.
+        if (!row.Training.AttendeeFencerIds.Contains(me.Id))
+            row.Training.AttendeeFencerIds.Add(me.Id);
+
+        // Keep the instructor's attendee-toggle in sync so the visible fencer
+        // list reflects it and a later Save (which rebuilds AttendeeFencerIds
+        // from the toggles) doesn't silently drop the self-attendance.
+        var myToggle = row.Fencers.FirstOrDefault(t => t.Fencer.Id == me.Id);
 
         var wasDirty = row.IsDirty;
 
         try
         {
             await _sheets.UpsertTrainingAsync(row.Training);
+            if (myToggle is not null) myToggle.IsAttending = true;
             row.CurrentUserAttending = true;
             row.IsDirty = wasDirty; // never become dirty just from self-attending
         }
