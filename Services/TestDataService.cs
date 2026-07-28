@@ -28,7 +28,7 @@ public sealed class TestDataService : IGoogleSheetsService, ICacheControl
     {
         _fencers = BuildFencers();
         _trainings = BuildTrainings();
-        _payments = new List<Payment>();
+        _payments = BuildPayments();
         _expenses = BuildExpenses();
         _incomes = BuildIncomes();
         _monthNotes = new List<MonthNote>();
@@ -357,26 +357,109 @@ public sealed class TestDataService : IGoogleSheetsService, ICacheControl
         return sessions;
     }
 
+    private static List<Payment> BuildPayments()
+    {
+        var today = DateTime.Today;
+        var thisMonth = new DateTime(today.Year, today.Month, 1);
+        var lastMonth = thisMonth.AddMonths(-1);
+        var twoMonthsAgo = thisMonth.AddMonths(-2);
+
+        var payments = new List<Payment>
+        {
+            // ----- Normal payments from existing fencers (real dues rows) -----
+            new() { FencerId = "demo-f2", Year = thisMonth.Year,  Month = thisMonth.Month,  Amount = 9000m,  PaidOn = thisMonth.AddDays(3) },
+            new() { FencerId = "demo-f3", Year = thisMonth.Year,  Month = thisMonth.Month,  Amount = 12000m, PaidOn = thisMonth.AddDays(4) },
+            new() { FencerId = "demo-f1", Year = lastMonth.Year,  Month = lastMonth.Month,  Amount = 5500m,  PaidOn = lastMonth.AddDays(6) },
+            new() { FencerId = "demo-f5", Year = lastMonth.Year,  Month = lastMonth.Month,  Amount = 9000m,  PaidOn = lastMonth.AddDays(8) },
+
+            // ----- ORPHANED payments: reference fencer IDs NOT present in
+            // BuildFencers(). These simulate members whose Fencers row was
+            // deleted from the sheet while their payment history remained.
+            // The Finance page should surface each as a "[Deleted User]" row. -----
+            new() { FencerId = "deleted-ghost-1", Year = thisMonth.Year,    Month = thisMonth.Month,    Amount = 12000m, PaidOn = thisMonth.AddDays(2) },
+            new() { FencerId = "deleted-ghost-1", Year = lastMonth.Year,    Month = lastMonth.Month,    Amount = 12000m, PaidOn = lastMonth.AddDays(2) },
+            new() { FencerId = "deleted-ghost-2", Year = lastMonth.Year,    Month = lastMonth.Month,    Amount = 9000m,  PaidOn = lastMonth.AddDays(5) },
+            new() { FencerId = "deleted-ghost-3", Year = twoMonthsAgo.Year, Month = twoMonthsAgo.Month, Amount = 3500m,  PaidOn = twoMonthsAgo.AddDays(9) },
+        };
+
+        return payments;
+    }
+
     private static List<Expense> BuildExpenses()
     {
         var today = DateTime.Today;
+        var thisMonth = new DateTime(today.Year, today.Month, 1);
+        var lastMonth = thisMonth.AddMonths(-1);
+
+        static string MonthLabel(DateTime d) =>
+            d.ToString("MMMM", System.Globalization.CultureInfo.InvariantCulture);
+
         return new List<Expense>
         {
-            new() { Id = "exp-1", Date = today.AddDays(-45), Amount = 25000, Description = "Venue rent (March)" },
-            new() { Id = "exp-2", Date = today.AddDays(-15), Amount = 25000, Description = "Venue rent (April)" },
-            new() { Id = "exp-3", Date = today.AddDays(-30), Amount = 8500, Description = "New training swords (×2)" },
-            new() { Id = "exp-4", Date = today.AddDays(-10), Amount = 3200, Description = "First aid supplies" },
+            new() { Id = "exp-1", Date = lastMonth.AddDays(2),  Amount = 25000, Category = "Venue",
+                    Description = $"Venue rent ({MonthLabel(lastMonth)})" },
+            new() { Id = "exp-2", Date = thisMonth.AddDays(2),  Amount = 25000, Category = "Venue",
+                    Description = $"Venue rent ({MonthLabel(thisMonth)})" },
+            new() { Id = "exp-3", Date = today.AddDays(-30),    Amount = 8500,  Category = "Equipment",
+                    Description = "New training swords (×2)" },
+            new() { Id = "exp-4", Date = today.AddDays(-10),    Amount = 3200,  Category = "Supplies",
+                    Description = "First aid supplies" },
         };
     }
 
     private static List<Income> BuildIncomes()
     {
         var today = DateTime.Today;
+        var thisMonth = new DateTime(today.Year, today.Month, 1);
+        var lastMonth = thisMonth.AddMonths(-1);
+
         return new List<Income>
         {
-            new() { Id = "inc-1", Date = today.AddDays(-40), Amount = 15000, Description = "Workshop fee (guest)" },
-            new() { Id = "inc-2", Date = today.AddDays(-5), Amount = 5000, Description = "Tournament entry (external)" },
+            new() { Id = "inc-1", Date = thisMonth.AddDays(3), Amount = 15000, Category = "Donation",   Description = "Anonymous donation" },
+            new() { Id = "inc-2", Date = thisMonth.AddDays(6), Amount = 30000, Category = "Sponsorship", Description = "Local sponsor" },
+            new() { Id = "inc-3", Date = lastMonth.AddDays(4), Amount = 18000, Category = "Workshop",    Description = "Guest workshop fee" },
         };
+    }
+
+    private static List<MonthNote> BuildMonthNotes()
+    {
+        var notes = new List<MonthNote>();
+        for (var y = 2021; y <= DateTime.Today.Year; y++)
+        {
+            for (var m = 1; m <= 12; m++)
+            {
+                if (y == DateTime.Today.Year && m > DateTime.Today.Month) continue;
+                notes.Add(new MonthNote
+                {
+                    Year = y, Month = m, Note = $"Lorem ipsum nota {y}-{m:00}"
+                });
+            }
+        }
+        return notes;
+    }
+
+    private static List<IndividualLesson> BuildIndividualLessons()
+    {
+        var today = DateTime.Today;
+        var threeMonthsAgo = today.AddMonths(-3);
+        var rng = new Random(42);
+        var topics = new[] { "Footwork", "Parries", "Thrusts", "Cuts", "Blocking" };
+
+        var lessons = new List<IndividualLesson>();
+        for (var d = threeMonthsAgo; d <= today; d = d.AddDays(7))
+        {
+            lessons.Add(new IndividualLesson
+            {
+                Id = $"il-{d:yyyyMMdd}",
+                StudentId = "demo-f6",
+                Date = d,
+                Topic = topics[rng.Next(topics.Length)],
+                InstructorId = "test-001",
+                Notes = "Great improvement!",
+                Status = IndividualLessonStatus.Accepted
+            });
+        }
+        return lessons;
     }
 
     private static List<RecurringTrainingRule> BuildRecurringTrainings()
@@ -404,9 +487,9 @@ public sealed class TestDataService : IGoogleSheetsService, ICacheControl
         var start = new DateTime(DateTime.Today.Year, 1, 1);
         return new List<PriceRule>
         {
-            new() { Id = "pr-1", SessionCount = 1, MonthCount = 1, FullPrice = 3500,  StudentPrice = 2000, StartDate = start },
-            new() { Id = "pr-2", SessionCount = 4, MonthCount = 1, FullPrice = 9000,  StudentPrice = 5500, StartDate = start },
-            new() { Id = "pr-3", SessionCount = 0, MonthCount = 1, FullPrice = 12000, StudentPrice = 7000, StartDate = start },
+            new() { Id = "pr-1", SessionCount = 1, MonthCount = 1, FullPrice = 3500,  StudentPrice = 2000,  StartDate = start },
+            new() { Id = "pr-2", SessionCount = 4, MonthCount = 1, FullPrice = 9000,  StudentPrice = 5500,  StartDate = start },
+            new() { Id = "pr-3", SessionCount = 0, MonthCount = 1, FullPrice = 12000, StudentPrice = 7000,  StartDate = start },
             new() { Id = "pr-4", SessionCount = 0, MonthCount = 2, FullPrice = 20000, StudentPrice = 12000, StartDate = start },
         };
     }

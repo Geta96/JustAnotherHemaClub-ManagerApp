@@ -4,6 +4,8 @@ namespace JustAnotherHemaClub.Models;
 
 public class Fencer
 {
+    public const string DeletedPlaceholder = "[Deleted User]";
+
     public string Id { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Username is required")]
@@ -26,4 +28,7 @@ public class Fencer
     public bool GdprAccepted { get; set; }
     public bool LiabilityAccepted { get; set; }
     public bool IsInstructor { get; set; }
+
+    public string DisplayName =>
+        string.IsNullOrWhiteSpace(Name) ? DeletedPlaceholder : Name;
 }

@@ -83,7 +83,7 @@
                                                         <Border Style="{StaticResource Card}">
                                                             <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12">
                                                                 <Label Grid.Row="0" Grid.Column="0"
-                                                                       Text="{Binding Fencer.Name}" FontAttributes="Bold"
+                                                                       Text="{Binding Fencer.DisplayName}" FontAttributes="Bold"
                                                                        TextColor="{StaticResource Wine}" />
                                                                 <Label Grid.Row="1" Grid.Column="0"
                                                                        Text="{Binding Summary}" Style="{StaticResource Caption}" />

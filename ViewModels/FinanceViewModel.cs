@@ -277,6 +277,8 @@ public partial class FinanceViewModel : ObservableObject
                             decimal Income, decimal Expenses, int Sessions,
                             double Avg)[ordered.Count];
 
+        var knownFencerIds = fencers.Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
+
         Parallel.For(0, ordered.Count, i =>
         {
             var ym = ordered[i];
@@ -327,6 +329,24 @@ public partial class FinanceViewModel : ObservableObject
                     continue;
 
                 monthVm.Dues.Add(new FencerDueRow(f, quote, cashPaid));
+            }
+
+            if (isInstructor)
+            {
+                var orphanedPaid = monthPayments
+                    .Where(p => !string.IsNullOrWhiteSpace(p.FencerId) &&
+                                !knownFencerIds.Contains(p.FencerId))
+                    .GroupBy(p => p.FencerId, StringComparer.Ordinal);
+
+                foreach (var g in orphanedPaid)
+                {
+                    var paid = g.Sum(p => p.Amount);
+                    if (paid == 0m) continue;
+
+                    var ghost = new Fencer { Id = g.Key, Name = "" }; // DisplayName → "[Deleted User]"
+                    var quote = DuesCalculator.Calculate(0, ghost.IsStudent, monthRules, paid);
+                    monthVm.Dues.Add(new FencerDueRow(ghost, quote, paid));
+                }
             }
 
             if (isInstructor)
