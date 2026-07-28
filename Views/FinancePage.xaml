@@ -368,7 +368,7 @@
                                 <Label Text="Full price (Ft)" Style="{StaticResource Caption}" />
                                 <Entry Keyboard="Numeric" Text="{Binding Vm.PricesVm.NewFullPrice}" />
 
-                                <Label Text="Student price (Ft) — auto ≈60%, rounded to 500"
+                                <Label Text="Student price (Ft) — discounted price made made for students"
                                        Style="{StaticResource Caption}" />
                                 <Entry Keyboard="Numeric" Text="{Binding Vm.PricesVm.NewStudentPrice}" />
 
@@ -401,7 +401,7 @@
                            IsVisible="{Binding Vm.PricesVm.HasNoRules}"
                            Style="{StaticResource Caption}" />
 
-                    <!-- Existing rules — active first, all collapsed by default -->
+                    <!-- Existing rules — active first, and all collapsed by default -->
                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding Vm.PricesVm.Rules}" Spacing="10">
                         <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="vm:PriceRuleRow">

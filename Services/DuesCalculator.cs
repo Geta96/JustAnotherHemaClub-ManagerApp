@@ -163,7 +163,9 @@ public static class DuesCalculator
             _ => sessionsAttended <= r.SessionCount,    // pack must cover attendance
         };
 
-    /// <summary>Roughly 60% of the full price, rounded to the nearest 500 Ft (so it also lands on 1000s).</summary>
+    /// <summary>Suggested starting point for a student price — roughly 60% of the
+    /// full price, rounded to the nearest 500 Ft. Instructors can override it with
+    /// any custom amount when creating or editing a price rule.</summary>
     public static decimal SuggestStudentPrice(decimal fullPrice)
     {
         if (fullPrice <= 0) return 0m;
