@@ -70,6 +70,7 @@ public partial class FinanceViewModel : ObservableObject
     [ObservableProperty] private int     allTimeSessions;
     [ObservableProperty] private int     activeFencers;
     [ObservableProperty] private double  allTimeAvgAttendance;
+    [ObservableProperty] private decimal allTimeUnpaid;
 
     // Year aggregates
     [ObservableProperty] private int     year = DateTime.Today.Year;
@@ -78,7 +79,8 @@ public partial class FinanceViewModel : ObservableObject
     [ObservableProperty] private decimal yearBalance;
     [ObservableProperty] private int     yearSessions;
     [ObservableProperty] private double  yearAvgAttendance;
-
+    [ObservableProperty] private decimal yearUnpaid;
+    
     public FinanceViewModel(IGoogleSheetsService sheets, AuthService auth, PricesViewModel pricesVm)
     {
         _sheets = sheets;
@@ -177,12 +179,14 @@ public partial class FinanceViewModel : ObservableObject
             AllTimeSessions      = computed.TotalSessions;
             ActiveFencers        = fencers.Count(f => f.Active);
             AllTimeAvgAttendance = computed.WeightedAttCount == 0 ? 0 : computed.WeightedAttSum / computed.WeightedAttCount;
+            AllTimeUnpaid        = computed.TotalUnpaid;
 
             YearIncome        = computed.YIncome;
             YearExpenses      = computed.YExpenses;
             YearBalance       = computed.YIncome - computed.YExpenses;
             YearSessions      = computed.YSessions;
             YearAvgAttendance = computed.YWeightedAttCount == 0 ? 0 : computed.YWeightedAttSum / computed.YWeightedAttCount;
+            YearUnpaid        = computed.YUnpaid;
 
             RecomputePersonalSummary();
             OnPropertyChanged(nameof(ShowPersonalSummary));
@@ -215,6 +219,7 @@ public partial class FinanceViewModel : ObservableObject
         public int YSessions;
         public double YWeightedAttSum;
         public int YWeightedAttCount;
+        public decimal TotalUnpaid, YUnpaid;
     }
 
     /// <summary>
@@ -275,7 +280,7 @@ public partial class FinanceViewModel : ObservableObject
 
         var perMonth = new (MonthFinanceVm Vm,
                             decimal Income, decimal Expenses, int Sessions,
-                            double Avg)[ordered.Count];
+                            double Avg, decimal Unpaid)[ordered.Count];
 
         var knownFencerIds = fencers.Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
 
@@ -358,7 +363,10 @@ public partial class FinanceViewModel : ObservableObject
             }
 
             monthVm.RaiseTotals();
-            perMonth[i] = (monthVm, monthIncome, monthExpenses, monthSessionsList.Count, avg);
+            var monthUnpaid = monthVm.Dues
+                .Where(d => !d.IsPaid)
+                .Sum(d => d.AmountDue);
+            perMonth[i] = (monthVm, monthIncome, monthExpenses, monthSessionsList.Count, avg, monthUnpaid);
         });
 
         var result = new FinanceComputation
@@ -368,12 +376,13 @@ public partial class FinanceViewModel : ObservableObject
 
         for (int i = 0; i < perMonth.Length; i++)
         {
-            var (vm, monthIncome, monthExpenses, sessions, avg) = perMonth[i];
+            var (vm, monthIncome, monthExpenses, sessions, avg, unpaid) = perMonth[i];
             var y = vm.Year;
 
             result.TotalIncome   += monthIncome;
             result.TotalExpenses += monthExpenses;
             result.TotalSessions += sessions;
+            result.TotalUnpaid   += unpaid;
             if (sessions > 0)
             {
                 result.WeightedAttSum   += avg * sessions;
@@ -384,11 +393,8 @@ public partial class FinanceViewModel : ObservableObject
                 result.YIncome   += monthIncome;
                 result.YExpenses += monthExpenses;
                 result.YSessions += sessions;
-                if (sessions > 0)
-                {
-                    result.YWeightedAttSum   += avg * sessions;
-                    result.YWeightedAttCount += sessions;
-                }
+                result.YUnpaid   += unpaid;
+
             }
 
             result.Months.Add(vm);
