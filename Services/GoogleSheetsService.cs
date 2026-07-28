@@ -115,7 +115,7 @@ public partial class GoogleSheetsService : IGoogleSheetsService
         {
             f.Id, f.Username ?? "", f.PasswordHash ?? "",
             f.Name, f.Email ?? "",
-            f.Active, f.IsStudent, f.GdprAccepted, f.LiabilityAccepted, f.IsInstructor
+            B(f.Active), B(f.IsStudent), B(f.GdprAccepted), B(f.LiabilityAccepted), B(f.IsInstructor)
         });
 
     public async Task UpsertFencerAsync(Fencer f)
@@ -129,7 +129,7 @@ public partial class GoogleSheetsService : IGoogleSheetsService
         {
             f.Id, f.Username ?? "", f.PasswordHash ?? "",
             f.Name, f.Email ?? "",
-            f.Active, f.IsStudent, f.GdprAccepted, f.LiabilityAccepted, f.IsInstructor
+            B(f.Active), B(f.IsStudent), B(f.GdprAccepted), B(f.LiabilityAccepted), B(f.IsInstructor)
         };
 
         if (rowIndex >= 0)
@@ -422,6 +422,11 @@ public partial class GoogleSheetsService : IGoogleSheetsService
 
     private static string S(IList<object> row, int i) =>
         i < row.Count ? row[i]?.ToString() ?? "" : "";
+
+    /// <summary>Serializes a bool as the canonical "TRUE"/"FALSE" text that
+    /// <see cref="ParseBool"/> round-trips reliably, avoiding the ambiguity of
+    /// writing raw boxed bools through USER_ENTERED.</summary>
+    private static string B(bool value) => value ? "TRUE" : "FALSE";
 
     private static bool ParseBool(string s) =>
         s.Equals("TRUE", StringComparison.OrdinalIgnoreCase) ||
