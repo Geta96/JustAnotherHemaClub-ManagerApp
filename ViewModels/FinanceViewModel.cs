@@ -459,7 +459,7 @@ public partial class FinanceViewModel : ObservableObject
     private static string BuildPricingSummary(IReadOnlyList<PriceRule> all)
     {
         if (all.Count == 0)
-            return "Pricing (defaults): 1 session 3 500 · 4 sessions 9 000 · unlimited 12 000";
+            return "Pricing (defaults): 1 session 3 500 · 4 sessions 9 000 · monthly pass 12 000";
 
         var activeToday = all
             .Where(r => r.IsActiveOn(DateTime.Today))
@@ -471,7 +471,9 @@ public partial class FinanceViewModel : ObservableObject
 
         return "Pricing: " + string.Join(" · ", activeToday.Select(r => r.SessionCount switch
         {
-            0 => $"unlimited {r.FullPrice:N0}",
+            0 => Math.Max(1, r.MonthCount) == 1
+                    ? $"monthly pass {r.FullPrice:N0}"
+                    : $"{Math.Max(1, r.MonthCount)} months pass {r.FullPrice:N0}",
             1 => $"1 session {r.FullPrice:N0}",
             _ => $"{r.SessionCount} sessions {r.FullPrice:N0}"
         }));
