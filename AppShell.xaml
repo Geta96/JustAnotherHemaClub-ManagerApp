@@ -28,14 +28,6 @@
         </Grid>
     </Shell.FlyoutHeader>
 
-    <Shell.FlyoutFooter>
-        <Grid Padding="16,12" BackgroundColor="{StaticResource Cream}">
-            <Label Text="© Just Another HEMA Club"
-                   TextColor="{StaticResource Muted}" FontSize="12"
-                   HorizontalOptions="Center" />
-        </Grid>
-    </Shell.FlyoutFooter>
-
     <!-- Custom flyout item template for a sharper look -->
     <Shell.ItemTemplate>
         <DataTemplate x:DataType="BaseShellItem">
@@ -103,7 +95,7 @@
                        HorizontalOptions="Center"
                        VerticalOptions="Center" />
                 <Label Grid.Column="1"
-                       Text="{Binding Text}"
+                       Text="Logout"
                        TextColor="{StaticResource DangerRed}"
                        FontSize="15" FontAttributes="Bold"
                        VerticalOptions="Center" />
