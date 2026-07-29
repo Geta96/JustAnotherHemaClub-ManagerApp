@@ -44,6 +44,12 @@ You may at any time:
 
 To exercise these rights, contact an instructor in person or by email.
 
+You further confirm that either you are 18 years of age or older and are therefore able to
+provide this consent on your own behalf; or you are under 18 years of age, in which case your
+legal guardian has consented to your participation and to the processing of your personal data
+as described above, and has already submitted a written declaration of consent to the
+instructors to this effect.
+
 By checking the GDPR box on the registration / profile page you confirm that you have read,
 understood and agreed to this statement.
                     </Label.Text>
@@ -55,32 +61,38 @@ understood and agreed to this statement.
                 <Label Text="Magyar" Style="{StaticResource H2}" />
                 <Label LineBreakMode="WordWrap">
                     <Label.Text>
-A Just Another HEMA Club (a tovabbiakban "a Klub") az alkalmazasban megadott szemelyes
-adatokat (nev, e-mail cim, felhasznalonev, edzeseken valo reszvetel es befizetesi statusz)
-kizarolag a Klub mukodtetese celjabol kezeli: a vivok nyilvantartasahoz, az edzesek
-szervezesehez, valamint a tagdijak es koltsegek nyomon kovetesehez.
+A Just Another HEMA Club (a továbbiakban "a Klub") az alkalmazásban megadott személyes
+adatokat (név, e-mail cím, felhasználónév, edzéseken való részvétel és befizetési státusz)
+kizárólag a Klub működtetése céljából kezeli: a vívók nyilvántartásához, az edzések
+szervezéséhez, valamint a tagdíjak és költségek nyomon követéséhez.
 
-Az adatokat egy privat Google Sheet-ben taroljuk, amelyhez kizarolag a Klub edzoi es az
-alkalmazas altal hasznalt szolgaltatasi fiok fer hozza. Az adatokat harmadik felnek nem
-adjuk at, nem ertekesitjuk.
+Az adatokat egy privát Google Sheet-ben tároljuk, amelyhez kizárólag a Klub edzői és az
+alkalmazás által használt szolgáltatási fiók fér hozzá. Az adatokat harmadik félnek nem
+adjuk át, nem értékesítjük.
 
-Az edzeseken, gyakorlasokon es a Klub esemenyein a vivokrol fenykepek es videofelvetelek
-keszulhetnek. Ezek a kepek es videok a Klub altal marketing- es promocios celokra
-felhasznalhatok, beleertve - de nem kizarolagosan - a Klub kozossegi media oldalain, a
-honlapon es nyomtatott anyagokban valo kozzetetelt. Ha nem szeretnel ilyen anyagokban
-megjelenni, kerjuk, jelezd irasban valamelyik edzonek; ebben az esetben kihagyunk minden
-nyilvanossagra szant felvetelbol.
+Az edzéseken, gyakorlásokon és a Klub eseményein a vívókról fényképek és videófelvételek
+készülhetnek. Ezek a képek és videók a Klub által marketing- és promóciós célokra
+felhasználhatók, beleértve - de nem kizárólagosan - a Klub közösségi média oldalain, a
+honlapon és nyomtatott anyagokban való közzétételt. Ha nem szeretnél ilyen anyagokban
+megjelenni, kérjük, jelezd írásban valamelyik edzőnek; ebben az esetben kihagyunk minden
+nyilvánosságra szánt felvételből.
 
-Barmikor jogosult vagy:
-  - masolatot kerni a rolad tarolt adatokrol,
-  - kerni a pontatlan adatok helyesbiteset,
-  - kerni a fiokod es a kapcsolodo adatok torleset,
-  - visszavonni a hozzajarulasodat a kepmasod marketinganyagokban valo felhasznalasahoz.
+Bármikor jogosult vagy:
+  - másolatot kérni a rólad tárolt adatokról,
+  - kérni a pontatlan adatok helyesbítését,
+  - kérni a fiókod és a kapcsolódó adatok törlését,
+  - visszavonni a hozzájárulásodat a képmásod marketinganyagokban való felhasználásához.
 
-Ezeket a jogokat egy edzonel szemelyesen vagy e-mailben gyakorolhatod.
+Ezeket a jogokat egy edzőnél személyesen vagy e-mailben gyakorolhatod.
 
-Az adatvedelmi jelolonegyzet bejelolesevel a regisztracios / profil oldalon megerositi,
-hogy a jelen nyilatkozatot elolvastad, megertetted es elfogadtad.
+Egyúttal megerősíted, hogy vagy betöltötted a 18. életévedet, és így önállóan, saját nevedben
+jogosult vagy megadni ezt a hozzájárulást; vagy még nem töltötted be a 18. életévedet, amely
+esetben a törvényes gondviselőd hozzájárult a részvételedhez és a személyes adataid fent
+leírtak szerinti kezeléséhez, és erről írásbeli hozzájáruló nyilatkozatot már benyújtott az
+edzőknek.
+
+Az adatvédelmi jelölőnégyzet bejelölésével a regisztrációs / profil oldalon megerősíted,
+hogy a jelen nyilatkozatot elolvastad, megértetted és elfogadtad.
                     </Label.Text>
                 </Label>
             </VerticalStackLayout>

@@ -34,6 +34,10 @@ By checking the liability box on the registration / profile page you confirm tha
     and accept the responsibility of doing so.
   - You will wear and maintain the protective equipment required for each activity.
   - You will follow the safety rules and the instructors' directions during every session.
+  - You are 18 years of age or older, and therefore legally responsible for yourself; or
+  - You are under 18 years of age, in which case your legal guardian has consented to your
+    participation in the Club's trainings and has already submitted a written declaration of
+    consent to the instructors to this effect.
   - Neither the Club, its instructors, nor other members are liable for injuries, loss or
     damage to property arising from your participation, except in cases of gross negligence
     or wilful misconduct.
@@ -67,40 +71,44 @@ part in the Club's training activities.
                 <Label Text="Magyar" Style="{StaticResource H2}" />
                 <Label LineBreakMode="WordWrap">
                     <Label.Text>
-A felelossegvallalasi nyilatkozat bejelolesevel a regisztracios / profil oldalon az
-alabbiakat ismered el:
+A felelősségvállalási nyilatkozat bejelölésével a regisztrációs / profil oldalon az
+alábbiakat ismered el:
 
-  - A Klub edzesein, gyakorlasain es esemenyein onkentesen, sajat felelossegedre veszel reszt.
-  - Fizikailag alkalmas vagy az intenziv testmozgasra, vagy orvossal konzultaltal es ezt a
-    felelosseget vallalod.
-  - Az adott tevekenyseghez eloirt vedofelszerelest viseled es karbantartod.
-  - Minden alkalommal betartod a biztonsagi szabalyokat es az edzok utasitasait.
-  - A Klubot, az edzoket es a tobbi tagot nem terheli felelosseg a reszveteledbol eredo
-    serulesekert, kar- vagy vagyonveszteseger, kiveve sulyos gondatlansag vagy szandekos
-    magatartas eseten.
+  - A Klub edzésein, gyakorlásain és eseményein önkéntesen, saját felelősségedre veszel részt.
+  - Fizikailag alkalmas vagy az intenzív testmozgásra, vagy orvossal konzultáltál és ezt a
+    felelősséget vállalod.
+  - Az adott tevékenységhez előírt védőfelszerelést viseled és karbantartod.
+  - Minden alkalommal betartod a biztonsági szabályokat és az edzők utasításait.
+  - Betöltötted a 18. életévedet, és ezáltal jogilag felelősséget tudsz vállalni önmagadért; vagy
+  - Még nem töltötted be a 18. életévedet, amely esetben a törvényes gondviselőd hozzájárult a
+    Klub edzésein való részvételedhez, és erről írásbeli hozzájáruló nyilatkozatot már
+    benyújtott az edzőknek.
+  - A Klubot, az edzőket és a többi tagot nem terheli felelősség a részvételedből eredő
+    sérülésekért, kár- vagy vagyonveszteségért, kivéve súlyos gondatlanság vagy szándékos
+    magatartás esetén.
 
-Tudomasul veszem, hogy az edzesen valo reszvetel fizikai megterhelessel es potencialis
-serulesveszellyel jar.
-Sajat testi epsegem megovasa erdekeben megfelelo vedofelszerelest hasznalok, es az edzo
-utasitasait minden esetben betartom. Az esetleges serulesekert, balesetekert, amelyek
-sajat hibambol vagy kockazatvallalasbol erednek, az egyesuletet es az edzot nem terheli
-felelosseg.
+Tudomásul veszem, hogy az edzésen való részvétel fizikai megterheléssel és potenciális
+sérülésveszéllyel jár.
+Saját testi épségem megóvása érdekében megfelelő védőfelszerelést használok, és az edző
+utasításait minden esetben betartom. Az esetleges sérülésekért, balesetekért, amelyek
+saját hibámból vagy kockázatvállalásból erednek, az egyesületet és az edzőt nem terheli
+felelősség.
 
-Gyakorlas es a parbajok soran mindent megteszek partnerem es a sajat testi epsegenek
-megovasaert. Betartom a biztonsagi eloirasokat, az eszkozhasznalati szabalyokat.
+Gyakorlás és a párbajok során mindent megteszek partnerem és a saját testi épségének
+megóvásáért. Betartom a biztonsági előírásokat, az eszközhasználati szabályokat.
 
-Felelosseget vallalok az altalam hasznalt sajat es kolcsonzott felszerelesert, eszkozokert.
-Edzes elott meggyozodok rola, hogy biztonsagosan hasznalhatok.
+Felelősséget vállalok az általam használt saját és kölcsönzött felszerelésért, eszközökért.
+Edzés előtt meggyőződök róla, hogy biztonságosan használhatók.
 
-Koteles vagyok a kolcson kapott eszkozoket rendeltetesszeruen hasznalni, es azokban
-keletkezett esetleges kart megteriteni, ha az nem rendeltetesszeru hasznalatbol ered.
+Köteles vagyok a kölcsön kapott eszközöket rendeltetésszerűen használni, és azokban
+keletkezett esetleges kárt megtéríteni, ha az nem rendeltetésszerű használatból ered.
 
-Kijelentem, hogy egeszsegi allapotom lehetove teszi az edzesen valo reszvetelt, es nem all
-fenn olyan betegsegem vagy korlatozottsagom, amely az edzeseken valo reszvetel soran ram
-vagy masokra veszelyt jelentene.
+Kijelentem, hogy egészségi állapotom lehetővé teszi az edzésen való részvételt, és nem áll
+fenn olyan betegségem vagy korlátozottságom, amely az edzéseken való részvétel során rám
+vagy másokra veszélyt jelentene.
 
-Ha nem ertesz egyet ezekkel a feltetelekkel, kerjuk, ne jelold be a felelossegvallalasi
-jelolonegyzetet es ne vegy reszt a Klub edzesein.
+Ha nem értesz egyet ezekkel a feltételekkel, kérjük, ne jelöld be a felelősségvállalási
+jelölőnégyzetet és ne vegyél részt a Klub edzésein.
                     </Label.Text>
                 </Label>
             </VerticalStackLayout>
