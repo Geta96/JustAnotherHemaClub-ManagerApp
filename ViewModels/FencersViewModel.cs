@@ -109,7 +109,14 @@ public partial class FencersViewModel : ObservableObject
             _allTrainings = allTrainings;
             _allLessons = allLessons;
 
-            SelectedFencer ??= Fencers.FirstOrDefault();
+            if (SelectedFencer is null)
+            {
+                var currentId = _auth.CurrentFencer?.Id;
+                SelectedFencer = (!string.IsNullOrWhiteSpace(currentId)
+                        ? Fencers.FirstOrDefault(f => f.Id == currentId)
+                        : null)
+                    ?? Fencers.FirstOrDefault();
+            }
             RecomputeSelectedDetails();
 
             BackendRequestSucceeded = true;
