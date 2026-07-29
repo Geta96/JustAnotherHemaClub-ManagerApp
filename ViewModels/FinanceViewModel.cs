@@ -395,6 +395,11 @@ public partial class FinanceViewModel : ObservableObject
                 result.YSessions += sessions;
                 result.YUnpaid   += unpaid;
 
+                if (sessions > 0)
+                {
+                    result.YWeightedAttSum   += avg * sessions;
+                    result.YWeightedAttCount += sessions;
+                }
             }
 
             result.Months.Add(vm);
