@@ -103,8 +103,10 @@
                             Style="{StaticResource SecondaryButton}"
                             Clicked="OnBackClicked" />
 
-                    <Label Text="{Binding StatusMessage}" TextColor="#1F8A2E" FontAttributes="Bold" />
-                    <Label Text="{Binding ErrorMessage}"  TextColor="{StaticResource DangerRed}" FontAttributes="Bold" />
+                    <Label Text="{Binding StatusMessage}" TextColor="#1F8A2E" FontAttributes="Bold"
+                           IsVisible="{Binding HasStatusMessage}" />
+                    <Label Text="{Binding ErrorMessage}"  TextColor="{StaticResource DangerRed}" FontAttributes="Bold"
+                           IsVisible="{Binding HasErrorMessage}" />
                 </VerticalStackLayout>
             </Border>
         </VerticalStackLayout>

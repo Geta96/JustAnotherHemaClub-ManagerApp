@@ -23,4 +23,9 @@ public partial class GdprPage : ContentPage
         EnglishButton.Style = english ? null! : secondary!;
         HungarianButton.Style = english ? secondary! : null!;
     }
+    private async void OnBackClicked(object? sender, EventArgs e)
+    {
+        if (Navigation.NavigationStack.Count > 1)
+            await Navigation.PopAsync();
+    }
 }

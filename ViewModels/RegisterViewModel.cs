@@ -25,6 +25,12 @@ public partial class RegisterViewModel : ObservableObject
     [ObservableProperty] private string? errorMessage;
     [ObservableProperty] private bool isBusy;
 
+    /// <summary>True when there is a status message to show — used to collapse the label otherwise.</summary>
+    public bool HasStatusMessage => !string.IsNullOrWhiteSpace(StatusMessage);
+
+    /// <summary>True when there is an error message to show — used to collapse the label otherwise.</summary>
+    public bool HasErrorMessage => !string.IsNullOrWhiteSpace(ErrorMessage);
+
     /// <summary>
     /// True only once both fields are non-empty and don't match. Used to show a
     /// live red hint under the confirm-email field without nagging on first focus.
@@ -46,6 +52,9 @@ public partial class RegisterViewModel : ObservableObject
     partial void OnConfirmEmailChanged(string value)    => OnPropertyChanged(nameof(EmailMismatch));
     partial void OnPasswordChanged(string value)        => OnPropertyChanged(nameof(PasswordMismatch));
     partial void OnConfirmPasswordChanged(string value) => OnPropertyChanged(nameof(PasswordMismatch));
+
+    partial void OnStatusMessageChanged(string? value)  => OnPropertyChanged(nameof(HasStatusMessage));
+    partial void OnErrorMessageChanged(string? value)   => OnPropertyChanged(nameof(HasErrorMessage));
 
     [RelayCommand]
     private async Task RegisterAsync()
