@@ -13,21 +13,12 @@
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalOptions="Center">
                     <Label Grid.Column="0" Text="Fencer profiles" Style="{StaticResource H1}"
                            VerticalOptions="Center" />
-                    <Border Grid.Column="1"
-                            BackgroundColor="{StaticResource CreamSoft}"
-                            Stroke="{StaticResource Wine}" StrokeThickness="1"
-                            StrokeShape="RoundRectangle 10"
-                            Padding="10,6"
-                            HorizontalOptions="End">
-                        <Border.GestureRecognizers>
+                    <Label Grid.Column="1"
+                           Style="{StaticResource RefreshIcon}">
+                        <Label.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OnRefreshTapped" />
-                        </Border.GestureRecognizers>
-                        <Label Text="↻"
-                               FontSize="22" FontAttributes="Bold"
-                               TextColor="{StaticResource Wine}"
-                               VerticalOptions="Center"
-                               HorizontalOptions="Center" />
-                    </Border>
+                        </Label.GestureRecognizers>
+                    </Label>
                 </Grid>
 
                 <VerticalStackLayout Spacing="14"

@@ -85,6 +85,22 @@
         <Setter Property="StrokeShape" Value="RoundRectangle 12" />
     </Style>
 
+    <!-- Borderless refresh icon (glyph only). Fixed square with centered text
+         alignment so the ↻ glyph sits dead-centre instead of riding high on
+         its baseline. Used in every page header via a TapGestureRecognizer. -->
+    <Style x:Key="RefreshIcon" TargetType="Label">
+        <Setter Property="Text" Value="↻" />
+        <Setter Property="FontSize" Value="30" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="TextColor" Value="{StaticResource Wine}" />
+        <Setter Property="WidthRequest" Value="44" />
+        <Setter Property="HeightRequest" Value="44" />
+        <Setter Property="HorizontalOptions" Value="End" />
+        <Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="HorizontalTextAlignment" Value="Center" />
+        <Setter Property="VerticalTextAlignment" Value="Center" />
+    </Style>
+
     <!-- NavigationPage (used on LoginPage) -->
     <Style TargetType="NavigationPage">
         <Setter Property="BarBackgroundColor" Value="{StaticResource Wine}" />
