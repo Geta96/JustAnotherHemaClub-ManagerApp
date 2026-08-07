@@ -29,6 +29,15 @@ public partial class FinancePage : ContentPage
         _loadedOnce = true;
     }
 
+    protected override void OnDisappearing()
+    {
+        base.OnDisappearing();
+        // Abandon any in-flight refresh so it doesn't mutate the detached
+        // CollectionView after we've navigated away (crashes on Android when the
+        // RecyclerView has already been torn down).
+        _vm.CancelLoad();
+    }
+
     private async void OnRefreshTapped(object? sender, TappedEventArgs e)
     {
         _cache.InvalidateFencers();

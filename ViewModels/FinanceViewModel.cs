@@ -17,6 +17,9 @@ public partial class FinanceViewModel : ObservableObject
     private readonly IGoogleSheetsService _sheets;
     private readonly AuthService _auth;
 
+    // Cancels any in-flight LoadAsync when the user navigates away mid-refresh.
+    private CancellationTokenSource? _loadCts;
+
     // Suppress silent re-loads for 30 seconds after the last successful fetch.
     private static readonly TimeSpan SilentReloadThrottle = TimeSpan.FromSeconds(30);
     private DateTime _lastLoadedUtc = DateTime.MinValue;
@@ -105,6 +108,11 @@ public partial class FinanceViewModel : ObservableObject
         if (!showSpinner && DateTime.UtcNow - _lastLoadedUtc < SilentReloadThrottle)
             return;
 
+        // Cancel a previous in-flight load and start a fresh token for this one.
+        _loadCts?.Cancel();
+        _loadCts = new CancellationTokenSource();
+        var ct = _loadCts.Token;
+
         if (showSpinner) IsLoading = true;
         try
         {
@@ -126,6 +134,8 @@ public partial class FinanceViewModel : ObservableObject
             var incomesTask   = _sheets.GetIncomesAsync(rangeFrom, rangeTo);
             var rulesTask     = _sheets.GetPriceRulesAsync();
             await Task.WhenAll(fencersTask, trainingsTask, expensesTask, incomesTask, rulesTask);
+
+            ct.ThrowIfCancellationRequested();
 
             var fencers     = fencersTask.Result;
             var trainings   = trainingsTask.Result;
@@ -154,6 +164,8 @@ public partial class FinanceViewModel : ObservableObject
                 .ToArray();
             await Task.WhenAll(paymentTasks);
 
+            ct.ThrowIfCancellationRequested();
+
             // Everything from here to the UI assignment is pure CPU work
             // (grouping, the credit-carry pre-pass, per-month VM building and the
             // reduction). Run it OFF the UI thread so the parallel loops don't
@@ -164,7 +176,12 @@ public partial class FinanceViewModel : ObservableObject
 
             var computed = await Task.Run(() => ComputeFinance(
                 fencers, trainings, expensesAll, incomesAll, allRules,
-                ordered, payments, today, isInstructor, currentFencerId, Year));
+                ordered, payments, today, isInstructor, currentFencerId, Year), ct);
+
+            // The page may have been navigated away from while we computed.
+            // Publishing now would mutate a detached CollectionView, which
+            // crashes on Android when the RecyclerView has already been torn down.
+            ct.ThrowIfCancellationRequested();
 
             // ----- UI-thread section: publish the results -----
             var built = computed.Months;
@@ -193,6 +210,10 @@ public partial class FinanceViewModel : ObservableObject
             OnPropertyChanged(nameof(IsLoggedInInstructor));
 
             _lastLoadedUtc = DateTime.UtcNow;
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when the user navigates away mid-refresh — abandon quietly.
         }
         catch (Exception ex)
         {
@@ -284,7 +305,17 @@ public partial class FinanceViewModel : ObservableObject
 
         var knownFencerIds = fencers.Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
 
-        Parallel.For(0, ordered.Count, i =>
+        // Leave a core free for the UI thread + renderer. On the Android emulator
+        // (few shared vCPUs) an unbounded Parallel.For grabs every core and starves
+        // the dispatcher, so the hamburger menu / tabs stop responding while a
+        // refresh is running. Capping this keeps the emulator interactive and is
+        // harmless on a real device where there are more cores.
+        var parallelOptions = new ParallelOptions
+        {
+            MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1)
+        };
+
+        Parallel.For(0, ordered.Count, parallelOptions, i =>
         {
             var ym = ordered[i];
             var (y, m) = ym;
@@ -429,7 +460,15 @@ public partial class FinanceViewModel : ObservableObject
         // its own partial dictionary; results are merged single-threaded after.
         var partials = new Dictionary<(string, int, int), decimal>[fencerList.Count];
 
-        Parallel.For(0, fencerList.Count, idx =>
+        // Cap parallelism so the credit-carry pre-pass leaves a core free for the
+        // UI thread (see note in ComputeFinance) — keeps the Android emulator
+        // responsive while a refresh runs.
+        var parallelOptions = new ParallelOptions
+        {
+            MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1)
+        };
+
+        Parallel.For(0, fencerList.Count, parallelOptions, idx =>
         {
             var f = fencerList[idx];
             var local = new Dictionary<(string, int, int), decimal>(monthsAscending.Count);
@@ -619,4 +658,12 @@ public partial class FinanceViewModel : ObservableObject
         month.IsAddingIncome = false;
         month.RaiseTotals();
     }
+
+    /// <summary>
+    /// Abandons any in-flight <see cref="LoadAsync"/>. Called when the page is
+    /// disappearing so a manual refresh doesn't mutate the UI-bound collections
+    /// after the CollectionView has been detached (crashes on Android when the
+    /// RecyclerView has already been torn down).
+    /// </summary>
+    public void CancelLoad() => _loadCts?.Cancel();
 }

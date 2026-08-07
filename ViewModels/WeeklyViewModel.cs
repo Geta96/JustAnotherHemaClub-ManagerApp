@@ -70,6 +70,9 @@ public partial class WeeklyViewModel : ObservableObject
     private readonly IGoogleSheetsService _sheets;
     private readonly AuthService _auth;
 
+    // Cancels any in-flight LoadAsync when the user navigates away mid-refresh.
+    private CancellationTokenSource? _loadCts;
+
     public ObservableCollection<WeeklyRuleRow> Rules { get; } = new();
 
     [ObservableProperty] private bool isLoading;
@@ -87,13 +90,22 @@ public partial class WeeklyViewModel : ObservableObject
         Rules.CollectionChanged += (_, __) => NotifyHasNoRules();
     }
 
+    /// <summary>Abandons any in-flight <see cref="LoadAsync"/> when navigating away mid-load.</summary>
+    public void CancelLoad() => _loadCts?.Cancel();
+
     [RelayCommand]
     public async Task LoadAsync(bool showSpinner = false)
     {
+        _loadCts?.Cancel();
+        _loadCts = new CancellationTokenSource();
+        var ct = _loadCts.Token;
+
         if (showSpinner) IsLoading = true;
         try
         {
             var rules = await _sheets.GetRecurringTrainingsAsync();
+
+            ct.ThrowIfCancellationRequested();
 
             var ordered = rules
                 .OrderBy(r => ((int)r.DayOfWeek + 6) % 7)
@@ -103,6 +115,10 @@ public partial class WeeklyViewModel : ObservableObject
             foreach (var r in ordered) Rules.Add(new WeeklyRuleRow(r));
 
             NotifyHasNoRules(); // belt-and-braces; CollectionChanged handles it too
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when the user navigates away mid-load — abandon quietly.
         }
         finally { if (showSpinner) IsLoading = false; }
     }

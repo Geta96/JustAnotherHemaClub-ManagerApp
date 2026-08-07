@@ -28,6 +28,14 @@ public partial class TrainingsHubPage : ContentPage
         _loadedOnce = true;
     }
 
+    protected override void OnDisappearing()
+    {
+        base.OnDisappearing();
+        // Abandon any in-flight load so it doesn't mutate the detached
+        // CollectionViews after we've navigated away.
+        _vm.CancelLoad();
+    }
+
     private async void OnRefreshTapped(object? sender, TappedEventArgs e)
     {
         _cache.InvalidateTrainings();

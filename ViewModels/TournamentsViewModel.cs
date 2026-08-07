@@ -10,6 +10,9 @@ public partial class TournamentsViewModel : ObservableObject
     private readonly IGoogleSheetsService _sheets;
     private readonly ICacheControl _cache;
 
+    // Cancels any in-flight LoadAsync when the user navigates away mid-refresh.
+    private CancellationTokenSource? _loadCts;
+
     // Suppress silent re-loads for 30 seconds after the last successful fetch.
     private static readonly TimeSpan SilentReloadThrottle = TimeSpan.FromSeconds(30);
     private DateTime _lastLoadedUtc = DateTime.MinValue;
@@ -36,10 +39,20 @@ public partial class TournamentsViewModel : ObservableObject
         // freshly-created (not-yet-started) tournament won't appear until the
         // window expires. Redundant network reads are already de-duplicated by
         // the caching layer, so an unconditional reload is cheap.
+
+        // Cancel a previous in-flight load and start a fresh token for this one.
+        _loadCts?.Cancel();
+        _loadCts = new CancellationTokenSource();
+        var ct = _loadCts.Token;
+
         if (showSpinner) IsLoading = true;
         try
         {
             var headers = await _sheets.GetTournamentHeadersAsync();
+
+            // The page may have been navigated away from while we fetched.
+            ct.ThrowIfCancellationRequested();
+
             Tournaments.Clear();
             foreach (var t in headers.OrderByDescending(h => h.CreatedAt))
                 Tournaments.Add(new TournamentRow(t));
@@ -47,8 +60,20 @@ public partial class TournamentsViewModel : ObservableObject
             OnPropertyChanged(nameof(HasNoTournaments));
             _lastLoadedUtc = DateTime.UtcNow;
         }
+        catch (OperationCanceledException)
+        {
+            // Expected when the user navigates away mid-refresh — abandon quietly.
+        }
         finally { if (showSpinner) IsLoading = false; }
     }
+
+    /// <summary>
+    /// Abandons any in-flight <see cref="LoadAsync"/>. Called when the page is
+    /// disappearing so a manual refresh doesn't mutate the UI-bound collections
+    /// after the CollectionView has been detached (crashes on Android when the
+    /// RecyclerView has already been torn down).
+    /// </summary>
+    public void CancelLoad() => _loadCts?.Cancel();
 
     [RelayCommand]
     public async Task RefreshAsync()

@@ -20,6 +20,9 @@ public partial class StatisticsViewModel : ObservableObject
     private readonly IGoogleSheetsService _sheets;
     private readonly AuthService _auth;
 
+    // Cancels any in-flight LoadAsync when the user navigates away mid-refresh.
+    private CancellationTokenSource? _loadCts;
+
     public ObservableCollection<MonthStatRow> Months { get; } = new();
 
     // Leaderboards
@@ -56,9 +59,22 @@ public partial class StatisticsViewModel : ObservableObject
         _auth = auth;
     }
 
+    /// <summary>
+    /// Abandons any in-flight <see cref="LoadAsync"/>. Called when the page is
+    /// disappearing so a manual refresh doesn't mutate the UI-bound collections
+    /// after the CollectionView has been detached (crashes on Android when the
+    /// RecyclerView has already been torn down).
+    /// </summary>
+    public void CancelLoad() => _loadCts?.Cancel();
+
     [RelayCommand]
     public async Task LoadAsync(bool showSpinner = false)
     {
+        // Cancel a previous in-flight load and start a fresh token for this one.
+        _loadCts?.Cancel();
+        _loadCts = new CancellationTokenSource();
+        var ct = _loadCts.Token;
+
         if (showSpinner) IsLoading = true;
         try
         {
@@ -67,6 +83,8 @@ public partial class StatisticsViewModel : ObservableObject
             var trainingsTask = _sheets.GetTrainingsAsync();
             var lessonsTask   = _sheets.GetIndividualLessonsAsync();
             await Task.WhenAll(fencersTask, trainingsTask, lessonsTask);
+
+            ct.ThrowIfCancellationRequested();
 
             var fencers   = fencersTask.Result;
             var trainings = trainingsTask.Result;
@@ -89,7 +107,10 @@ public partial class StatisticsViewModel : ObservableObject
 
             // Grouping over all-time attendance / lessons is CPU work — build the
             // leaderboard rows off the UI thread, then publish on the dispatcher.
-            var boards = await Task.Run(() => ComputeLeaderboards(fencers, trainings, lessons));
+            var boards = await Task.Run(() => ComputeLeaderboards(fencers, trainings, lessons), ct);
+
+            // The page may have been navigated away from while we computed.
+            ct.ThrowIfCancellationRequested();
 
             RecentAttendanceSubtitle = boards.RecentSubtitle;
             OnPropertyChanged(nameof(RecentAttendanceSubtitle));
@@ -98,6 +119,10 @@ public partial class StatisticsViewModel : ObservableObject
             Replace(TopAttendanceAllTime, boards.AllTime);
             Replace(TopOneOnOneGivers, boards.Givers);
             Replace(TopOneOnOneReceivers, boards.Receivers);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when the user navigates away mid-refresh — abandon quietly.
         }
         finally { if (showSpinner) IsLoading = false; }
     }

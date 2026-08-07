@@ -13,20 +13,27 @@
         <!-- =================== TRAININGS TAB =================== -->
         <DataTemplate x:Key="TrainingsTabTemplate"
                       x:DataType="vm:TrainingsViewModel">
-            <ScrollView>
-                <VerticalStackLayout Padding="16,8,16,16" Spacing="14">
+            <Grid RowDefinitions="Auto,Auto,*">
 
-                    <Button Text="New Training"
-                            BackgroundColor="#476FB5"
-                            TextColor="{StaticResource Cream}"
-                            IsVisible="{Binding IsLoggedInInstructor}"
-                            Clicked="OnNewTrainingClicked" />
+                <Button Grid.Row="0"
+                        Text="New Training"
+                        Margin="16,8,16,0"
+                        BackgroundColor="#476FB5"
+                        TextColor="{StaticResource Cream}"
+                        IsVisible="{Binding IsLoggedInInstructor}"
+                        Clicked="OnNewTrainingClicked" />
 
-                    <Label Text="Past trainings by month" Style="{StaticResource H1}" />
+                <Label Grid.Row="1" Text="Past trainings by month" Style="{StaticResource H1}"
+                       Margin="16,14,16,0" />
 
-                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Months}" Spacing="10">
-                        <BindableLayout.ItemTemplate>
-                            <DataTemplate x:DataType="vm:PastMonthVm">
+                <CollectionView Grid.Row="2"
+                                ItemsSource="{Binding Months}"
+                                Margin="16,8,16,16">
+                    <CollectionView.ItemsLayout>
+                        <LinearItemsLayout Orientation="Vertical" ItemSpacing="10" />
+                    </CollectionView.ItemsLayout>
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PastMonthVm">
                                 <Border Style="{StaticResource Card}">
                                     <VerticalStackLayout Spacing="10">
 
@@ -156,12 +163,10 @@
 
                                     </VerticalStackLayout>
                                 </Border>
-                            </DataTemplate>
-                        </BindableLayout.ItemTemplate>
-                    </VerticalStackLayout>
-
-                </VerticalStackLayout>
-            </ScrollView>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </Grid>
         </DataTemplate>
 
         <!-- =================== WEEKLY TAB =================== -->
@@ -273,8 +278,14 @@
         <!-- =================== 1 ON 1 TAB =================== -->
         <DataTemplate x:Key="LessonsTabTemplate"
                       x:DataType="vm:IndividualLessonsViewModel">
-            <ScrollView>
-                <VerticalStackLayout Padding="16,8,16,16" Spacing="14">
+            <CollectionView ItemsSource="{Binding Lessons}"
+                            Margin="16,8,16,16">
+                <CollectionView.ItemsLayout>
+                    <LinearItemsLayout Orientation="Vertical" ItemSpacing="10" />
+                </CollectionView.ItemsLayout>
+
+                <CollectionView.Header>
+                    <VerticalStackLayout Spacing="14" Padding="0,0,0,14">
 
                     <Border Style="{StaticResource Card}" IsVisible="{Binding IsInstructor}">
                         <VerticalStackLayout Spacing="8">
@@ -387,9 +398,11 @@
                         </VerticalStackLayout>
                     </Border>
 
-                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Lessons}" Spacing="10">
-                        <BindableLayout.ItemTemplate>
-                            <DataTemplate x:DataType="vm:IndividualLessonRowVm">
+                    </VerticalStackLayout>
+                </CollectionView.Header>
+
+                <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:IndividualLessonRowVm">
                                 <Border Style="{StaticResource Card}">
                                     <VerticalStackLayout Spacing="8">
                                         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8"
@@ -492,12 +505,9 @@
                                         </VerticalStackLayout>
                                     </VerticalStackLayout>
                                 </Border>
-                            </DataTemplate>
-                        </BindableLayout.ItemTemplate>
-                    </VerticalStackLayout>
-
-                </VerticalStackLayout>
-            </ScrollView>
+                        </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
         </DataTemplate>
 
         <sel:TrainingsHubTabTemplateSelector x:Key="TabSelector"

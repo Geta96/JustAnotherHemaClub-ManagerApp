@@ -12,6 +12,9 @@ public partial class TrainingsViewModel : ObservableObject
     private readonly IGoogleSheetsService _sheets;
     private readonly AuthService _auth;
 
+    // Cancels any in-flight LoadAsync when the user navigates away mid-refresh.
+    private CancellationTokenSource? _loadCts;
+
     public ObservableCollection<Fencer> AllFencers { get; } = new();
 
     // Attendee toggles for the "New training" form
@@ -55,9 +58,20 @@ public partial class TrainingsViewModel : ObservableObject
         _auth = auth;
     }
 
+    /// <summary>
+    /// Abandons any in-flight <see cref="LoadAsync"/> so navigating away mid-load
+    /// doesn't mutate the UI-bound collections after the CollectionView has been
+    /// detached (crashes on Android when the RecyclerView has been torn down).
+    /// </summary>
+    public void CancelLoad() => _loadCts?.Cancel();
+
     [RelayCommand]
     public async Task LoadAsync(bool showSpinner = false)
     {
+        _loadCts?.Cancel();
+        _loadCts = new CancellationTokenSource();
+        var ct = _loadCts.Token;
+
         if (showSpinner) IsLoading = true;
         try
         {
@@ -66,6 +80,8 @@ public partial class TrainingsViewModel : ObservableObject
             var trainingsTask = _sheets.GetTrainingsAsync();
             var notesTask     = _sheets.GetMonthNotesAsync();
             await Task.WhenAll(fencersTask, trainingsTask, notesTask);
+
+            ct.ThrowIfCancellationRequested();
 
             // Fencers first so attendee toggles can rebuild against the new list.
             AllFencers.Clear();
@@ -105,11 +121,18 @@ public partial class TrainingsViewModel : ObservableObject
                     list.Add(mvm);
                 }
                 return list;
-            });
+            }, ct);
+
+            // The page may have been navigated away from while we built the tree.
+            ct.ThrowIfCancellationRequested();
 
             // ----- UI-thread publish -----
             Months.Clear();
             foreach (var mv in built) Months.Add(mv);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when the user navigates away mid-load — abandon quietly.
         }
         finally { if (showSpinner) IsLoading = false; }
     }

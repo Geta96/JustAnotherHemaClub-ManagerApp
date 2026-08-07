@@ -26,6 +26,14 @@ public partial class FencersPage : ContentPage
         _loadedOnce = true;
     }
 
+    protected override void OnDisappearing()
+    {
+        base.OnDisappearing();
+        // Abandon any in-flight refresh so it doesn't mutate the detached
+        // CollectionView after we've navigated away.
+        _vm.CancelLoad();
+    }
+
     private async void OnPromoteClicked(object? sender, EventArgs e)
     {
         if (_vm.SelectedFencer is null) return;

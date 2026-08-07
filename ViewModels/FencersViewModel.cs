@@ -12,6 +12,9 @@ public partial class FencersViewModel : ObservableObject
     private readonly IGoogleSheetsService _sheets;
     private readonly AuthService _auth;
 
+    // Cancels any in-flight LoadAsync when the user navigates away mid-refresh.
+    private CancellationTokenSource? _loadCts;
+
     // Suppress silent re-loads for 30 seconds after the last successful fetch.
     private static readonly TimeSpan SilentReloadThrottle = TimeSpan.FromSeconds(30);
     private DateTime _lastLoadedUtc = DateTime.MinValue;
@@ -47,12 +50,25 @@ public partial class FencersViewModel : ObservableObject
         _auth = auth;
     }
 
+    /// <summary>
+    /// Abandons any in-flight <see cref="LoadAsync"/>. Called when the page is
+    /// disappearing so a manual refresh doesn't mutate the UI-bound collections
+    /// after the CollectionView has been detached (crashes on Android when the
+    /// RecyclerView has already been torn down).
+    /// </summary>
+    public void CancelLoad() => _loadCts?.Cancel();
+
     [RelayCommand]
     public async Task LoadAsync(bool showSpinner = false)
     {
         // Skip silent refreshes within the throttle window (rapid back-navigation).
         if (!showSpinner && DateTime.UtcNow - _lastLoadedUtc < SilentReloadThrottle)
             return;
+
+        // Cancel a previous in-flight load and start a fresh token for this one.
+        _loadCts?.Cancel();
+        _loadCts = new CancellationTokenSource();
+        var ct = _loadCts.Token;
 
         if (showSpinner) IsLoading = true;
         BackendRequestSucceeded = false;
@@ -69,6 +85,8 @@ public partial class FencersViewModel : ObservableObject
             var lessonsTask    = _sheets.GetIndividualLessonsAsync();
             var priceRulesTask = _sheets.GetPriceRulesAsync();
             await Task.WhenAll(fencersTask, trainingsTask, paymentsTask, lessonsTask, priceRulesTask);
+
+            ct.ThrowIfCancellationRequested();
 
             var all = fencersTask.Result.OrderBy(f => f.Name).ToList();
             var allTrainings = trainingsTask.Result;
@@ -92,6 +110,8 @@ public partial class FencersViewModel : ObservableObject
             if (priorPaymentTasks.Count > 0)
                 await Task.WhenAll(priorPaymentTasks.Values);
 
+            ct.ThrowIfCancellationRequested();
+
             var priorPayments = priorMonths.ToDictionary(
                 ym => ym, ym => priorPaymentTasks[ym].Result);
 
@@ -99,7 +119,10 @@ public partial class FencersViewModel : ObservableObject
             // The credit-carry pre-pass loops every fencer × every prior month;
             // running it on the dispatcher is what made the first load lag.
             var statusByFencer = await Task.Run(() => ComputeStatuses(
-                all, allTrainings, payments, priorMonths, priorPayments, allRules, today));
+                all, allTrainings, payments, priorMonths, priorPayments, allRules, today), ct);
+
+            // The page may have been navigated away from while we computed.
+            ct.ThrowIfCancellationRequested();
 
             // ----- UI-thread publish -----
             Fencers.Clear();
@@ -122,6 +145,10 @@ public partial class FencersViewModel : ObservableObject
             BackendRequestSucceeded = true;
             BackendStatus = $"Backend request successful. Loaded {Fencers.Count} fencer(s).";
             _lastLoadedUtc = DateTime.UtcNow;
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when the user navigates away mid-refresh — abandon quietly.
         }
         catch (Exception ex)
         {

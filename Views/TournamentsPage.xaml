@@ -37,61 +37,63 @@
         </VerticalStackLayout>
 
         <!-- List -->
-        <ScrollView Grid.Row="2" Grid.RowSpan="2"
-                    IsVisible="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}">
-            <VerticalStackLayout Padding="16,12,16,16" Spacing="10"
-                                 BindableLayout.ItemsSource="{Binding FilteredTournaments}">
-                <BindableLayout.ItemTemplate>
-                    <DataTemplate x:DataType="vm:TournamentRow">
-                        <Border Style="{StaticResource Card}">
-                            <Border.GestureRecognizers>
-                                <TapGestureRecognizer Tapped="OnTournamentTapped" />
-                            </Border.GestureRecognizers>
-                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                                <VerticalStackLayout Grid.Column="0" Spacing="2">
-                                    <Label Text="{Binding Name}"
-                                           FontAttributes="Bold" FontSize="17"
-                                           TextColor="{StaticResource Wine}" />
-                                    <Label Style="{StaticResource Caption}">
-                                        <Label.FormattedText>
-                                            <FormattedString>
-                                                <Span Text="{Binding StateText}" />
-                                                <Span Text=" · " />
-                                                <Span Text="{Binding FencerCountText}" />
-                                                <Span Text=" · " />
-                                                <Span Text="{Binding CreatedAtText}" />
-                                            </FormattedString>
-                                        </Label.FormattedText>
-                                    </Label>
-                                </VerticalStackLayout>
+        <CollectionView Grid.Row="2" Grid.RowSpan="2"
+                        ItemsSource="{Binding FilteredTournaments}"
+                        Margin="16,12,16,16"
+                        IsVisible="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}">
+            <CollectionView.ItemsLayout>
+                <LinearItemsLayout Orientation="Vertical" ItemSpacing="10" />
+            </CollectionView.ItemsLayout>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="vm:TournamentRow">
+                    <Border Style="{StaticResource Card}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnTournamentTapped" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                            <VerticalStackLayout Grid.Column="0" Spacing="2">
+                                <Label Text="{Binding Name}"
+                                       FontAttributes="Bold" FontSize="17"
+                                       TextColor="{StaticResource Wine}" />
+                                <Label Style="{StaticResource Caption}">
+                                    <Label.FormattedText>
+                                        <FormattedString>
+                                            <Span Text="{Binding StateText}" />
+                                            <Span Text=" · " />
+                                            <Span Text="{Binding FencerCountText}" />
+                                            <Span Text=" · " />
+                                            <Span Text="{Binding CreatedAtText}" />
+                                        </FormattedString>
+                                    </Label.FormattedText>
+                                </Label>
+                            </VerticalStackLayout>
 
-                                <!-- Trash icon: own gesture so it doesn't trigger the card's open-handler. -->
-                                <Border Grid.Column="1"
-                                        BackgroundColor="{StaticResource CreamSoft}"
-                                        Stroke="{StaticResource DangerRed}" StrokeThickness="1"
-                                        StrokeShape="RoundRectangle 8"
-                                        Padding="10,4"
-                                        VerticalOptions="Center">
-                                    <Border.GestureRecognizers>
-                                        <TapGestureRecognizer Tapped="OnDeleteTapped" />
-                                    </Border.GestureRecognizers>
-                                    <Label Text="🗑"
-                                           FontSize="18"
-                                           TextColor="{StaticResource DangerRed}"
-                                           HorizontalOptions="Center"
-                                           VerticalOptions="Center" />
-                                </Border>
-
-                                <Label Grid.Column="2" Text="›"
-                                       FontSize="24" FontAttributes="Bold"
-                                       TextColor="{StaticResource Wine}"
+                            <!-- Trash icon: own gesture so it doesn't trigger the card's open-handler. -->
+                            <Border Grid.Column="1"
+                                    BackgroundColor="{StaticResource CreamSoft}"
+                                    Stroke="{StaticResource DangerRed}" StrokeThickness="1"
+                                    StrokeShape="RoundRectangle 8"
+                                    Padding="10,4"
+                                    VerticalOptions="Center">
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnDeleteTapped" />
+                                </Border.GestureRecognizers>
+                                <Label Text="🗑"
+                                       FontSize="18"
+                                       TextColor="{StaticResource DangerRed}"
+                                       HorizontalOptions="Center"
                                        VerticalOptions="Center" />
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </BindableLayout.ItemTemplate>
-            </VerticalStackLayout>
-        </ScrollView>
+                            </Border>
+
+                            <Label Grid.Column="2" Text="›"
+                                   FontSize="24" FontAttributes="Bold"
+                                   TextColor="{StaticResource Wine}"
+                                   VerticalOptions="Center" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
 
         <!-- Empty hint -->
         <Label Grid.Row="2"

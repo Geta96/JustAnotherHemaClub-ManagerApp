@@ -65,4 +65,16 @@ public partial class TrainingsHubViewModel : ObservableObject
         }
         finally { if (showSpinner) IsLoading = false; }
     }
+
+    /// <summary>
+    /// Abandons any in-flight load across all three tabs. Called when the page is
+    /// disappearing so navigating away mid-load doesn't mutate the detached
+    /// CollectionViews (crashes on Android once the RecyclerView is torn down).
+    /// </summary>
+    public void CancelLoad()
+    {
+        TrainingsVm.CancelLoad();
+        WeeklyVm.CancelLoad();
+        LessonsVm.CancelLoad();
+    }
 }

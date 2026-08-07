@@ -41,6 +41,14 @@ public partial class TournamentsPage : ContentPage
     private async void OnRefreshTapped(object? sender, TappedEventArgs e)
         => await _vm.RefreshAsync();
 
+    protected override void OnDisappearing()
+    {
+        base.OnDisappearing();
+        // Abandon any in-flight refresh so it doesn't mutate the detached
+        // CollectionView after we've navigated away.
+        _vm.CancelLoad();
+    }
+
     private async void OnNewTournamentClicked(object? sender, EventArgs e)
     {
         var page = _services.GetRequiredService<TournamentEditorPage>();

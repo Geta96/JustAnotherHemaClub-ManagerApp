@@ -57,6 +57,9 @@ public partial class IndividualLessonsViewModel : ObservableObject
     private readonly IGoogleSheetsService _sheets;
     private readonly AuthService _auth;
 
+    // Cancels any in-flight LoadAsync when the user navigates away mid-refresh.
+    private CancellationTokenSource? _loadCts;
+
     public const string ModeAddDirect = "Add directly";
     public const string ModeRequest = "Request from instructor(s)";
 
@@ -110,9 +113,16 @@ public partial class IndividualLessonsViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowRequestPickerSection));
     }
 
+    /// <summary>Abandons any in-flight <see cref="LoadAsync"/> when navigating away mid-load.</summary>
+    public void CancelLoad() => _loadCts?.Cancel();
+
     [RelayCommand]
     public async Task LoadAsync(bool showSpinner = false)
     {
+        _loadCts?.Cancel();
+        _loadCts = new CancellationTokenSource();
+        var ct = _loadCts.Token;
+
         if (showSpinner) IsLoading = true;
         try
         {
@@ -120,6 +130,8 @@ public partial class IndividualLessonsViewModel : ObservableObject
             var fencersTask = _sheets.GetFencersAsync();
             var lessonsTask = _sheets.GetIndividualLessonsAsync();
             await Task.WhenAll(fencersTask, lessonsTask);
+
+            ct.ThrowIfCancellationRequested();
 
             var all = fencersTask.Result;
             var meId = CurrentUserId;
@@ -140,6 +152,10 @@ public partial class IndividualLessonsViewModel : ObservableObject
 
             _cache = lessonsTask.Result;
             Rebuild();
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when the user navigates away mid-load — abandon quietly.
         }
         finally { if (showSpinner) IsLoading = false; }
     }
