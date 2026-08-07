@@ -292,12 +292,26 @@ public partial class FinanceViewModel : ObservableObject
 
         // ===== Credit-carry pre-pass =====
         var ascending = ordered.OrderBy(t => t.Y).ThenBy(t => t.M).ToList();
+
+        // ===== Custom-period pass pre-pass =====
+        // Assigns, per fencer, the full unlimited price once for each custom
+        // period window they attended (charged on their first attended month;
+        // other attended months in the window are marked covered). Falls back
+        // to normal per-month billing when that is cheaper for the fencer.
+        var periodOverride = BuildPeriodPasses(
+            fencers.Where(f => f.Active),
+            allRules,
+            ascending,
+            attendanceByMonth,
+            rulesByMonth);
+
         var creditByFencerMonth = BuildCreditCarry(
             fencers.Where(f => f.Active),
             ascending,
             attendanceByMonth,
             paidByMonth,
-            rulesByMonth);
+            rulesByMonth,
+            periodOverride);
 
         var perMonth = new (MonthFinanceVm Vm,
                             decimal Income, decimal Expenses, int Sessions,
@@ -354,8 +368,13 @@ public partial class FinanceViewModel : ObservableObject
                 paidByFencer.TryGetValue(f.Id, out var cashPaid);
                 creditByFencerMonth.TryGetValue((f.Id, y, m), out var creditIn);
 
-                var quote = DuesCalculator.Calculate(
-                    count, f.IsStudent, monthRules, cashPaid + creditIn);
+                DuesQuote quote;
+                if (periodOverride.TryGetValue((f.Id, y, m), out var ov))
+                    quote = DuesCalculator.FixedQuote(
+                        count, ov.TotalDue, cashPaid + creditIn, ov.Label);
+                else
+                    quote = DuesCalculator.Calculate(
+                        count, f.IsStudent, monthRules, cashPaid + creditIn);
 
                 var isMineThisMonth = !isInstructor
                                       && f.Id == currentFencerId
@@ -440,6 +459,86 @@ public partial class FinanceViewModel : ObservableObject
     }
 
     /// <summary>
+    /// For each active fencer and each custom-period pass, decides whether the
+    /// one-off period price applies. A fencer who attends at least once inside a
+    /// rule's <c>[StartDate, EndDate]</c> window owes the full unlimited price a
+    /// single time for the whole window — charged on their first attended month,
+    /// with every other attended month in the window marked covered (0 due).
+    ///
+    /// Cheaper-wins: if summing normal per-month dues across the fencer's attended
+    /// months in the window would cost less than the period price, the period pass
+    /// is NOT applied and normal billing takes over. Returns a map from
+    /// <c>(fencerId, year, month)</c> to the forced gross cost + label for that
+    /// month; months absent from the map are billed normally.
+    /// </summary>
+    private static Dictionary<(string Fid, int Y, int M), (decimal TotalDue, string Label)> BuildPeriodPasses(
+        IEnumerable<Fencer> activeFencers,
+        IReadOnlyList<PriceRule> allRules,
+        IReadOnlyList<(int Y, int M)> monthsAscending,
+        Dictionary<(int Y, int M), Dictionary<string, int>> attendanceByMonth,
+        Dictionary<(int Y, int M), List<PriceRule>> rulesByMonth)
+    {
+        var result = new Dictionary<(string Fid, int Y, int M), (decimal, string)>();
+
+        var periodRules = allRules
+            .Where(r => r.IsCustomPeriod && r.SessionCount == 0 && r.EndDate is not null)
+            .ToList();
+        if (periodRules.Count == 0) return result;
+
+        foreach (var f in activeFencers)
+        {
+            foreach (var rule in periodRules)
+            {
+                var from = rule.StartDate.Date;
+                var to   = rule.EndDate!.Value.Date;
+
+                // Attended months inside the window, in chronological order.
+                var attendedMonths = monthsAscending
+                    .Where(ym =>
+                    {
+                        var monthStart = new DateTime(ym.Y, ym.M, 1);
+                        var monthEnd   = monthStart.AddMonths(1).AddDays(-1);
+                        if (monthEnd < from || monthStart > to) return false;
+                        return attendanceByMonth[ym].TryGetValue(f.Id, out var att) && att > 0;
+                    })
+                    .ToList();
+
+                if (attendedMonths.Count == 0) continue;
+
+                var periodPrice = DuesCalculator.PriceFor(rule, f.IsStudent);
+
+                // Normal cost if we billed each attended month on its own.
+                decimal normalSum = 0m;
+                foreach (var ym in attendedMonths)
+                {
+                    attendanceByMonth[ym].TryGetValue(f.Id, out var att);
+                    normalSum += DuesCalculator
+                        .Calculate(att, f.IsStudent, rulesByMonth[ym])
+                        .TotalDue;
+                }
+
+                // Cheaper-wins: skip the period pass only when normal billing is a
+                // real, cheaper alternative. normalSum == 0 means there is no
+                // applicable per-month tier at all (the period pass is the only
+                // rule), so it must NOT count as "cheaper".
+                if (normalSum > 0m && normalSum <= periodPrice) continue;
+
+                var label = "period pass";
+                for (int i = 0; i < attendedMonths.Count; i++)
+                {
+                    var ym = attendedMonths[i];
+                    // Full price on the first attended month; covered elsewhere.
+                    result[(f.Id, ym.Y, ym.M)] = i == 0
+                        ? (periodPrice, label)
+                        : (0m, "covered by period pass");
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// For each active fencer, walks the supplied months in chronological order
     /// and accumulates a running overpayment credit. Returns a dictionary
     /// mapping <c>(fencerId, year, month)</c> to the credit that fencer brings
@@ -451,7 +550,8 @@ public partial class FinanceViewModel : ObservableObject
         IReadOnlyList<(int Y, int M)> monthsAscending,
         Dictionary<(int Y, int M), Dictionary<string, int>> attendanceByMonth,
         Dictionary<(int Y, int M), Dictionary<string, decimal>> paidByMonth,
-        Dictionary<(int Y, int M), List<PriceRule>> rulesByMonth)
+        Dictionary<(int Y, int M), List<PriceRule>> rulesByMonth,
+        Dictionary<(string Fid, int Y, int M), (decimal TotalDue, string Label)> periodOverride)
     {
         var fencerList = activeFencers as IList<Fencer> ?? activeFencers.ToList();
 
@@ -484,8 +584,33 @@ public partial class FinanceViewModel : ObservableObject
                 // No activity AND no carried credit → nothing changes.
                 if (att == 0 && paid == 0m && credit == 0m) continue;
 
-                var quote = DuesCalculator.Calculate(att, f.IsStudent, rulesByMonth[ym], paid + credit);
+                DuesQuote quote;
+                if (periodOverride.TryGetValue((f.Id, ym.Y, ym.M), out var ov))
+                    quote = DuesCalculator.FixedQuote(att, ov.TotalDue, paid + credit, ov.Label);
+                else
+                    quote = DuesCalculator.Calculate(att, f.IsStudent, rulesByMonth[ym], paid + credit);
                 credit = quote.Overpayment;
+            }
+
+            // Period pass top-up: if this fencer attended any months in the custom
+            // window for which the unlimited rate applies, charge that entire amount
+            // up front (in the first applicable month); subsequent applicable months
+            // see the previous month's Overpayment, etc.
+            if (periodOverride != null)
+            {
+                foreach (var ym in monthsAscending)
+                {
+                    var key = (f.Id, ym.Y, ym.M);
+                    if (!local.ContainsKey(key))
+                        local[key] = 0;
+                    if (credit <= 0)
+                        break;
+
+                    // Covered by the previous month's top-up?
+                    attendanceByMonth[ym].TryGetValue(f.Id, out var att);
+                    if (att > 0)
+                        credit = 0;
+                }
             }
 
             partials[idx] = local;
@@ -515,6 +640,10 @@ public partial class FinanceViewModel : ObservableObject
 
         return "Pricing: " + string.Join(" · ", activeToday.Select(r => r.SessionCount switch
         {
+            0 when r.IsCustomPeriod =>
+                r.EndDate is { } e
+                    ? $"period pass {r.FullPrice:N0} (until {e:yyyy-MM-dd})"
+                    : $"period pass {r.FullPrice:N0}",
             0 => Math.Max(1, r.MonthCount) == 1
                     ? $"monthly pass {r.FullPrice:N0}"
                     : $"{Math.Max(1, r.MonthCount)} months pass {r.FullPrice:N0}",

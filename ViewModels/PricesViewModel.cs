@@ -12,6 +12,7 @@ public partial class PriceRuleRow : ObservableObject
 
     [ObservableProperty] private int sessionCount;
     [ObservableProperty] private int monthCount;
+    [ObservableProperty] private bool isCustomPeriod;
     [ObservableProperty] private decimal fullPrice;
     [ObservableProperty] private decimal studentPrice;
     [ObservableProperty] private DateTime startDate;
@@ -41,6 +42,7 @@ public partial class PriceRuleRow : ObservableObject
 
     public string TierName => (SessionCount, MonthCount) switch
     {
+        _ when IsCustomPeriod => "Custom period pass",
         (0, 2) => "2-month unlimited pass",
         (0, _) => "Unlimited monthly pass",
         (1, _) => "Single-session ticket",
@@ -63,6 +65,7 @@ public partial class PriceRuleRow : ObservableObject
             Rule         = r;
             SessionCount = r.SessionCount;
             MonthCount   = r.MonthCount < 1 ? 1 : r.MonthCount;
+            IsCustomPeriod = r.IsCustomPeriod;
             FullPrice    = r.FullPrice;
             StudentPrice = r.StudentPrice;
             StartDate    = r.StartDate == default ? DateTime.Today : r.StartDate;
@@ -132,6 +135,7 @@ public partial class PriceRuleRow : ObservableObject
     {
         Rule.SessionCount = SessionCount;
         Rule.MonthCount   = MonthCount;
+        Rule.IsCustomPeriod = IsCustomPeriod;
         Rule.FullPrice    = FullPrice;
         Rule.StudentPrice = StudentPrice;
         Rule.StartDate    = StartDate;
@@ -162,7 +166,7 @@ public partial class PricesViewModel : ObservableObject
     //   2 → (0, 1)   unlimited (1 month)
     //   3 → (0, 2)   unlimited (2 months)
     public IReadOnlyList<string> SessionCountOptions { get; } =
-        new[] { "1 session", "4 sessions", "Unlimited (1 month)", "Unlimited (2 months)" };
+        new[] { "1 session", "4 sessions", "Unlimited (1 month)", "Custom period (unlimited)" };
 
     [ObservableProperty] private bool isLoading;
     [ObservableProperty] private bool isAddingRule;
@@ -248,19 +252,29 @@ public partial class PricesViewModel : ObservableObject
             return;
         }
 
-        var (sessions, months) = NewSessionCountIndex switch
+        var (sessions, months, isCustomPeriod) = NewSessionCountIndex switch
         {
-            0 => (1, 1),
-            1 => (4, 1),
-            2 => (0, 1),
-            _ => (0, 2)  // Unlimited 2-month
+            0 => (1, 1, false),
+            1 => (4, 1, false),
+            2 => (0, 1, false),
+            _ => (0, 1, true)  // Custom period (unlimited)
         };
+
+        // A custom-period pass is billed once for its whole window, so it needs
+        // a concrete end date to know where the period stops.
+        if (isCustomPeriod && !NewHasEndDate)
+        {
+            await ShowAsync("End date required",
+                "A custom period pass needs an end date — tick \"Has end date\" and pick when the period ends.");
+            return;
+        }
 
         var rule = new PriceRule
         {
-            SessionCount = sessions,
-            MonthCount   = months,
-            FullPrice    = NewFullPrice,
+            SessionCount   = sessions,
+            MonthCount     = months,
+            IsCustomPeriod = isCustomPeriod,
+            FullPrice      = NewFullPrice,
             StudentPrice = NewStudentPrice > 0
                 ? NewStudentPrice
                 : DuesCalculator.SuggestStudentPrice(NewFullPrice),
@@ -291,6 +305,14 @@ public partial class PricesViewModel : ObservableObject
     private async Task SaveRuleAsync(PriceRuleRow row)
     {
         if (row is null || !row.IsDirty || !IsLoggedInInstructor) return;
+
+        // A custom-period pass must keep a concrete end date on edit too.
+        if (row.IsCustomPeriod && !row.HasEndDate)
+        {
+            await ShowAsync("End date required",
+                "A custom period pass needs an end date — tick \"Has end date\" and pick when the period ends.");
+            return;
+        }
 
         var updated = row.ToUpdatedRule();
 
@@ -336,6 +358,9 @@ public partial class PricesViewModel : ObservableObject
 
     private static bool RulesOverlap(PriceRule a, PriceRule b)
     {
+        // Custom-period passes are a distinct tier from the standard unlimited
+        // pass even though both use SessionCount 0 / MonthCount 1.
+        if (a.IsCustomPeriod != b.IsCustomPeriod) return false;
         // Two rules are in the same tier only when both SessionCount AND MonthCount match.
         if (a.SessionCount != b.SessionCount) return false;
         if (a.MonthCount   != b.MonthCount)   return false;
@@ -353,6 +378,7 @@ public partial class PricesViewModel : ObservableObject
     {
         static string TierLabel(PriceRule r) => (r.SessionCount, r.MonthCount) switch
         {
+            _ when r.IsCustomPeriod => "custom period pass",
             (0, 2) => "2-month unlimited pass",
             (0, _) => "Unlimited monthly pass",
             (1, _) => "Single-session ticket",

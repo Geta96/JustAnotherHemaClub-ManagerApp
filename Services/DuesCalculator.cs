@@ -91,6 +91,7 @@ public static class DuesCalculator
 
         // Group by (SessionCount, MonthCount) and pick the newest within each tier.
         var perTier = effective
+            .Where(r => !r.IsCustomPeriod)          // custom-period passes are billed once per window, not per month
             .Where(r => IsApplicable(r, sessionsAttended))
             .GroupBy(r => (r.SessionCount, r.MonthCount))
             .Select(g => g
@@ -151,6 +152,32 @@ public static class DuesCalculator
             Outstanding:      outstanding,
             Overpayment:      overpayment,
             TierLabel:        bestLabel,
+            IsCovered:        outstanding == 0m,
+            IsOverpaid:       overpayment > 0m);
+    }
+
+    /// <summary>The price a given fencer pays for a rule (student vs full).</summary>
+    public static decimal PriceFor(PriceRule rule, bool isStudent) =>
+        isStudent ? rule.StudentPrice : rule.FullPrice;
+
+    /// <summary>
+    /// Builds a <see cref="DuesQuote"/> for a month whose cost is fixed by an
+    /// external policy (e.g. a custom-period pass charged once for a whole
+    /// window). <paramref name="totalDue"/> is the gross cost placed on this
+    /// month; outstanding / overpayment are derived from <paramref name="alreadyPaid"/>.
+    /// </summary>
+    public static DuesQuote FixedQuote(
+        int sessionsAttended, decimal totalDue, decimal alreadyPaid, string tierLabel)
+    {
+        var outstanding = Math.Max(0m, totalDue    - alreadyPaid);
+        var overpayment = Math.Max(0m, alreadyPaid - totalDue);
+        return new DuesQuote(
+            SessionsAttended: sessionsAttended,
+            TotalDue:         totalDue,
+            EffectivePaid:    alreadyPaid,
+            Outstanding:      outstanding,
+            Overpayment:      overpayment,
+            TierLabel:        tierLabel,
             IsCovered:        outstanding == 0m,
             IsOverpaid:       overpayment > 0m);
     }

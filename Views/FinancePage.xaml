@@ -377,6 +377,9 @@
                                 <Picker ItemsSource="{Binding Vm.PricesVm.SessionCountOptions}"
                                         SelectedIndex="{Binding Vm.PricesVm.NewSessionCountIndex, Mode=TwoWay}" />
 
+                                <Label Text="Tip: a custom period pass charges the full price once for anyone who attends at least once between the start and end dates (end date required)."
+                                       Style="{StaticResource Caption}" />
+
                                 <Label Text="Full price (Ft)" Style="{StaticResource Caption}" />
                                 <Entry Keyboard="Numeric" Text="{Binding Vm.PricesVm.NewFullPrice}" />
 
@@ -456,6 +459,14 @@
                                                 </HorizontalStackLayout>
                                                 <DatePicker Date="{Binding EndDate}"
                                                             IsVisible="{Binding HasEndDate}" />
+
+                                                <!-- Custom-period passes are billed once for the whole
+                                                     window; an end date is required for them. -->
+                                                <HorizontalStackLayout Spacing="8">
+                                                    <CheckBox IsChecked="{Binding IsCustomPeriod}" />
+                                                    <Label Text="Custom period (charge once for the whole window)"
+                                                           VerticalOptions="Center" LineBreakMode="WordWrap" />
+                                                </HorizontalStackLayout>
 
                                                 <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
                                                     <Button Grid.Column="0" Text="Delete"

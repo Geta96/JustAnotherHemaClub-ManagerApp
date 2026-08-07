@@ -8,13 +8,13 @@ namespace JustAnotherHemaClub.Services;
 public partial class GoogleSheetsService
 {
     // --- Price rules ---
-    // Columns: A=Id, B=SessionCount, C=FullPrice, D=StudentPrice, E=StartDate, F=EndDate, G=MonthCount
+    // Columns: A=Id, B=SessionCount, C=FullPrice, D=StudentPrice, E=StartDate, F=EndDate, G=MonthCount, H=IsCustomPeriod
     public async Task<List<PriceRule>> GetPriceRulesAsync()
     {
         IList<IList<object>> rows;
         try
         {
-            rows = await ReadAsync("Prices!A2:G");
+            rows = await ReadAsync("Prices!A2:H");
         }
         catch (GoogleApiException)
         {
@@ -48,15 +48,19 @@ public partial class GoogleSheetsService
                 int.TryParse(monthStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var mc) && mc > 0)
                 monthCount = mc;
 
+            // Column H: IsCustomPeriod — defaults to false for rows written before this column existed.
+            bool isCustomPeriod = ParseBool(PriceS(r, 7));
+
             list.Add(new PriceRule
             {
-                Id           = id,
-                SessionCount = count,
-                MonthCount   = monthCount,
-                FullPrice    = full,
-                StudentPrice = student,
-                StartDate    = start,
-                EndDate      = end
+                Id             = id,
+                SessionCount   = count,
+                MonthCount     = monthCount,
+                IsCustomPeriod = isCustomPeriod,
+                FullPrice      = full,
+                StudentPrice   = student,
+                StartDate      = start,
+                EndDate        = end
             });
         }
         return list;
@@ -64,7 +68,7 @@ public partial class GoogleSheetsService
 
     public async Task UpsertPriceRuleAsync(PriceRule rule)
     {
-        var rows = await ReadAsync("Prices!A2:G");
+        var rows = await ReadAsync("Prices!A2:H");
         int rowIndex = -1;
         for (int i = 0; i < rows.Count; i++)
             if (PriceS(rows[i], 0) == rule.Id) { rowIndex = i; break; }
@@ -77,27 +81,28 @@ public partial class GoogleSheetsService
             rule.StudentPrice.ToString(CultureInfo.InvariantCulture),
             rule.StartDate.ToString("o", CultureInfo.InvariantCulture),
             rule.EndDate?.ToString("o", CultureInfo.InvariantCulture) ?? "",
-            rule.MonthCount
+            rule.MonthCount,
+            B(rule.IsCustomPeriod)
         };
 
         if (rowIndex >= 0)
-            await UpdateAsync($"Prices!A{rowIndex + 2}:G{rowIndex + 2}", values);
+            await UpdateAsync($"Prices!A{rowIndex + 2}:H{rowIndex + 2}", values);
         else
-            await AppendAsync("Prices!A:G", values);
+            await AppendAsync("Prices!A:H", values);
     }
 
     public async Task DeletePriceRuleAsync(string ruleId)
     {
         if (string.IsNullOrWhiteSpace(ruleId)) return;
 
-        var rows = await ReadAsync("Prices!A2:G");
+        var rows = await ReadAsync("Prices!A2:H");
         int rowIndex = -1;
         for (int i = 0; i < rows.Count; i++)
             if (PriceS(rows[i], 0) == ruleId) { rowIndex = i; break; }
         if (rowIndex < 0) return;
 
-        var blanks = new List<object> { "", "", "", "", "", "", "" };
-        await UpdateAsync($"Prices!A{rowIndex + 2}:G{rowIndex + 2}", blanks);
+        var blanks = new List<object> { "", "", "", "", "", "", "", "" };
+        await UpdateAsync($"Prices!A{rowIndex + 2}:H{rowIndex + 2}", blanks);
     }
 
     private static string PriceS(IList<object> row, int i) =>
