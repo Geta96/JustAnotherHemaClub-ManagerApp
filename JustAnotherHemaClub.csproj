@@ -14,13 +14,15 @@
 
         <ApplicationTitle>JAHC Manager</ApplicationTitle>
         <ApplicationId>com.jahc.manager</ApplicationId>
-        <ApplicationVersion>8</ApplicationVersion>
-        <ApplicationDisplayVersion>1.0.12</ApplicationDisplayVersion>
+        <ApplicationVersion>9</ApplicationVersion>
+        <ApplicationDisplayVersion>1.0.13</ApplicationDisplayVersion>
 
         <SupportedOSPlatformVersion>24.0</SupportedOSPlatformVersion>
 
         <AndroidTargetSdkVersion>36</AndroidTargetSdkVersion>
         <AndroidUseLatestPlatformSdk>true</AndroidUseLatestPlatformSdk>
+
+        <RuntimeIdentifiers>android-arm64;android-arm</RuntimeIdentifiers>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)' == 'Release'">
