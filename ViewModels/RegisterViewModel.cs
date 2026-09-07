@@ -35,16 +35,10 @@ public partial class RegisterViewModel : ObservableObject
     /// True only once both fields are non-empty and don't match. Used to show a
     /// live red hint under the confirm-email field without nagging on first focus.
     /// </summary>
-    public bool EmailMismatch =>
-        !string.IsNullOrWhiteSpace(Email) &&
-        !string.IsNullOrWhiteSpace(ConfirmEmail) &&
-        !string.Equals(Email.Trim(), ConfirmEmail.Trim(), StringComparison.OrdinalIgnoreCase);
+    public bool EmailMismatch => RegistrationValidator.ComputeEmailMismatch(Email, ConfirmEmail);
 
     /// <summary>True only once both password fields are non-empty and don't match.</summary>
-    public bool PasswordMismatch =>
-        !string.IsNullOrEmpty(Password) &&
-        !string.IsNullOrEmpty(ConfirmPassword) &&
-        Password != ConfirmPassword;
+    public bool PasswordMismatch => RegistrationValidator.ComputePasswordMismatch(Password, ConfirmPassword);
 
     public RegisterViewModel(GoogleSheetsService sheets) => _sheets = sheets;
 
@@ -61,24 +55,12 @@ public partial class RegisterViewModel : ObservableObject
     {
         ErrorMessage = StatusMessage = null;
 
-        var trimmedEmail        = (Email ?? "").Trim();
-        var trimmedConfirmEmail = (ConfirmEmail ?? "").Trim();
+        var trimmedEmail = (Email ?? "").Trim();
 
-        // Validate
-        string? validation =
-            string.IsNullOrWhiteSpace(Name)            ? "Name is required." :
-            string.IsNullOrWhiteSpace(trimmedEmail)    ? "Email is required." :
-            !IsValidEmail(trimmedEmail)                ? "Please enter a valid email address (e.g. you@example.com)." :
-            string.IsNullOrWhiteSpace(trimmedConfirmEmail)
-                                                       ? "Please confirm your email address." :
-            !string.Equals(trimmedEmail, trimmedConfirmEmail, StringComparison.OrdinalIgnoreCase)
-                                                       ? "Email addresses do not match." :
-            string.IsNullOrWhiteSpace(LoginUsername)   ? "Login username is required." :
-            !IsStrongPassword(Password)                ? "Password must be at least 6 characters and include at least one number." :
-            Password != ConfirmPassword                ? "Passwords do not match." :
-            !GdprAccepted                              ? "You must accept the GDPR policy." :
-            !LiabilityAccepted                         ? "You must accept the liability statement." :
-            null;
+        // Validate (shared, host-agnostic rules live in Core).
+        var validation = RegistrationValidator.Validate(
+            Name, Email, ConfirmEmail, LoginUsername,
+            Password, ConfirmPassword, GdprAccepted, LiabilityAccepted);
 
         if (validation is not null)
         {
@@ -95,41 +77,28 @@ public partial class RegisterViewModel : ObservableObject
 
             var existingFencers = await _sheets.GetFencersAsync();
 
-            bool usernameTaken = existingFencers.Any(f =>
-                !string.IsNullOrEmpty(f.Username) &&
-                string.Equals(f.Username.Trim(), desiredUser, StringComparison.OrdinalIgnoreCase));
-
-            if (usernameTaken)
+            if (RegistrationValidator.IsDuplicateUsername(desiredUser, existingFencers))
             {
                 ErrorMessage = "That username is already taken. Please choose another.";
                 await ShowAsync("Username taken", ErrorMessage);
                 return;
             }
 
-            bool emailTaken = existingFencers.Any(f =>
-                !string.IsNullOrEmpty(f.Email) &&
-                string.Equals(f.Email.Trim(), trimmedEmail, StringComparison.OrdinalIgnoreCase));
-
-            if (emailTaken)
+            if (RegistrationValidator.IsDuplicateEmail(trimmedEmail, existingFencers))
             {
                 ErrorMessage = "That email is already registered. Please use a different email or log in.";
                 await ShowAsync("Email already registered", ErrorMessage);
                 return;
             }
 
-            await _sheets.AddFencerAsync(new Fencer
-            {
-                Id = Guid.NewGuid().ToString("N"),
-                Username = desiredUser,
-                PasswordHash = AuthService.Hash(Password),
-                Name = Name.Trim(),
-                Email = trimmedEmail,
-                Active = true,
-                IsStudent = IsStudent,
-                GdprAccepted = GdprAccepted,
-                LiabilityAccepted = LiabilityAccepted,
-                IsInstructor = false
-            });
+            await _sheets.AddFencerAsync(RegistrationValidator.BuildRegistrationFencer(
+                name: Name,
+                email: trimmedEmail,
+                username: desiredUser,
+                password: Password,
+                isStudent: IsStudent,
+                gdprAccepted: GdprAccepted,
+                liabilityAccepted: LiabilityAccepted));
 
             StatusMessage = $"Welcome, {Name}! You can now log in with \"{desiredUser}\".";
 
@@ -147,43 +116,6 @@ public partial class RegisterViewModel : ObservableObject
         }
         finally { IsBusy = false; }
     }
-
-    /// <summary>
-    /// Stricter than <see cref="System.Net.Mail.MailAddress"/> alone: also requires
-    /// a real-looking TLD (a dot in the host with ≥2 chars after it), so inputs
-    /// like "a@b" or "user@localhost" are rejected.
-    /// </summary>
-    private static bool IsValidEmail(string email)
-    {
-        if (string.IsNullOrWhiteSpace(email)) return false;
-        if (email.Contains(' '))             return false;
-
-        try
-        {
-            var addr = new System.Net.Mail.MailAddress(email);
-            if (addr.Address != email) return false;
-
-            var atIdx = email.LastIndexOf('@');
-            if (atIdx < 1) return false;
-
-            var host   = email[(atIdx + 1)..];
-            var dotIdx = host.LastIndexOf('.');
-            if (dotIdx < 1) return false;                          // need a dot in the host
-            if (host.Length - dotIdx - 1 < 2) return false;        // TLD ≥ 2 chars
-
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>At least 6 characters and at least one digit.</summary>
-    private static bool IsStrongPassword(string? password) =>
-        !string.IsNullOrEmpty(password) &&
-        password.Length >= 6 &&
-        password.Any(char.IsDigit);
 
     [RelayCommand]
     private Task BackToLoginAsync() => GoBackAsync();

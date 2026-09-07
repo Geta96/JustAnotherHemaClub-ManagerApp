@@ -10,7 +10,7 @@
         <Nullable>enable</Nullable>
 
         <NoWarn>$(NoWarn);XC0025</NoWarn>
-        <DefaultItemExcludes>$(DefaultItemExcludes);Tests\**;UITests\**</DefaultItemExcludes>
+        <DefaultItemExcludes>$(DefaultItemExcludes);Tests\**;UITests\**;Core\**</DefaultItemExcludes>
 
         <ApplicationTitle>JAHC Manager</ApplicationTitle>
         <ApplicationId>com.jahc.manager</ApplicationId>
@@ -129,6 +129,11 @@
 
     <ItemGroup>
         <TrimmerRootDescriptor Include="Platforms\Android\linker.xml" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Shared platform-neutral core (models, data layer, dues math, auth, Group A VMs) -->
+        <ProjectReference Include="Core\JustAnotherHemaClub.Core.csproj" />
     </ItemGroup>
 
 </Project>

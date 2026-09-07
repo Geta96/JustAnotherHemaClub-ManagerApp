@@ -6,7 +6,7 @@ namespace JustAnotherHemaClub.Services;
 /// <summary>
 /// Pure, network-free mapping between raw Google Sheets rows (jagged object lists)
 /// and domain models. Extracted from <see cref="GoogleSheetsService"/> so the
-/// parsing rules — blank-row skipping, TryParse resilience, legacy defaults —
+/// parsing rules ? blank-row skipping, TryParse resilience, legacy defaults ?
 /// can be unit-tested without touching the Sheets API.
 /// </summary>
 public static class SheetRowMapper

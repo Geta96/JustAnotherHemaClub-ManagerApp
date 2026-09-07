@@ -11,6 +11,7 @@ public partial class TrainingsViewModel : ObservableObject
 {
     private readonly IGoogleSheetsService _sheets;
     private readonly AuthService _auth;
+    private readonly IDialogService _dialogs;
 
     // Cancels any in-flight LoadAsync when the user navigates away mid-refresh.
     private CancellationTokenSource? _loadCts;
@@ -52,10 +53,11 @@ public partial class TrainingsViewModel : ObservableObject
     public bool IsLoggedInInstructor => _auth.IsLoggedInInstructor;
     public bool IsLoggedInRegularFencer => _auth.IsLoggedInFencer && !_auth.IsLoggedInInstructor;
 
-    public TrainingsViewModel(IGoogleSheetsService sheets, AuthService auth)
+    public TrainingsViewModel(IGoogleSheetsService sheets, AuthService auth, IDialogService dialogs)
     {
         _sheets = sheets;
         _auth = auth;
+        _dialogs = dialogs;
     }
 
     /// <summary>
@@ -241,12 +243,9 @@ public partial class TrainingsViewModel : ObservableObject
             }
             catch (Exception ex)
             {
-                var page = AppNavigationHelper.RootPage;
-                if (page is not null)
-                    await page.DisplayAlert(
-                        "Recurring rule not saved",
-                        $"The training was created, but the weekly rule could not be saved:\n{ex.Message}",
-                        "OK");
+                await _dialogs.ShowAsync(
+                    "Recurring rule not saved",
+                    $"The training was created, but the weekly rule could not be saved:\n{ex.Message}");
             }
         }
 

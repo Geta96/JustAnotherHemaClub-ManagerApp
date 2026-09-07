@@ -1,8 +1,8 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels"
-             xmlns:m="clr-namespace:JustAnotherHemaClub.Models"
+             xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels;assembly=JustAnotherHemaClub.Core"
+             xmlns:m="clr-namespace:JustAnotherHemaClub.Models;assembly=JustAnotherHemaClub.Core"
              xmlns:sel="clr-namespace:JustAnotherHemaClub.Selectors"
              x:Class="JustAnotherHemaClub.Views.TrainingsHubPage"
              x:DataType="vm:TrainingsHubViewModel"

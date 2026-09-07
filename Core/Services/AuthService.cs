@@ -1,12 +1,14 @@
 using System.Security.Cryptography;
 using System.Text;
 using JustAnotherHemaClub.Models;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace JustAnotherHemaClub.Services;
 
 public class AuthService
 {
     private readonly Lazy<IGoogleSheetsService> _sheets;
+    private readonly ICredentialStore _store;
 
     private const string KeyUsername = "auth.username";
     private const string KeyPasswordHash = "auth.passwordHash";
@@ -24,9 +26,10 @@ public class AuthService
     public bool IsLoggedInFencer =>
         CurrentFencer is not null && !IsGuest;
 
-    public AuthService(IServiceProvider services)
+    public AuthService(IServiceProvider services, ICredentialStore store)
     {
         _sheets = new Lazy<IGoogleSheetsService>(services.GetRequiredService<IGoogleSheetsService>);
+        _store = store;
     }
 
     public async Task<bool> LoginAsync(string username, string password)
@@ -97,20 +100,20 @@ public class AuthService
         ClearPersistedCredentials();
     }
 
-    // ------- Persistence (SecureStorage) -------
+    // ------- Persistence (ICredentialStore) -------
 
     public async Task PersistCredentialsAsync(string username, string passwordHash, bool useBiometric)
     {
-        await SecureStorage.Default.SetAsync(KeyUsername, username ?? "");
-        await SecureStorage.Default.SetAsync(KeyPasswordHash, passwordHash ?? "");
-        await SecureStorage.Default.SetAsync(KeyBiometricEnabled, useBiometric ? "1" : "0");
+        await _store.SetAsync(KeyUsername, username ?? "");
+        await _store.SetAsync(KeyPasswordHash, passwordHash ?? "");
+        await _store.SetAsync(KeyBiometricEnabled, useBiometric ? "1" : "0");
     }
 
     public async Task<(string? Username, string? PasswordHash, bool BiometricEnabled)> TryGetPersistedAsync()
     {
-        var u = await SecureStorage.Default.GetAsync(KeyUsername);
-        var h = await SecureStorage.Default.GetAsync(KeyPasswordHash);
-        var b = await SecureStorage.Default.GetAsync(KeyBiometricEnabled);
+        var u = await _store.GetAsync(KeyUsername);
+        var h = await _store.GetAsync(KeyPasswordHash);
+        var b = await _store.GetAsync(KeyBiometricEnabled);
         return (u, h, b == "1");
     }
 
@@ -118,21 +121,21 @@ public class AuthService
     {
         get
         {
-            // SecureStorage is async-only; the platform layer caches a sync flag in Preferences for speed.
-            return Preferences.Default.Get(KeyUsername + ".set", false);
+            // Secure storage is async-only; a synchronous flag is cached for fast startup.
+            return _store.GetFlag(KeyUsername + ".set", false);
         }
     }
 
     public void ClearPersistedCredentials()
     {
-        SecureStorage.Default.Remove(KeyUsername);
-        SecureStorage.Default.Remove(KeyPasswordHash);
-        SecureStorage.Default.Remove(KeyBiometricEnabled);
-        Preferences.Default.Remove(KeyUsername + ".set");
+        _store.Remove(KeyUsername);
+        _store.Remove(KeyPasswordHash);
+        _store.Remove(KeyBiometricEnabled);
+        _store.RemoveFlag(KeyUsername + ".set");
     }
 
     public void MarkPersisted(bool persisted)
-        => Preferences.Default.Set(KeyUsername + ".set", persisted);
+        => _store.SetFlag(KeyUsername + ".set", persisted);
 
     /// <summary>Uppercase hex SHA-256 of the UTF-8 bytes of the input.</summary>
     public static string Hash(string input)

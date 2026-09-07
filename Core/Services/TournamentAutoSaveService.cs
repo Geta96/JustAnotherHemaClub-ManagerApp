@@ -148,7 +148,7 @@ public sealed class TournamentAutoSaveService
                 return;
             }
 
-            // Lock still ours (or stale) — fast-forward version and retry once.
+            // Lock still ours (or stale) ? fast-forward version and retry once.
             match.Version = latest.Version;
             await _sheets.UpsertMatchAsync(tournamentId, match);
         }

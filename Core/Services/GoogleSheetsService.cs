@@ -10,12 +10,14 @@ namespace JustAnotherHemaClub.Services;
 public partial class GoogleSheetsService : IGoogleSheetsService
 {
     private readonly string _spreadsheetId;
+    private readonly ICredentialProvider _credentials;
     private SheetsService? _service;
     private readonly SemaphoreSlim _serviceGate = new(1, 1);
 
-    public GoogleSheetsService(string spreadsheetId)
+    public GoogleSheetsService(string spreadsheetId, ICredentialProvider credentials)
     {
         _spreadsheetId = spreadsheetId;
+        _credentials = credentials;
     }
 
     /// <summary>
@@ -38,7 +40,7 @@ public partial class GoogleSheetsService : IGoogleSheetsService
         {
             if (_service is not null) return _service;
 
-            using var stream = await FileSystem.OpenAppPackageFileAsync("service-account.json");
+            using var stream = await _credentials.OpenServiceAccountAsync();
             var credential = GoogleCredential.FromStream(stream)
                 .CreateScoped(SheetsService.Scope.Spreadsheets);
 

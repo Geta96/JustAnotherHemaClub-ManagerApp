@@ -1,4 +1,4 @@
-﻿using JustAnotherHemaClub.Models;
+using JustAnotherHemaClub.Models;
 
 namespace JustAnotherHemaClub.Services;
 
@@ -133,7 +133,7 @@ public static class TournamentEngine
     // ---------- Draft pools (Setup state, before matches are generated) ----------
 
     /// <summary>
-    /// Builds DRAFT pools that contain only fencer assignments — no matches yet.
+    /// Builds DRAFT pools that contain only fencer assignments � no matches yet.
     /// Used in the editor's Setup state so the organiser can rearrange fencers
     /// before <see cref="GeneratePoolMatches"/> creates the actual fight list.
     /// </summary>
@@ -314,7 +314,7 @@ public static class TournamentEngine
 
     /// <summary>
     /// Standard bracket pairing so seeds 1 and 2 only meet in the final, 1-4 only in semis, etc.
-    /// Example size=8 → [1, 8, 4, 5, 2, 7, 3, 6].
+    /// Example size=8 ? [1, 8, 4, 5, 2, 7, 3, 6].
     /// </summary>
     public static int[] BuildBracketSeedOrder(int size)
     {
@@ -394,7 +394,7 @@ public static class TournamentEngine
     ///
     /// Bracket portion:
     ///   1 = gold, 2 = silver, 3 = bronze winner, 4 = bronze loser. Then per
-    ///   earlier round (QF → R16 → R32 → R64 → R128) the losers are placed,
+    ///   earlier round (QF ? R16 ? R32 ? R64 ? R128) the losers are placed,
     ///   ordered by the FINAL position of the fencer who knocked them out.
     ///
     /// After every bracket entrant is placed, fencers who never made it into
@@ -421,8 +421,8 @@ public static class TournamentEngine
             var placeOf = new Dictionary<string, int>();
             for (int i = 0; i < placement.Count; i++) placeOf[placement[i]] = i + 1;
 
-            // Walk earlier rounds, latest-first (semis → QF → R16 → R32 → ...).
-            // Skip the final round; skip the semis too — semi-finalists are 3rd/4th via the bronze.
+            // Walk earlier rounds, latest-first (semis ? QF ? R16 ? R32 ? ...).
+            // Skip the final round; skip the semis too � semi-finalists are 3rd/4th via the bronze.
             for (int r = bracket.Rounds.Count - 2; r >= 0; r--)
             {
                 if (r == bracket.Rounds.Count - 2) continue;
@@ -524,7 +524,7 @@ public static class TournamentEngine
 
     /// <summary>
     /// Returns the IDs of fencers who qualify for the elimination using the given
-    /// <paramref name="cutoffFraction"/> (0.0–1.0). The minimum qualifying count is 4.
+    /// <paramref name="cutoffFraction"/> (0.0�1.0). The minimum qualifying count is 4.
     /// </summary>
     public static List<string> ComputeQualifyingFencerIds(Tournament t, double cutoffFraction)
     {
@@ -558,7 +558,7 @@ public static class TournamentEngine
 
         var globallyOrdered = SortSeedStats(all);
 
-        // Rule 2: < 8 fencers in total → every fencer enters the elimination (if cutoff allows all).
+        // Rule 2: < 8 fencers in total ? every fencer enters the elimination (if cutoff allows all).
         if (totalFencers < 8 && cutoffFraction >= 0.6)
             return globallyOrdered.Select(s => s.FencerId).ToList();
 
@@ -572,7 +572,7 @@ public static class TournamentEngine
             foreach (var q in poolOrdered.Take(qCount)) qualifierSet.Add(q.FencerId);
         }
 
-        // Floor rule: for standard cutoffs (≥ 0.6), ensure at least 8 qualify when
+        // Floor rule: for standard cutoffs (? 0.6), ensure at least 8 qualify when
         // there are 8+ fencers (backward compat). For lower cutoffs (user chose
         // fewer), the floor is 4 (minimum for a bracket).
         int minQualifiers;
@@ -599,7 +599,7 @@ public static class TournamentEngine
 
     /// <summary>
     /// Build the bracket from per-pool standings using the same criteria the Pool
-    /// Standings tab shows (Win% → AvgFor desc → AvgAgainst asc → RedCards asc).
+    /// Standings tab shows (Win% ? AvgFor desc ? AvgAgainst asc ? RedCards asc).
     /// Qualification rules are owned by <see cref="ComputeQualifyingFencerIds(Tournament)"/>.
     /// </summary>
     public static EliminationBracket BuildBracketFromPoolStandings(Tournament t)
@@ -607,7 +607,7 @@ public static class TournamentEngine
 
     /// <summary>
     /// Build the bracket from per-pool standings using a custom
-    /// <paramref name="cutoffFraction"/> (0.0–1.0) to determine how many fencers
+    /// <paramref name="cutoffFraction"/> (0.0�1.0) to determine how many fencers
     /// advance from pools. Minimum 4 fencers enter the bracket.
     /// </summary>
     public static EliminationBracket BuildBracketFromPoolStandings(Tournament t, double cutoffFraction)
@@ -772,15 +772,15 @@ public static class TournamentEngine
         /// <summary>Total fencers in the tournament (denominator of the percentage shown).</summary>
         public int TotalFencers { get; init; }
 
-        /// <summary>Fraction of fencers that will enter the bracket (0.0–1.0).</summary>
+        /// <summary>Fraction of fencers that will enter the bracket (0.0�1.0).</summary>
         public double CutoffFraction => TotalFencers > 0 ? (double)QualifyingCount / TotalFencers : 0;
 
         /// <summary>True if this bracket size is playable. A size is playable when the
-        /// *previous* smaller size wouldn't already hold every fencer — i.e.
+        /// *previous* smaller size wouldn't already hold every fencer � i.e.
         /// <c>BracketSize / 2 &lt; TotalFencers</c>. This means sizes below the
         /// fencer count are always available, and the smallest size that fits
         /// all fencers (with byes) is also available; everything larger is
-        /// greyed out. Example: 5 fencers → 4, 8 available; 35 fencers → 4, 8,
+        /// greyed out. Example: 5 fencers ? 4, 8 available; 35 fencers ? 4, 8,
         /// 16, 32, 64 available.
         /// </summary>
         public bool IsAvailable => TotalFencers >= 4 && BracketSize / 2 < TotalFencers;
@@ -906,11 +906,11 @@ public static class TournamentEngine
     /// <summary>
     /// Walks every UNFINISHED pool match and bracket match the withdrawn fencer
     /// is in, marks them <see cref="MatchStatus.Finished"/> with the opponent as
-    /// winner and a 0–0 scoreline (so the walkover doesn't affect averages), then
+    /// winner and a 0�0 scoreline (so the walkover doesn't affect averages), then
     /// propagates winners through the bracket. Returns the list of mutated matches
     /// so the caller can persist them.
     ///
-    /// Already-finished matches are left untouched — historical results stand.
+    /// Already-finished matches are left untouched � historical results stand.
     /// </summary>
     public static WithdrawalCascade ApplyWithdrawalCascade(Tournament t, string withdrawnFencerId)
     {
@@ -918,7 +918,7 @@ public static class TournamentEngine
         if (string.IsNullOrEmpty(withdrawnFencerId)) return result;
 
         // Pools: every pending/in-progress match involving the fencer becomes a
-        // 0–0 walkover for the opponent.
+        // 0�0 walkover for the opponent.
         foreach (var pool in t.Pools)
         {
             foreach (var m in pool.Matches)
@@ -955,7 +955,7 @@ public static class TournamentEngine
                 var opponent = isLeft ? m.RightFencerId : m.LeftFencerId;
                 if (string.IsNullOrEmpty(opponent))
                 {
-                    // No opponent yet — clear the withdrawn fencer's slot; propagation
+                    // No opponent yet � clear the withdrawn fencer's slot; propagation
                     // will treat the other feeder's winner as a bye when it arrives.
                     if (isLeft)  m.LeftFencerId  = "";
                     if (isRight) m.RightFencerId = "";

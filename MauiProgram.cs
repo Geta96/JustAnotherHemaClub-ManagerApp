@@ -20,7 +20,9 @@ public static class MauiProgram
             });
 
         // Backends
-        builder.Services.AddSingleton(new GoogleSheetsService(SpreadsheetId));
+        builder.Services.AddSingleton<ICredentialProvider, MauiCredentialProvider>();
+        builder.Services.AddSingleton(sp =>
+            new GoogleSheetsService(SpreadsheetId, sp.GetRequiredService<ICredentialProvider>()));
         builder.Services.AddSingleton<CachedGoogleSheetsService>(sp =>
             new CachedGoogleSheetsService(sp.GetRequiredService<GoogleSheetsService>()));
         builder.Services.AddSingleton<IGoogleSheetsService>(sp => sp.GetRequiredService<CachedGoogleSheetsService>());
@@ -33,7 +35,9 @@ public static class MauiProgram
         builder.Services.AddSingleton<RecurringTrainingMaterializer>();
 
         // Auth + proxy
-        builder.Services.AddSingleton<AuthService>();
+        builder.Services.AddSingleton<ICredentialStore, MauiCredentialStore>();
+        builder.Services.AddSingleton(sp =>
+            new AuthService(sp, sp.GetRequiredService<ICredentialStore>()));
         builder.Services.AddSingleton<IBiometricService, BiometricService>();
 
         // ViewModels

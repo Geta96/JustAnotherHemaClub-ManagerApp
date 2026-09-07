@@ -1,4 +1,4 @@
-﻿using JustAnotherHemaClub.Models;
+using JustAnotherHemaClub.Models;
 
 namespace JustAnotherHemaClub.Services;
 
@@ -52,14 +52,14 @@ public interface IGoogleSheetsService
     Task UpsertMatchAsync(string tournamentId, Match match);
     Task DeleteMatchAsync(string tournamentId, string matchId);
 
-    /// <summary>One HTTP call regardless of how many pools � used by Start Tournament.</summary>
+    /// <summary>One HTTP call regardless of how many pools ? used by Start Tournament.</summary>
     Task AppendPoolsAsync(string tournamentId, IList<Pool> pools);
 
-    /// <summary>One HTTP call regardless of how many matches � used by Start Tournament.</summary>
+    /// <summary>One HTTP call regardless of how many matches ? used by Start Tournament.</summary>
     Task AppendMatchesAsync(string tournamentId, IList<Match> matches);
 
     Task SaveFinalStandingsAsync(string tournamentId, IList<string> orderedFencerIds);
 
-    /// <summary>One HTTP call regardless of how many fencers � used by Save Tournament for new tournaments.</summary>
+    /// <summary>One HTTP call regardless of how many fencers ? used by Save Tournament for new tournaments.</summary>
     Task AppendTournamentFencersAsync(string tournamentId, IList<TournamentFencer> fencers);
 }

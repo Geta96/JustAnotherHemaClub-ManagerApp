@@ -16,6 +16,7 @@ public partial class FinanceViewModel : ObservableObject
 
     private readonly IGoogleSheetsService _sheets;
     private readonly AuthService _auth;
+    private readonly IDialogService _dialogs;
 
     // Cancels any in-flight LoadAsync when the user navigates away mid-refresh.
     private CancellationTokenSource? _loadCts;
@@ -84,11 +85,12 @@ public partial class FinanceViewModel : ObservableObject
     [ObservableProperty] private double  yearAvgAttendance;
     [ObservableProperty] private decimal yearUnpaid;
     
-    public FinanceViewModel(IGoogleSheetsService sheets, AuthService auth, PricesViewModel pricesVm)
+    public FinanceViewModel(IGoogleSheetsService sheets, AuthService auth, PricesViewModel pricesVm, IDialogService dialogs)
     {
         _sheets = sheets;
         _auth = auth;
         PricesVm = pricesVm;
+        _dialogs = dialogs;
 
         Tabs = _auth.IsLoggedInInstructor
             ? new[]
@@ -219,11 +221,7 @@ public partial class FinanceViewModel : ObservableObject
         {
             System.Diagnostics.Debug.WriteLine($"[FinanceViewModel.LoadAsync] {ex}");
 
-            var page = Services.AppNavigationHelper.RootPage;
-            if (page is not null)
-                await page.DisplayAlert("Couldn't load Finance",
-                                        ex.Message,
-                                        "OK");
+            await _dialogs.ShowAsync("Couldn't load Finance", ex.Message);
         }
         finally { if (showSpinner) IsLoading = false; }
     }
@@ -715,23 +713,37 @@ public partial class FinanceViewModel : ObservableObject
     {
         if (row is null || row.IsPaid || row.AmountDue <= 0) return;
 
-        var month = Months.First(mvm => mvm.Dues.Contains(row));
-
-        var topUp = row.AmountDue;
-
-        var p = new Payment
+        try
         {
-            FencerId = row.Fencer.Id,
-            Year     = month.Year,
-            Month    = month.Month,
-            Amount   = topUp,
-            PaidOn   = DateTime.Now
-        };
-        await _sheets.MarkPaidAsync(p);
+            var month = Months.FirstOrDefault(mvm => mvm.Dues.Contains(row));
+            if (month is null)
+            {
+                await _dialogs.ShowAsync("Mark paid failed",
+                    "Could not locate the month for this fencer row. Please refresh and try again.");
+                return;
+            }
 
-        row.ApplyTopUp(topUp);
-        month.RaiseTotals();
-        RecomputePersonalSummary();
+            var topUp = row.AmountDue;
+
+            var p = new Payment
+            {
+                FencerId = row.Fencer.Id,
+                Year     = month.Year,
+                Month    = month.Month,
+                Amount   = topUp,
+                PaidOn   = DateTime.Now
+            };
+            await _sheets.MarkPaidAsync(p);
+
+            row.ApplyTopUp(topUp);
+            month.RaiseTotals();
+            RecomputePersonalSummary();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[FinanceViewModel.MarkPaidAsync] {ex}");
+            await _dialogs.ShowAsync("Mark paid failed", ex.Message);
+        }
     }
 
     [RelayCommand]

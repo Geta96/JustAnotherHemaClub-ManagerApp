@@ -306,25 +306,33 @@ public partial class PricesViewModel : ObservableObject
     {
         if (row is null || !row.IsDirty || !IsLoggedInInstructor) return;
 
-        // A custom-period pass must keep a concrete end date on edit too.
-        if (row.IsCustomPeriod && !row.HasEndDate)
+        try
         {
-            await ShowAsync("End date required",
-                "A custom period pass needs an end date — tick \"Has end date\" and pick when the period ends.");
-            return;
+            // A custom-period pass must keep a concrete end date on edit too.
+            if (row.IsCustomPeriod && !row.HasEndDate)
+            {
+                await ShowAsync("End date required",
+                    "A custom period pass needs an end date — tick \"Has end date\" and pick when the period ends.");
+                return;
+            }
+
+            var updated = row.ToUpdatedRule();
+
+            // Same overlap warning on edit. ignoreId excludes the row itself so
+            // editing a rule never reports it as conflicting with its own state.
+            var conflict = FindOverlap(updated, ignoreId: row.Rule.Id);
+            if (conflict is not null && !await ConfirmOverlapAsync(updated, conflict))
+                return;
+
+            await _sheets.UpsertPriceRuleAsync(updated);
+            row.IsDirty = false;
+            row.IsExpanded = false;
         }
-
-        var updated = row.ToUpdatedRule();
-
-        // Same overlap warning on edit. ignoreId excludes the row itself so
-        // editing a rule never reports it as conflicting with its own state.
-        var conflict = FindOverlap(updated, ignoreId: row.Rule.Id);
-        if (conflict is not null && !await ConfirmOverlapAsync(updated, conflict))
-            return;
-
-        await _sheets.UpsertPriceRuleAsync(updated);
-        row.IsDirty = false;
-        row.IsExpanded = false;
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[PricesViewModel.SaveRuleAsync] {ex}");
+            await ShowAsync("Could not save price rule", ex.Message);
+        }
     }
 
     [RelayCommand]

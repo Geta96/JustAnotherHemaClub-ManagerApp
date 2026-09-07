@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels"
              xmlns:sel="clr-namespace:JustAnotherHemaClub.Selectors"
-             xmlns:services="clr-namespace:JustAnotherHemaClub.Services"
+             xmlns:services="clr-namespace:JustAnotherHemaClub.Services;assembly=JustAnotherHemaClub.Core"
              x:Class="JustAnotherHemaClub.Views.TournamentHubPage"
              x:Name="HubPage"
              x:DataType="vm:TournamentHubViewModel"

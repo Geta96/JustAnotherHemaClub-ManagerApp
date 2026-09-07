@@ -69,6 +69,7 @@ public partial class WeeklyViewModel : ObservableObject
 {
     private readonly IGoogleSheetsService _sheets;
     private readonly AuthService _auth;
+    private readonly IDialogService _dialogs;
 
     // Cancels any in-flight LoadAsync when the user navigates away mid-refresh.
     private CancellationTokenSource? _loadCts;
@@ -81,10 +82,11 @@ public partial class WeeklyViewModel : ObservableObject
     public bool IsNotLoggedInInstructor => !_auth.IsLoggedInInstructor;
     public bool HasNoRules => Rules.Count == 0;
 
-    public WeeklyViewModel(IGoogleSheetsService sheets, AuthService auth)
+    public WeeklyViewModel(IGoogleSheetsService sheets, AuthService auth, IDialogService dialogs)
     {
         _sheets = sheets;
         _auth = auth;
+        _dialogs = dialogs;
 
         // Keep HasNoRules accurate whenever the collection changes (add, remove, clear, etc.).
         Rules.CollectionChanged += (_, __) => NotifyHasNoRules();
@@ -137,16 +139,12 @@ public partial class WeeklyViewModel : ObservableObject
     {
         if (row is null || !IsLoggedInInstructor) return;
 
-        var page = Services.AppNavigationHelper.RootPage;
-        if (page is not null)
-        {
-            var ok = await page.DisplayAlert(
-                "Delete recurring training",
-                $"Stop the weekly {row.Rule.DayOfWeek} training at {row.TimeOfDay:hh\\:mm}?\n" +
-                "Existing past sessions are kept; only future auto-creation stops.",
-                "Delete", "Cancel");
-            if (!ok) return;
-        }
+        var ok = await _dialogs.ConfirmAsync(
+            "Delete recurring training",
+            $"Stop the weekly {row.Rule.DayOfWeek} training at {row.TimeOfDay:hh\\:mm}?\n" +
+            "Existing past sessions are kept; only future auto-creation stops.",
+            "Delete", "Cancel");
+        if (!ok) return;
 
         await _sheets.DeleteRecurringTrainingAsync(row.Rule.Id);
         Rules.Remove(row);

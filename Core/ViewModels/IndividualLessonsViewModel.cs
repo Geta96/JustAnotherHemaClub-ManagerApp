@@ -56,6 +56,7 @@ public partial class IndividualLessonsViewModel : ObservableObject
 {
     private readonly IGoogleSheetsService _sheets;
     private readonly AuthService _auth;
+    private readonly IDialogService _dialogs;
 
     // Cancels any in-flight LoadAsync when the user navigates away mid-refresh.
     private CancellationTokenSource? _loadCts;
@@ -97,10 +98,11 @@ public partial class IndividualLessonsViewModel : ObservableObject
     public bool IsStudentViewer => _auth.IsLoggedInFencer && !_auth.IsLoggedInInstructor;
     public string CurrentUserId => _auth.CurrentFencer?.Id ?? "";
 
-    public IndividualLessonsViewModel(IGoogleSheetsService sheets, AuthService auth)
+    public IndividualLessonsViewModel(IGoogleSheetsService sheets, AuthService auth, IDialogService dialogs)
     {
         _sheets = sheets;
         _auth = auth;
+        _dialogs = dialogs;
     }
 
     partial void OnFilterStudentChanged(Fencer? value) => Rebuild();
@@ -373,15 +375,11 @@ public partial class IndividualLessonsViewModel : ObservableObject
     {
         if (row is null || !IsInstructor) return;
 
-        var page = Services.AppNavigationHelper.RootPage;
-        if (page is not null)
-        {
-            var ok = await page.DisplayAlert(
-                "Delete 1 on 1 lesson",
-                $"Delete this lesson with {row.StudentName} on {row.DateText}?",
-                "Delete", "Cancel");
-            if (!ok) return;
-        }
+        var ok = await _dialogs.ConfirmAsync(
+            "Delete 1 on 1 lesson",
+            $"Delete this lesson with {row.StudentName} on {row.DateText}?",
+            "Delete", "Cancel");
+        if (!ok) return;
 
         // Reuse the Rejected status to mean "deleted" — cached reads skip these rows.
         row.Lesson.Status = IndividualLessonStatus.Rejected;
@@ -395,8 +393,7 @@ public partial class IndividualLessonsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            if (page is not null)
-                await page.DisplayAlert("Couldn't delete", ex.Message, "OK");
+            await _dialogs.ShowAsync("Couldn't delete", ex.Message);
         }
     }
 }

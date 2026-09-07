@@ -439,96 +439,41 @@ public class RegistrationWorkflowTests
     }
 
     // ======================================================================
-    // Helpers — these mirror the RegisterViewModel's private methods exactly
+    // Helpers — thin forwarders to the shared Core RegistrationValidator, so
+    // these tests verify the SAME logic the RegisterViewModel (and future
+    // Blazor front-end) run, not a parallel copy that could silently drift.
     // ======================================================================
 
-    /// <summary>
-    /// Replicates RegisterViewModel's validation chain. Returns null if valid,
-    /// or the first error message.
-    /// </summary>
     private static string? ValidateRegistration(
         string? name, string email, string confirmEmail,
         string username, string password, string confirmPassword,
-        bool gdpr, bool liability)
-    {
-        var trimmedEmail = (email ?? "").Trim();
-        var trimmedConfirmEmail = (confirmEmail ?? "").Trim();
+        bool gdpr, bool liability) =>
+        RegistrationValidator.Validate(
+            name, email, confirmEmail, username, password, confirmPassword, gdpr, liability);
 
-        return
-            string.IsNullOrWhiteSpace(name) ? "Name is required." :
-            string.IsNullOrWhiteSpace(trimmedEmail) ? "Email is required." :
-            !IsValidEmail(trimmedEmail) ? "Please enter a valid email address (e.g. you@example.com)." :
-            string.IsNullOrWhiteSpace(trimmedConfirmEmail) ? "Please confirm your email address." :
-            !string.Equals(trimmedEmail, trimmedConfirmEmail, StringComparison.OrdinalIgnoreCase)
-                ? "Email addresses do not match." :
-            string.IsNullOrWhiteSpace(username) ? "Login username is required." :
-            !IsStrongPassword(password) ? "Password must be at least 6 characters and include at least one number." :
-            password != confirmPassword ? "Passwords do not match." :
-            !gdpr ? "You must accept the GDPR policy." :
-            !liability ? "You must accept the liability statement." :
-            null;
-    }
-
-    private static bool IsValidEmail(string email)
-    {
-        if (string.IsNullOrWhiteSpace(email)) return false;
-        if (email.Contains(' ')) return false;
-        try
-        {
-            var addr = new System.Net.Mail.MailAddress(email);
-            if (addr.Address != email) return false;
-            var atIdx = email.LastIndexOf('@');
-            if (atIdx < 1) return false;
-            var host = email[(atIdx + 1)..];
-            var dotIdx = host.LastIndexOf('.');
-            if (dotIdx < 1) return false;
-            if (host.Length - dotIdx - 1 < 2) return false;
-            return true;
-        }
-        catch { return false; }
-    }
+    private static bool IsValidEmail(string email) =>
+        RegistrationValidator.IsValidEmail(email);
 
     private static bool IsStrongPassword(string? password) =>
-        !string.IsNullOrEmpty(password) &&
-        password.Length >= 6 &&
-        password.Any(char.IsDigit);
+        RegistrationValidator.IsStrongPassword(password);
 
     private static bool IsDuplicateUsername(string username, List<Fencer> existing) =>
-        existing.Any(f =>
-            !string.IsNullOrEmpty(f.Username) &&
-            string.Equals(f.Username.Trim(), username.Trim(), StringComparison.OrdinalIgnoreCase));
+        RegistrationValidator.IsDuplicateUsername(username, existing);
 
     private static bool IsDuplicateEmail(string email, List<Fencer> existing) =>
-        existing.Any(f =>
-            !string.IsNullOrEmpty(f.Email) &&
-            string.Equals(f.Email.Trim(), email.Trim(), StringComparison.OrdinalIgnoreCase));
+        RegistrationValidator.IsDuplicateEmail(email, existing);
 
     private static bool ComputeEmailMismatch(string email, string confirmEmail) =>
-        !string.IsNullOrWhiteSpace(email) &&
-        !string.IsNullOrWhiteSpace(confirmEmail) &&
-        !string.Equals(email.Trim(), confirmEmail.Trim(), StringComparison.OrdinalIgnoreCase);
+        RegistrationValidator.ComputeEmailMismatch(email, confirmEmail);
 
     private static bool ComputePasswordMismatch(string password, string confirmPassword) =>
-        !string.IsNullOrEmpty(password) &&
-        !string.IsNullOrEmpty(confirmPassword) &&
-        password != confirmPassword;
+        RegistrationValidator.ComputePasswordMismatch(password, confirmPassword);
 
     private static Fencer BuildRegistrationFencer(
         string name = "Test User",
         string email = "test@example.com",
         string username = "testuser",
         string password = "secret99",
-        bool isStudent = false) => new()
-    {
-        Id = Guid.NewGuid().ToString("N"),
-        Username = username.Trim(),
-        PasswordHash = AuthService.Hash(password),
-        Name = name.Trim(),
-        Email = email.Trim(),
-        Active = true,
-        IsStudent = isStudent,
-        GdprAccepted = true,
-        LiabilityAccepted = true,
-        IsInstructor = false
-    };
+        bool isStudent = false) =>
+        RegistrationValidator.BuildRegistrationFencer(name, email, username, password, isStudent);
 }
