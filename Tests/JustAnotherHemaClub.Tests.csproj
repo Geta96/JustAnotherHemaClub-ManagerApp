@@ -30,6 +30,7 @@
   <ItemGroup>
     <Compile Include="..\ViewModels\TournamentEditorVm.cs" Link="Shared\ViewModels\TournamentEditorVm.cs" />
     <Compile Include="..\ViewModels\TournamentFencerRow.cs" Link="Shared\ViewModels\TournamentFencerRow.cs" />
+    <Compile Include="..\Services\RecurringTrainingMaterializer.cs" Link="Shared\Services\RecurringTrainingMaterializer.cs" />
   </ItemGroup>
 
   <ItemGroup>

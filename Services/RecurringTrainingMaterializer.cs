@@ -7,10 +7,6 @@ public class RecurringTrainingMaterializer
     private readonly IGoogleSheetsService _sheets;
     private readonly ICacheControl _cache;
 
-    // Never backfill further into the past than this, even if a rule has been
-    // dormant for months. Keeps the first run after a long offline period cheap.
-    private const int MaxBackfillDays = 14;
-
     public RecurringTrainingMaterializer(IGoogleSheetsService sheets, ICacheControl cache)
     { _sheets = sheets; _cache = cache; }
 
@@ -19,15 +15,17 @@ public class RecurringTrainingMaterializer
         $"rec_{rule.Id}_{date:yyyyMMdd}";
 
     /// <summary>
-    /// For every active rule:
-    ///   - backfills any past occurrences that were missed, capped at the last
-    ///     <see cref="MaxBackfillDays"/> days, and
-    ///   - creates the next upcoming occurrence(s) up to <paramref name="lookAheadDays"/>
-    ///     (default 7 = "the whole week ahead", so the Home "Next lesson" card and
-    ///     the Trainings list always have the upcoming sessions ready).
-    /// Idempotent: re-running never duplicates rows, thanks to deterministic ids,
-    /// and a look-alike check on (date, start time, topic) prevents duplicating
-    /// sessions that were created manually for the same slot.
+    /// For every active rule, creates the upcoming occurrence(s) from today up to
+    /// <paramref name="lookAheadDays"/> (default 7 = "the whole week ahead", so the
+    /// Home "Next lesson" card and the Trainings list always have the upcoming
+    /// sessions ready).
+    ///
+    /// Forward-only by design: it never fabricates brand-new past rows (that would
+    /// spam phantom sessions nobody attended whenever a rule's StartDate predates
+    /// the first materialization). Idempotent: re-running never duplicates rows,
+    /// thanks to deterministic ids, and a look-alike check on (date, start time,
+    /// topic) prevents duplicating sessions that were created manually for the
+    /// same slot.
     /// </summary>
     public async Task MaterializeDueAsync(int lookAheadDays = 7)
     {
@@ -49,32 +47,15 @@ public class RecurringTrainingMaterializer
             .Select(t => (Date: t.Date.Date, Time: t.Date.TimeOfDay, Topic: TopicKey(t.Topic)))
             .ToHashSet();
 
-        // Precompute, per rule, the date of the latest session we already created for it.
-        // Lets us start the backfill loop right after that date instead of from StartDate.
-        var lastByRule = existing
-            .Where(t => t.Id.StartsWith("rec_", StringComparison.Ordinal))
-            .GroupBy(t =>
-            {
-                // id format: rec_{ruleId}_{yyyyMMdd}
-                var parts = t.Id.Split('_');
-                return parts.Length >= 3 ? parts[1] : "";
-            })
-            .ToDictionary(g => g.Key, g => g.Max(t => t.Date.Date));
-
-        var today        = DateTime.Today;
-        var horizon      = today.AddDays(lookAheadDays);
-        var earliestBack = today.AddDays(-MaxBackfillDays);
-        var created      = false;
+        var today   = DateTime.Today;
+        var horizon = today.AddDays(lookAheadDays);
+        var created = false;
 
         foreach (var rule in rules)
         {
-            // Walk from the earliest date that still needs consideration...
+            // Forward-only: never earlier than today, never before the rule starts.
             var from = rule.StartDate.Date;
-            if (lastByRule.TryGetValue(rule.Id, out var last) && last.AddDays(1) > from)
-                from = last.AddDays(1);
-
-            // ...but never further back than the 2-week hard ceiling.
-            if (from < earliestBack) from = earliestBack;
+            if (from < today) from = today;
 
             // ...up to today + look-ahead (but never past the rule's EndDate).
             var to = horizon;

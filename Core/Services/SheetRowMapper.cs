@@ -21,25 +21,21 @@ public static class SheetRowMapper
         s.Equals("yes", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Tolerant date reader. Accepts either:
-    ///   • a canonical ISO "o" string (new / migrated rows), or
-    ///   • a bare Sheets serial number (double) written by OLD app versions that
-    ///     still use the USER_ENTERED path and corrupt the cell.
-    /// This is defense-in-depth: even if an out-of-date client re-corrupts a cell
-    /// after the migration, new clients still read the correct instant instead of
-    /// crashing or dropping the row.
+    /// Tolerant date reader. Accepts either an ISO "o" round-trip string (the
+    /// canonical format written by the fixed RAW writer / migration) OR a bare
+    /// Google Sheets serial number (an OLE Automation date) that a stale
+    /// old-client write may still leave behind. Returns false for blank/garbage.
     /// </summary>
     public static bool TryParseDate(string s, out DateTime value)
     {
         value = default;
         if (string.IsNullOrWhiteSpace(s)) return false;
 
-        // Good rows: already ISO round-trippable.
         if (DateTime.TryParse(s, CultureInfo.InvariantCulture,
                               DateTimeStyles.RoundtripKind, out value))
             return true;
 
-        // Corrupt rows: bare serial number -> OLE Automation date.
+        // Bare Sheets serial number ? OLE Automation date.
         if (double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var serial))
         {
             try { value = DateTime.FromOADate(serial); return true; }
@@ -49,7 +45,7 @@ public static class SheetRowMapper
         return false;
     }
 
-    /// <summary>Tolerant date read with a fallback when the cell is blank/unparseable.</summary>
+    /// <summary>Parses a date cell, falling back to <paramref name="fallback"/> when unparseable.</summary>
     public static DateTime ParseDateOr(string s, DateTime fallback) =>
         TryParseDate(s, out var v) ? v : fallback;
 
@@ -78,7 +74,11 @@ public static class SheetRowMapper
             return null;
 
         DateTime end;
-        if (!TryParseDate(S(r, 4), out end))
+        var endStr = S(r, 4);
+        if (!string.IsNullOrWhiteSpace(endStr) &&
+            TryParseDate(endStr, out var parsedEnd))
+            end = parsedEnd;
+        else
             end = date.AddMinutes(90);
 
         return new TrainingSession
@@ -130,10 +130,12 @@ public static class SheetRowMapper
         if (!Enum.TryParse<DayOfWeek>(S(r, 1), true, out var dow)) return null;
 
         if (!TimeSpan.TryParse(S(r, 2), CultureInfo.InvariantCulture, out var tod)) tod = TimeSpan.Zero;
-        var start = ParseDateOr(S(r, 4), DateTime.Today);
+        if (!TryParseDate(S(r, 4), out var start)) start = DateTime.Today;
 
         DateTime? end = null;
-        if (TryParseDate(S(r, 5), out var e))
+        var endStr = S(r, 5);
+        if (!string.IsNullOrWhiteSpace(endStr) &&
+            TryParseDate(endStr, out var e))
             end = e;
 
         TimeSpan endTod;
