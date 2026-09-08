@@ -95,30 +95,15 @@
 
                                                             <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
                                                                     Text="Mark Paid"
-                                                                    IsVisible="{Binding Source={x:Reference FinancePageRoot}, Path=BindingContext.IsLoggedInInstructor}"
-                                                                    Command="{Binding Source={x:Reference FinancePageRoot}, Path=BindingContext.MarkPaidCommand}"
-                                                                    CommandParameter="{Binding .}"
+                                                                    IsVisible="{Binding ShowMarkPaidButton}"
+                                                                    Command="{Binding MarkPaidCommand}"
                                                                     VerticalOptions="Center">
-                                                                <Button.Triggers>
-                                                                    <DataTrigger TargetType="Button"
-                                                                                 Binding="{Binding IsPaid}"
-                                                                                 Value="True">
-                                                                        <Setter Property="IsVisible" Value="False" />
-                                                                    </DataTrigger>
-                                                                </Button.Triggers>
                                                             </Button>
 
                                                             <HorizontalStackLayout Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
                                                                                    Spacing="6"
                                                                                    VerticalOptions="Center"
-                                                                                   IsVisible="{Binding IsNotPaid}">
-                                                                <HorizontalStackLayout.Triggers>
-                                                                    <DataTrigger TargetType="HorizontalStackLayout"
-                                                                                 Binding="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.IsLoggedInInstructor}"
-                                                                                 Value="True">
-                                                                        <Setter Property="IsVisible" Value="False" />
-                                                                    </DataTrigger>
-                                                                </HorizontalStackLayout.Triggers>
+                                                                                   IsVisible="{Binding ShowNotPaidHint}">
                                                                 <Label Text="Not payed yet"
                                                                        TextColor="{StaticResource DangerRed}"
                                                                        FontAttributes="Bold"

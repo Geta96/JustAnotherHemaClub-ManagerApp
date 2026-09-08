@@ -89,8 +89,7 @@
                                                                                 TextColor="{StaticResource Cream}"
                                                                                 HeightRequest="36" Padding="12,0"
                                                                                 IsVisible="{Binding CanCurrentUserAttend}"
-                                                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=AttendTrainingCommand}"
-                                                                                CommandParameter="{Binding .}" />
+                                                                                Command="{Binding AttendCommand}" />
                                                                         <Label Text="✓"
                                                                                TextColor="#1F8A2E"
                                                                                FontAttributes="Bold" FontSize="18"
@@ -129,8 +128,7 @@
                                                                                 BackgroundColor="#476FB5"
                                                                                 TextColor="{StaticResource Cream}"
                                                                                 IsVisible="{Binding CanCurrentUserAttend}"
-                                                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=AttendTrainingCommand}"
-                                                                                CommandParameter="{Binding .}" />
+                                                                                Command="{Binding AttendCommand}" />
                                                                         <Label Text="✓ Attended"
                                                                                TextColor="#1F8A2E"
                                                                                FontAttributes="Bold" FontSize="16"
@@ -144,14 +142,13 @@
                                                                                 Text="Delete"
                                                                                 BackgroundColor="{StaticResource DangerRed}"
                                                                                 TextColor="{StaticResource Cream}"
-                                                                                Clicked="OnDeleteTrainingClicked" />
+                                                                                Command="{Binding DeleteCommand}" />
                                                                         <Button Grid.Column="1"
                                                                                 Text="Save"
                                                                                 BackgroundColor="#476FB5"
                                                                                 TextColor="{StaticResource Cream}"
                                                                                 IsEnabled="{Binding IsDirty}"
-                                                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TrainingsViewModel}}, Path=SaveTrainingEditCommand}"
-                                                                                CommandParameter="{Binding .}" />
+                                                                                Command="{Binding SaveCommand}" />
                                                                     </Grid>
                                                                 </VerticalStackLayout>
                                                             </VerticalStackLayout>

@@ -25,6 +25,15 @@
         <RuntimeIdentifiers>android-arm64;android-arm</RuntimeIdentifiers>
     </PropertyGroup>
 
+    <!-- Debug: disable Fast Deployment so assemblies are embedded in the APK.
+         The arm64-on-x86_64 (Berberis-translated) emulator fails to populate the
+         .__override__ fast-deploy folder, so the runtime finds no assemblies and
+         aborts (SIGABRT at monodroid-glue.cc). Embedding avoids that path. -->
+    <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+        <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+        <AndroidUseSharedRuntime>false</AndroidUseSharedRuntime>
+    </PropertyGroup>
+
     <PropertyGroup Condition="'$(Configuration)' == 'Release'">
         <AndroidUseAssemblyStore>true</AndroidUseAssemblyStore>
 

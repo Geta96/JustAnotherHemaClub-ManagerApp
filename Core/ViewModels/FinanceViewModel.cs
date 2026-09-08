@@ -381,7 +381,7 @@ public partial class FinanceViewModel : ObservableObject
                 if (count == 0 && cashPaid == 0m && creditIn == 0m && !isMineThisMonth)
                     continue;
 
-                monthVm.Dues.Add(new FencerDueRow(f, quote, cashPaid));
+                monthVm.Dues.Add(new FencerDueRow(f, quote, cashPaid) { MarkPaidAction = MarkPaidAsync, CanMarkPaid = isInstructor });
             }
 
             if (isInstructor)
@@ -398,7 +398,7 @@ public partial class FinanceViewModel : ObservableObject
 
                     var ghost = new Fencer { Id = g.Key, Name = "" }; // DisplayName → "[Deleted User]"
                     var quote = DuesCalculator.Calculate(0, ghost.IsStudent, monthRules, paid);
-                    monthVm.Dues.Add(new FencerDueRow(ghost, quote, paid));
+                    monthVm.Dues.Add(new FencerDueRow(ghost, quote, paid) { MarkPaidAction = MarkPaidAsync, CanMarkPaid = isInstructor });
                 }
             }
 

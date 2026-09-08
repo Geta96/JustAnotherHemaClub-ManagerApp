@@ -119,7 +119,15 @@ public partial class TrainingsViewModel : ObservableObject
                     if (noteByMonth.TryGetValue(g.Key, out var n)) mvm.Note = n;
                     mvm.IsNoteDirty = false;
                     foreach (var t in g.OrderByDescending(s => s.Date))
-                        mvm.Trainings.Add(new EditableTrainingRow(t, fencerSnapshot, myId));
+                    {
+                        var etr = new EditableTrainingRow(t, fencerSnapshot, myId)
+                        {
+                            AttendAction = AttendTrainingAsync,
+                            SaveAction   = SaveTrainingEditAsync,
+                            DeleteAction = DeleteTrainingAsync
+                        };
+                        mvm.Trainings.Add(etr);
+                    }
                     list.Add(mvm);
                 }
                 return list;
