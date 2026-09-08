@@ -24,11 +24,19 @@ public partial class IndividualLessonRowVm : ObservableObject
 
     // Compact-by-default header; expand to edit.
     [ObservableProperty] private bool isExpanded;
-    public string ExpandGlyph => IsExpanded ? "▾" : "▸";
+    public string ExpandGlyph => IsExpanded ? "\u25BE" : "\u25B8";
 
-    // Short topic line for the collapsed header.
-    public string TopicPreview =>
-        string.IsNullOrWhiteSpace(Lesson.Topic) ? "(no topic)" : Lesson.Topic;
+    // Parent-supplied handlers so buttons in the nested DataTemplate bind
+    // directly to this row (reliable) instead of walking to the parent VM.
+    public Func<IndividualLessonRowVm, Task>? AcceptAction { get; set; }
+    public Func<IndividualLessonRowVm, Task>? RejectAction { get; set; }
+    public Func<IndividualLessonRowVm, Task>? SaveAction { get; set; }
+    public Func<IndividualLessonRowVm, Task>? DeleteAction { get; set; }
+
+    [RelayCommand] private Task Accept() => AcceptAction?.Invoke(this) ?? Task.CompletedTask;
+    [RelayCommand] private Task Reject() => RejectAction?.Invoke(this) ?? Task.CompletedTask;
+    [RelayCommand] private Task Save()   => SaveAction?.Invoke(this)   ?? Task.CompletedTask;
+    [RelayCommand] private Task Delete() => DeleteAction?.Invoke(this) ?? Task.CompletedTask;
 
     public IndividualLessonRowVm(IndividualLesson lesson,
                                  string studentName,
@@ -44,6 +52,10 @@ public partial class IndividualLessonRowVm : ObservableObject
         IsCurrentUserStudent = isCurrentUserStudent;
         IsCurrentUserTargetedInstructor = isCurrentUserTargetedInstructor;
     }
+
+    // Short topic line for the collapsed header.
+    public string TopicPreview =>
+        string.IsNullOrWhiteSpace(Lesson.Topic) ? "(no topic)" : Lesson.Topic;
 
     [CommunityToolkit.Mvvm.Input.RelayCommand]
     private void ToggleExpanded() => IsExpanded = !IsExpanded;
@@ -220,7 +232,13 @@ public partial class IndividualLessonsViewModel : ObservableObject
                                      : "(unknown)"),
                 isViewerInstructor: IsInstructor,
                 isCurrentUserStudent: l.StudentId == meId,
-                isCurrentUserTargetedInstructor: targeted));
+                isCurrentUserTargetedInstructor: targeted)
+            {
+                AcceptAction = AcceptRequestAsync,
+                RejectAction = RejectRequestAsync,
+                SaveAction   = SaveLessonAsync,
+                DeleteAction = DeleteLessonAsync
+            });
         }
     }
 
@@ -256,61 +274,85 @@ public partial class IndividualLessonsViewModel : ObservableObject
     [RelayCommand]
     private async Task SubmitFormAsync()
     {
-        var when = NewDate.Date + NewTime;
-
-        if (IsInstructor && InstructorFormMode == ModeAddDirect)
+        try
         {
-            if (NewStudent is null) return;
-            var lesson = new IndividualLesson
+            var when = NewDate.Date + NewTime;
+
+            if (IsInstructor && InstructorFormMode == ModeAddDirect)
             {
-                Date = when,
-                StudentId = NewStudent.Id,
-                InstructorId = (NewInstructor ?? _auth.CurrentFencer!)?.Id ?? CurrentUserId,
-                Topic = NewTopic,
-                Notes = NewNotes,
-                NextIdea = NewNextIdea,
-                Status = IndividualLessonStatus.Accepted
-            };
-            await _sheets.UpsertIndividualLessonAsync(lesson);
+                if (NewStudent is null)
+                {
+                    await _dialogs.ShowAsync("Cannot save lesson", "Please select a student first.");
+                    return;
+                }
+                var lesson = new IndividualLesson
+                {
+                    Date = when,
+                    StudentId = NewStudent.Id,
+                    InstructorId = (NewInstructor ?? _auth.CurrentFencer!)?.Id ?? CurrentUserId,
+                    Topic = NewTopic,
+                    Notes = NewNotes,
+                    NextIdea = NewNextIdea,
+                    Status = IndividualLessonStatus.Accepted
+                };
+                await _sheets.UpsertIndividualLessonAsync(lesson);
+            }
+            else if (IsInstructor && InstructorFormMode == ModeRequest)
+            {
+                var targets = RequestTargets.Where(t => t.IsAttending).Select(t => t.Fencer.Id).ToList();
+                if (targets.Count == 0)
+                {
+                    await _dialogs.ShowAsync("Cannot request lesson",
+                        "Please tick at least one instructor under \"Request from instructor(s)\".");
+                    return;
+                }
+                var lesson = new IndividualLesson
+                {
+                    Date = when,
+                    StudentId = CurrentUserId,
+                    InstructorId = "",
+                    Topic = NewTopic,
+                    Status = IndividualLessonStatus.Requested,
+                    RequestedInstructorIds = targets
+                };
+                await _sheets.UpsertIndividualLessonAsync(lesson);
+            }
+            else if (IsStudentViewer)
+            {
+                var targets = RequestTargets.Where(t => t.IsAttending).Select(t => t.Fencer.Id).ToList();
+                if (targets.Count == 0)
+                {
+                    await _dialogs.ShowAsync("Cannot request lesson",
+                        "Please tick at least one instructor under \"Request from instructor(s)\".");
+                    return;
+                }
+                var lesson = new IndividualLesson
+                {
+                    Date = when,
+                    StudentId = CurrentUserId,
+                    InstructorId = "",
+                    Topic = NewTopic,
+                    Status = IndividualLessonStatus.Requested,
+                    RequestedInstructorIds = targets
+                };
+                await _sheets.UpsertIndividualLessonAsync(lesson);
+            }
+            else
+            {
+                await _dialogs.ShowAsync("Cannot save lesson",
+                    "The form isn't in a valid state for your role. Please reopen it and try again.");
+                return;
+            }
+
+            ResetForm();
+            IsFormVisible = false;
+            await ReloadLessonsAsync();
         }
-        else if (IsInstructor && InstructorFormMode == ModeRequest)
+        catch (Exception ex)
         {
-            // Instructor requests a lesson from one or more other instructors;
-            // the current instructor takes the "student" role on the request.
-            var targets = RequestTargets.Where(t => t.IsAttending).Select(t => t.Fencer.Id).ToList();
-            if (targets.Count == 0) return;
-
-            var lesson = new IndividualLesson
-            {
-                Date = when,
-                StudentId = CurrentUserId,
-                InstructorId = "",
-                Topic = NewTopic,
-                Status = IndividualLessonStatus.Requested,
-                RequestedInstructorIds = targets
-            };
-            await _sheets.UpsertIndividualLessonAsync(lesson);
+            System.Diagnostics.Debug.WriteLine($"[SubmitFormAsync] {ex}");
+            await _dialogs.ShowAsync("Couldn't save lesson", ex.Message);
         }
-        else if (IsStudentViewer)
-        {
-            var targets = RequestTargets.Where(t => t.IsAttending).Select(t => t.Fencer.Id).ToList();
-            if (targets.Count == 0) return;
-
-            var lesson = new IndividualLesson
-            {
-                Date = when,
-                StudentId = CurrentUserId,
-                InstructorId = "",
-                Topic = NewTopic,
-                Status = IndividualLessonStatus.Requested,
-                RequestedInstructorIds = targets
-            };
-            await _sheets.UpsertIndividualLessonAsync(lesson);
-        }
-
-        ResetForm();
-        IsFormVisible = false;
-        await ReloadLessonsAsync();
     }
 
     private void ResetForm()

@@ -10,6 +10,16 @@ public partial class PriceRuleRow : ObservableObject
 {
     public PriceRule Rule { get; }
 
+    // Parent-supplied handlers so the Save/Delete buttons in the nested
+    // BindableLayout DataTemplate bind directly to THIS row (reliable) instead
+    // of walking up to an ancestor VM via RelativeSource (which doesn't resolve
+    // inside a BindableLayout item and silently swallows the tap).
+    public Func<PriceRuleRow, Task>? SaveAction { get; set; }
+    public Func<PriceRuleRow, Task>? DeleteAction { get; set; }
+
+    [RelayCommand] private Task Save()   => SaveAction?.Invoke(this)   ?? Task.CompletedTask;
+    [RelayCommand] private Task Delete() => DeleteAction?.Invoke(this) ?? Task.CompletedTask;
+
     [ObservableProperty] private int sessionCount;
     [ObservableProperty] private int monthCount;
     [ObservableProperty] private bool isCustomPeriod;
@@ -207,7 +217,11 @@ public partial class PricesViewModel : ObservableObject
                 .ThenBy(r => r.StartDate)
                 .ToList();
 
-            var rows = ordered.Select(r => new PriceRuleRow(r)).ToList();
+            var rows = ordered.Select(r => new PriceRuleRow(r)
+            {
+                SaveAction   = SaveRuleAsync,
+                DeleteAction = DeleteRuleAsync
+            }).ToList();
 
             // Mark the boundary between "active today" and the rest so the
             // XAML can render a divider under the last active card. Only flag

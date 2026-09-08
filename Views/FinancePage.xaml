@@ -458,14 +458,12 @@
                                                     <Button Grid.Column="0" Text="Delete"
                                                             BackgroundColor="{StaticResource DangerRed}"
                                                             TextColor="{StaticResource Cream}"
-                                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.PricesVm.DeleteRuleCommand}"
-                                                            CommandParameter="{Binding .}" />
+                                                            Command="{Binding DeleteCommand}" />
                                                     <Button Grid.Column="1" Text="Save changes"
                                                             BackgroundColor="#476FB5"
                                                             TextColor="{StaticResource Cream}"
                                                             IsEnabled="{Binding IsDirty}"
-                                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.PricesVm.SaveRuleCommand}"
-                                                            CommandParameter="{Binding .}" />
+                                                            Command="{Binding SaveCommand}" />
                                                 </Grid>
                                             </VerticalStackLayout>
                                         </VerticalStackLayout>
