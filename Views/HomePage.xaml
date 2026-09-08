@@ -65,6 +65,57 @@
                     </VerticalStackLayout>
                 </Border>
 
+                <!-- Next lesson -->
+                <Border Style="{StaticResource Card}" IsVisible="{Binding HasNextLesson}"
+                        Stroke="{Binding NextLessonStroke}"
+                        StrokeThickness="{Binding NextLessonStrokeThickness}">
+                    <Border.Shadow>
+                        <Shadow Brush="#7FBF3F" Offset="0,0" Radius="14"
+                                Opacity="{Binding NextLessonGlowOpacity}" />
+                    </Border.Shadow>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalOptions="Center">
+                        <VerticalStackLayout Grid.Column="0" Spacing="4" VerticalOptions="Center">
+                            <Label Text="Next lesson:" Style="{StaticResource H2}" />
+                            <Label Text="{Binding NextLessonWhen}"
+                                   FontSize="18" FontAttributes="Bold"
+                                   TextColor="{StaticResource Wine}" />
+                            <Label Text="{Binding NextLessonTopic}"
+                                   Style="{StaticResource Caption}"
+                                   IsVisible="{Binding NextLessonHasTopic}" />
+                        </VerticalStackLayout>
+
+                        <!-- Blue Attend button (taller, nudged left via right margin) -->
+                        <Button Grid.Column="1"
+                                Text="Attend"
+                                BackgroundColor="#476FB5"
+                                TextColor="{StaticResource Cream}"
+                                HeightRequest="48" Padding="18,0"
+                                FontSize="16"
+                                Margin="0,0,10,0"
+                                VerticalOptions="Center"
+                                IsVisible="{Binding ShowAttendButton}"
+                                Command="{Binding ToggleAttendNextLessonCommand}" />
+
+                        <!-- After attending: Wine "Undo" text with a larger glyph -->
+                        <HorizontalStackLayout Grid.Column="1" Spacing="6"
+                                               Margin="0,0,10,0"
+                                               VerticalOptions="Center"
+                                               IsVisible="{Binding ShowUndoAttend}">
+                            <HorizontalStackLayout.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ToggleAttendNextLessonCommand}" />
+                            </HorizontalStackLayout.GestureRecognizers>
+                            <Label Text="&#x21A9;"
+                                   TextColor="{StaticResource Wine}"
+                                   FontSize="24" FontAttributes="Bold"
+                                   VerticalOptions="Center" />
+                            <Label Text="Undo"
+                                   TextColor="{StaticResource Wine}"
+                                   FontSize="16" FontAttributes="Bold"
+                                   VerticalOptions="Center" />
+                        </HorizontalStackLayout>
+                    </Grid>
+                </Border>
+
                 <!-- Weekly training (dynamic) -->
                 <Border Style="{StaticResource Card}">
                     <VerticalStackLayout Spacing="10">
