@@ -69,7 +69,7 @@ public partial class GoogleSheetsService : IGoogleSheetsService
         var svc = await GetServiceAsync();
         var body = new ValueRange { Values = new List<IList<object>> { row } };
         var req = svc.Spreadsheets.Values.Append(body, _spreadsheetId, range);
-        req.ValueInputOption = SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.USERENTERED;
+        req.ValueInputOption = SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.RAW;
         req.InsertDataOption = SpreadsheetsResource.ValuesResource.AppendRequest.InsertDataOptionEnum.INSERTROWS;
         await req.ExecuteAsync();
     }
@@ -79,7 +79,7 @@ public partial class GoogleSheetsService : IGoogleSheetsService
         var svc = await GetServiceAsync();
         var body = new ValueRange { Values = new List<IList<object>> { row } };
         var req = svc.Spreadsheets.Values.Update(body, _spreadsheetId, range);
-        req.ValueInputOption = SpreadsheetsResource.ValuesResource.UpdateRequest.ValueInputOptionEnum.USERENTERED;
+        req.ValueInputOption = SpreadsheetsResource.ValuesResource.UpdateRequest.ValueInputOptionEnum.RAW;
         await req.ExecuteAsync();
     }
 

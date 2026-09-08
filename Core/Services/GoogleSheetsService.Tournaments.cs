@@ -301,7 +301,7 @@ public partial class GoogleSheetsService
         };
         var req = svc.Spreadsheets.Values.Append(body, _spreadsheetId, "FinalStandings!A1");
         req.ValueInputOption =
-            SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.USERENTERED;
+            SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.RAW;
         req.InsertDataOption =
             SpreadsheetsResource.ValuesResource.AppendRequest.InsertDataOptionEnum.INSERTROWS;
         await req.ExecuteAsync();
@@ -343,7 +343,7 @@ public partial class GoogleSheetsService
         var body = new ValueRange { Values = rows };
         var req  = svc.Spreadsheets.Values.Append(body, _spreadsheetId, "Pools!A1");
         req.ValueInputOption =
-            SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.USERENTERED;
+            SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.RAW;
         req.InsertDataOption =
             SpreadsheetsResource.ValuesResource.AppendRequest.InsertDataOptionEnum.INSERTROWS;
         await req.ExecuteAsync();
@@ -388,7 +388,7 @@ public partial class GoogleSheetsService
         var body = new ValueRange { Values = rows };
         var req  = svc.Spreadsheets.Values.Append(body, _spreadsheetId, "Matches!A1");
         req.ValueInputOption =
-            SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.USERENTERED;
+            SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.RAW;
         req.InsertDataOption =
             SpreadsheetsResource.ValuesResource.AppendRequest.InsertDataOptionEnum.INSERTROWS;
         await req.ExecuteAsync();
@@ -409,7 +409,7 @@ public partial class GoogleSheetsService
         var body = new ValueRange { Values = rows };
         var req  = svc.Spreadsheets.Values.Append(body, _spreadsheetId, "TournamentFencers!A:E");
         req.ValueInputOption =
-            SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.USERENTERED;
+            SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.RAW;
         req.InsertDataOption =
             SpreadsheetsResource.ValuesResource.AppendRequest.InsertDataOptionEnum.INSERTROWS;
         await req.ExecuteAsync();
