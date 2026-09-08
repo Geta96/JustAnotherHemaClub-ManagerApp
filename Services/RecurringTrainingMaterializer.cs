@@ -14,17 +14,22 @@ public class RecurringTrainingMaterializer
     public RecurringTrainingMaterializer(IGoogleSheetsService sheets, ICacheControl cache)
     { _sheets = sheets; _cache = cache; }
 
+    /// <summary>Deterministic id for a rule's occurrence on a given date.</summary>
+    public static string OccurrenceId(RecurringTrainingRule rule, DateTime date) =>
+        $"rec_{rule.Id}_{date:yyyyMMdd}";
+
     /// <summary>
     /// For every active rule:
     ///   - backfills any past occurrences that were missed, capped at the last
     ///     <see cref="MaxBackfillDays"/> days, and
     ///   - creates the next upcoming occurrence(s) up to <paramref name="lookAheadDays"/>
-    ///     (default 1 = "the day before the session").
+    ///     (default 7 = "the whole week ahead", so the Home "Next lesson" card and
+    ///     the Trainings list always have the upcoming sessions ready).
     /// Idempotent: re-running never duplicates rows, thanks to deterministic ids,
     /// and a look-alike check on (date, start time, topic) prevents duplicating
     /// sessions that were created manually for the same slot.
     /// </summary>
-    public async Task MaterializeDueAsync(int lookAheadDays = 1)
+    public async Task MaterializeDueAsync(int lookAheadDays = 7)
     {
         var rules    = await _sheets.GetRecurringTrainingsAsync();
         var existing = await _sheets.GetTrainingsAsync();
@@ -101,5 +106,49 @@ public class RecurringTrainingMaterializer
         }
 
         if (created) _cache.InvalidateTrainings();
+    }
+
+    /// <summary>
+    /// Ensures the occurrence of <paramref name="rule"/> on <paramref name="date"/>
+    /// exists as a materialized <see cref="TrainingSession"/> and returns it
+    /// (either the pre-existing row or a freshly-created one).
+    ///
+    /// Duplicate-safe: re-reads the current trainings and skips creation if a row
+    /// already covers this slot — either by our deterministic id
+    /// (<see cref="OccurrenceId"/>) OR by a look-alike (date, start-time, topic)
+    /// match (e.g. a manually-created first session). This is the same guard the
+    /// batch <see cref="MaterializeDueAsync"/> uses, so calling this from the Home
+    /// screen can never produce a duplicate.
+    /// </summary>
+    public async Task<TrainingSession> EnsureOccurrenceAsync(RecurringTrainingRule rule, DateTime date)
+    {
+        var day = date.Date;
+        var id = OccurrenceId(rule, day);
+        var topicKey = (rule.Topic ?? "").Trim().ToLowerInvariant();
+
+        var existing = await _sheets.GetTrainingsAsync();
+
+        // Already materialized under our deterministic id?
+        var byId = existing.FirstOrDefault(t => t.Id == id);
+        if (byId is not null) return byId;
+
+        // Already covered by a look-alike row on the same (date, start time, topic)?
+        var bySlot = existing.FirstOrDefault(t =>
+            t.Date.Date == day &&
+            t.Date.TimeOfDay == rule.TimeOfDay &&
+            (t.Topic ?? "").Trim().ToLowerInvariant() == topicKey);
+        if (bySlot is not null) return bySlot;
+
+        // Nothing covers this slot yet — create it.
+        var session = new TrainingSession
+        {
+            Id      = id,
+            Date    = day + rule.TimeOfDay,
+            EndDate = day + rule.EndTimeOfDay,
+            Topic   = rule.Topic,
+        };
+        await _sheets.UpsertTrainingAsync(session);
+        _cache.InvalidateTrainings();
+        return session;
     }
 }

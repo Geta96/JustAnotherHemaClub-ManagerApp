@@ -28,6 +28,7 @@ public partial class HomeViewModel : ObservableObject
     private readonly IGoogleSheetsService _sheets;
     private readonly ICacheControl _cache;
     private readonly AuthService _auth;
+    private readonly RecurringTrainingMaterializer _materializer;
 
     public ObservableCollection<HomeWeeklyRow> WeeklyTrainings { get; } = new();
 
@@ -37,6 +38,11 @@ public partial class HomeViewModel : ObservableObject
 
     // --- Next lesson card ---
     private TrainingSession? _nextLesson;
+
+    // When the next lesson is a projected (not-yet-materialized) recurring
+    // occurrence, these hold the rule + date so we can materialize it on demand.
+    private RecurringTrainingRule? _nextLessonRule;
+    private DateTime _nextLessonDate;
 
     [ObservableProperty] private bool hasNextLesson;
     [ObservableProperty] private string nextLessonWhen = "";
@@ -78,11 +84,12 @@ public partial class HomeViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowUndoAttend));
     }
 
-    public HomeViewModel(IGoogleSheetsService sheets, ICacheControl cache, AuthService auth)
+    public HomeViewModel(IGoogleSheetsService sheets, ICacheControl cache, AuthService auth, RecurringTrainingMaterializer materializer)
     {
         _sheets = sheets;
         _cache = cache;
         _auth = auth;
+        _materializer = materializer;
         WeeklyTrainings.CollectionChanged += (_, __) =>
         {
             HasWeeklyTrainings = WeeklyTrainings.Count > 0;
@@ -153,19 +160,52 @@ public partial class HomeViewModel : ObservableObject
     {
         try
         {
-            var trainings = await _sheets.GetTrainingsAsync();
-
-            // "Upcoming" = the session's day has not yet fully passed (visible
-            // until midnight of the session date).
             var todayStart = DateTime.Today;
-            var next = trainings
+
+            // Read both the already-materialized sessions and the recurring rules
+            // in parallel. We consider BOTH sources so the card is correct even
+            // when the soonest recurring session hasn't been materialized yet.
+            var trainingsTask = _sheets.GetTrainingsAsync();
+            var rulesTask     = _sheets.GetRecurringTrainingsAsync();
+            await Task.WhenAll(trainingsTask, rulesTask);
+
+            var trainings = trainingsTask.Result;
+            var rules     = rulesTask.Result;
+
+            // Soonest already-materialized upcoming session (visible until midnight
+            // of its own day).
+            var nextMaterialized = trainings
                 .Where(t => t.Date.Date >= todayStart)
                 .OrderBy(t => t.Date)
                 .FirstOrDefault();
 
-            _nextLesson = next;
+            // Soonest PROJECTED recurring occurrence, computed straight from the
+            // rules (independent of materialization). For each active rule, find
+            // the next date on/after today that the rule fires.
+            RecurringTrainingRule? projectedRule = null;
+            DateTime projectedDate = default;
+            foreach (var rule in rules)
+            {
+                var occ = NextOccurrenceOnOrAfter(rule, todayStart);
+                if (occ is null) continue;
+                var start = occ.Value.Date + rule.TimeOfDay;
+                if (projectedRule is null || start < (projectedDate.Date + projectedRule.TimeOfDay))
+                {
+                    projectedRule = rule;
+                    projectedDate = occ.Value;
+                }
+            }
 
-            if (next is null)
+            // Decide which is sooner: the materialized session or the projected one.
+            DateTime? matStart = nextMaterialized?.Date;
+            DateTime? projStart = projectedRule is null
+                ? null
+                : projectedDate.Date + projectedRule.TimeOfDay;
+
+            _nextLesson     = null;
+            _nextLessonRule = null;
+
+            if (matStart is null && projStart is null)
             {
                 HasNextLesson = false;
                 CanAttendNextLesson = false;
@@ -173,20 +213,76 @@ public partial class HomeViewModel : ObservableObject
                 return;
             }
 
-            NextLessonWhen  = $"{FormatFriendlyDay(next.Date)} at {next.Date:HH\\:mm}";
-            NextLessonTopic = next.Topic ?? "";
+            // Prefer whichever starts first. When the projected occurrence is the
+            // same slot as the materialized one, the materialized row wins (equal
+            // or earlier), so we never double up.
+            bool useProjected = projStart is not null &&
+                                (matStart is null || projStart < matStart);
 
+            DateTime whenStart;
+            string topic;
             var me = _auth.CurrentFencer;
-            CanAttendNextLesson   = me is not null && !_auth.IsGuest;
-            IsAttendingNextLesson = me is not null && next.AttendeeFencerIds.Contains(me.Id);
+
+            if (useProjected)
+            {
+                _nextLessonRule = projectedRule;
+                _nextLessonDate = projectedDate;
+                whenStart = projStart!.Value;
+                topic = projectedRule!.Topic ?? "";
+
+                // Proactively materialize the projected occurrence NOW so the row
+                // exists as soon as the card shows it (no need to wait for Attend).
+                // EnsureOccurrenceAsync is duplicate-safe. Best-effort: if it fails
+                // (offline), the card still shows the projected data and Attend will
+                // retry the materialization.
+                try
+                {
+                    var session = await _materializer.EnsureOccurrenceAsync(projectedRule, projectedDate);
+                    _nextLesson     = session;
+                    _nextLessonRule = null; // now backed by a real row
+                    whenStart = session.Date;
+                    topic     = session.Topic ?? "";
+                }
+                catch { /* keep projected display; Attend will materialize later */ }
+            }
+            else
+            {
+                _nextLesson = nextMaterialized;
+                whenStart = matStart!.Value;
+                topic = nextMaterialized!.Topic ?? "";
+            }
+
+            NextLessonWhen  = $"{FormatFriendlyDay(whenStart)} at {whenStart:HH\\:mm}";
+            NextLessonTopic = topic;
+
+            CanAttendNextLesson = me is not null && !_auth.IsGuest;
+            IsAttendingNextLesson = me is not null && _nextLesson is not null &&
+                                    _nextLesson.AttendeeFencerIds.Contains(me.Id);
             HasNextLesson = true;
         }
         catch
         {
             _nextLesson = null;
+            _nextLessonRule = null;
             HasNextLesson = false;
             CanAttendNextLesson = false;
         }
+    }
+
+    /// <summary>
+    /// The next date on/after <paramref name="from"/> (inclusive) on which the
+    /// rule is active, or null if the rule has ended before then. Scans at most
+    /// 7 days since the rule fires weekly.
+    /// </summary>
+    private static DateTime? NextOccurrenceOnOrAfter(RecurringTrainingRule rule, DateTime from)
+    {
+        for (int i = 0; i < 7; i++)
+        {
+            var d = from.Date.AddDays(i);
+            if (rule.EndDate is { } end && d > end.Date) return null;
+            if (rule.IsActiveOn(d)) return d;
+        }
+        return null;
     }
 
     /// <summary>
@@ -202,12 +298,18 @@ public partial class HomeViewModel : ObservableObject
         if (days == 0) return "Today";
         if (days == 1) return "Tomorrow";
 
-        // Within the next 7 days (2..7): "This <Weekday>".
-        if (days >= 2 && days <= 7)
+        // Week-based buckets (weeks start on Monday). "This <weekday>" means the
+        // date falls in the current calendar week; "Next <weekday>" means it falls
+        // in the following calendar week — regardless of raw day distance. This is
+        // why e.g. next Monday reads "Next Monday" even though it's only 6 days off.
+        int daysSinceMonday = ((int)today.DayOfWeek + 6) % 7;
+        var endOfThisWeek = today.AddDays(6 - daysSinceMonday); // Sunday of this week
+        var endOfNextWeek = endOfThisWeek.AddDays(7);
+
+        if (date <= endOfThisWeek)
             return $"This {date.DayOfWeek}";
 
-        // 8..14 days out: "Next <Weekday>".
-        if (days >= 8 && days <= 14)
+        if (date <= endOfNextWeek)
             return $"Next {date.DayOfWeek}";
 
         // Further out: absolute "MMM d" with an ordinal suffix, e.g. "Oct 11th".
@@ -233,9 +335,24 @@ public partial class HomeViewModel : ObservableObject
     [RelayCommand]
     private async Task ToggleAttendNextLessonAsync()
     {
-        var lesson = _nextLesson;
         var me = _auth.CurrentFencer;
-        if (lesson is null || me is null || _auth.IsGuest) return;
+        if (me is null || _auth.IsGuest) return;
+
+        // If the card is showing a projected occurrence whose row wasn't
+        // materialized yet (proactive materialization failed, e.g. offline),
+        // materialize it now — duplicate-safe — before attending.
+        if (_nextLesson is null && _nextLessonRule is not null)
+        {
+            try
+            {
+                _nextLesson = await _materializer.EnsureOccurrenceAsync(_nextLessonRule, _nextLessonDate);
+                _nextLessonRule = null;
+            }
+            catch { return; } // can't attend a session we couldn't create
+        }
+
+        var lesson = _nextLesson;
+        if (lesson is null) return;
 
         var wasAttending = lesson.AttendeeFencerIds.Contains(me.Id);
 
