@@ -20,6 +20,39 @@ public static class SheetRowMapper
         s == "1" ||
         s.Equals("yes", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Tolerant date reader. Accepts either:
+    ///   • a canonical ISO "o" string (new / migrated rows), or
+    ///   • a bare Sheets serial number (double) written by OLD app versions that
+    ///     still use the USER_ENTERED path and corrupt the cell.
+    /// This is defense-in-depth: even if an out-of-date client re-corrupts a cell
+    /// after the migration, new clients still read the correct instant instead of
+    /// crashing or dropping the row.
+    /// </summary>
+    public static bool TryParseDate(string s, out DateTime value)
+    {
+        value = default;
+        if (string.IsNullOrWhiteSpace(s)) return false;
+
+        // Good rows: already ISO round-trippable.
+        if (DateTime.TryParse(s, CultureInfo.InvariantCulture,
+                              DateTimeStyles.RoundtripKind, out value))
+            return true;
+
+        // Corrupt rows: bare serial number -> OLE Automation date.
+        if (double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var serial))
+        {
+            try { value = DateTime.FromOADate(serial); return true; }
+            catch { return false; }
+        }
+
+        return false;
+    }
+
+    /// <summary>Tolerant date read with a fallback when the cell is blank/unparseable.</summary>
+    public static DateTime ParseDateOr(string s, DateTime fallback) =>
+        TryParseDate(s, out var v) ? v : fallback;
+
     // ---------- Fencer ----------
     public static Fencer MapFencer(IList<object> r) => new()
     {
@@ -41,17 +74,11 @@ public static class SheetRowMapper
     {
         var id = S(r, 0);
         if (string.IsNullOrWhiteSpace(id)) return null;
-        if (!DateTime.TryParse(S(r, 1), CultureInfo.InvariantCulture,
-                               DateTimeStyles.RoundtripKind, out var date))
+        if (!TryParseDate(S(r, 1), out var date))
             return null;
 
         DateTime end;
-        var endStr = S(r, 4);
-        if (!string.IsNullOrWhiteSpace(endStr) &&
-            DateTime.TryParse(endStr, CultureInfo.InvariantCulture,
-                              DateTimeStyles.RoundtripKind, out var parsedEnd))
-            end = parsedEnd;
-        else
+        if (!TryParseDate(S(r, 4), out end))
             end = date.AddMinutes(90);
 
         return new TrainingSession
@@ -75,7 +102,7 @@ public static class SheetRowMapper
             Year = int.TryParse(S(r, 1), out var y) ? y : 0,
             Month = int.TryParse(S(r, 2), out var mo) ? mo : 0,
             Amount = decimal.TryParse(S(r, 3), NumberStyles.Any, CultureInfo.InvariantCulture, out var a) ? a : 0m,
-            PaidOn = DateTime.TryParse(S(r, 4), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var d) ? d : default
+            PaidOn = ParseDateOr(S(r, 4), default)
         };
     }
 
@@ -87,7 +114,7 @@ public static class SheetRowMapper
         return new Expense
         {
             Id = S(r, 0),
-            Date = DateTime.TryParse(S(r, 1), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var d) ? d : default,
+            Date = ParseDateOr(S(r, 1), default),
             Category = S(r, 2),
             Description = S(r, 3),
             Amount = decimal.TryParse(S(r, 4), NumberStyles.Any, CultureInfo.InvariantCulture, out var a) ? a : 0m
@@ -103,14 +130,10 @@ public static class SheetRowMapper
         if (!Enum.TryParse<DayOfWeek>(S(r, 1), true, out var dow)) return null;
 
         if (!TimeSpan.TryParse(S(r, 2), CultureInfo.InvariantCulture, out var tod)) tod = TimeSpan.Zero;
-        if (!DateTime.TryParse(S(r, 4), CultureInfo.InvariantCulture,
-                               DateTimeStyles.RoundtripKind, out var start)) start = DateTime.Today;
+        var start = ParseDateOr(S(r, 4), DateTime.Today);
 
         DateTime? end = null;
-        var endStr = S(r, 5);
-        if (!string.IsNullOrWhiteSpace(endStr) &&
-            DateTime.TryParse(endStr, CultureInfo.InvariantCulture,
-                              DateTimeStyles.RoundtripKind, out var e))
+        if (TryParseDate(S(r, 5), out var e))
             end = e;
 
         TimeSpan endTod;

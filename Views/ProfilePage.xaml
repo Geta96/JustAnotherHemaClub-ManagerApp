@@ -122,6 +122,20 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- TEMP: one-time date migration. Instructor-only. DELETE after running once. -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding IsInstructor}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Maintenance (one-time)" Style="{StaticResource H2}" />
+                    <Label Text="Rewrites all stored dates to a safe, locale-independent format. Run once, then this button will be removed."
+                           Style="{StaticResource Caption}" />
+                    <Button x:Name="MigrateDatesButton"
+                            Text="Fix stored dates"
+                            Clicked="OnMigrateDatesClicked" />
+                    <Label x:Name="MigrateStatusLabel"
+                           Style="{StaticResource Caption}" />
+                </VerticalStackLayout>
+            </Border>
+
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>
