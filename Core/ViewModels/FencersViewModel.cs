@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+ï»¿using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -21,11 +21,12 @@ public partial class FencersViewModel : ObservableObject
 
     public ObservableCollection<Fencer> Fencers { get; } = new();
 
-    private Dictionary<string, (int Sessions, decimal Amount, bool Paid)> _statusByFencer = new();
+    private Dictionary<string, (int Sessions, FencerDuesLedger.DuesSummary Summary)> _statusByFencer = new();
 
     // Inputs cached for the details view's stat calculations.
     private List<TrainingSession> _allTrainings = new();
     private List<IndividualLesson> _allLessons = new();
+    private List<Payment> _allPayments = new();
 
     [ObservableProperty] private Fencer? selectedFencer;
     [ObservableProperty] private FencerDetailsVm? selectedDetails;
@@ -81,45 +82,46 @@ public partial class FencersViewModel : ObservableObject
 
             var fencersTask    = _sheets.GetFencersAsync();
             var trainingsTask  = _sheets.GetTrainingsAsync();
-            var paymentsTask   = _sheets.GetPaymentsAsync(today.Year, today.Month);
             var lessonsTask    = _sheets.GetIndividualLessonsAsync();
             var priceRulesTask = _sheets.GetPriceRulesAsync();
-            await Task.WhenAll(fencersTask, trainingsTask, paymentsTask, lessonsTask, priceRulesTask);
+            await Task.WhenAll(fencersTask, trainingsTask, lessonsTask, priceRulesTask);
 
             ct.ThrowIfCancellationRequested();
 
             var all = fencersTask.Result.OrderBy(f => f.Name).ToList();
             var allTrainings = trainingsTask.Result;
-            var payments = paymentsTask.Result;
             var allRules = priceRulesTask.Result;
             var allLessons = lessonsTask.Result;
 
-            // The credit-carry pre-pass needs prior-month payments; fetch them
-            // (cache makes repeat calls cheap) before handing everything to the
-            // background computation.
-            var priorMonths = allTrainings
-                .Where(t => t.Date.Year < today.Year ||
-                            (t.Date.Year == today.Year && t.Date.Month < today.Month))
-                .Select(t => (Y: t.Date.Year, M: t.Date.Month))
-                .Distinct()
-                .OrderBy(t => t.Y).ThenBy(t => t.M)
-                .ToList();
+            // Full month span from the earliest training through the current month.
+            // Payments for EVERY month are needed so the shared ledger can carry
+            // overpayment credit forward and surface cumulative arrears â€” exactly
+            // like the Home payment-status card.
+            var earliest = allTrainings.Count == 0
+                ? today
+                : allTrainings.Min(t => t.Date);
 
-            var priorPaymentTasks = priorMonths
-                .ToDictionary(ym => ym, ym => _sheets.GetPaymentsAsync(ym.Y, ym.M));
-            if (priorPaymentTasks.Count > 0)
-                await Task.WhenAll(priorPaymentTasks.Values);
+            var monthSpan = new List<(int Y, int M)>();
+            for (var d = new DateTime(earliest.Year, earliest.Month, 1);
+                 d <= new DateTime(today.Year, today.Month, 1);
+                 d = d.AddMonths(1))
+            {
+                monthSpan.Add((d.Year, d.Month));
+            }
+
+            var paymentTasks = monthSpan.ToDictionary(
+                ym => ym, ym => _sheets.GetPaymentsAsync(ym.Y, ym.M));
+            if (paymentTasks.Count > 0)
+                await Task.WhenAll(paymentTasks.Values);
 
             ct.ThrowIfCancellationRequested();
 
-            var priorPayments = priorMonths.ToDictionary(
-                ym => ym, ym => priorPaymentTasks[ym].Result);
+            var paymentsByMonth = monthSpan.ToDictionary(
+                ym => ym, ym => paymentTasks[ym].Result);
 
             // ===== Heavy CPU aggregation OFF the UI thread =====
-            // The credit-carry pre-pass loops every fencer × every prior month;
-            // running it on the dispatcher is what made the first load lag.
             var statusByFencer = await Task.Run(() => ComputeStatuses(
-                all, allTrainings, payments, priorMonths, priorPayments, allRules, today), ct);
+                all, allTrainings, monthSpan, paymentsByMonth, allRules, today), ct);
 
             // The page may have been navigated away from while we computed.
             ct.ThrowIfCancellationRequested();
@@ -131,6 +133,7 @@ public partial class FencersViewModel : ObservableObject
             _statusByFencer = statusByFencer;
             _allTrainings = allTrainings;
             _allLessons = allLessons;
+            _allPayments = paymentsByMonth.Values.SelectMany(p => p).ToList();
 
             if (SelectedFencer is null)
             {
@@ -148,7 +151,7 @@ public partial class FencersViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            // Expected when the user navigates away mid-refresh — abandon quietly.
+            // Expected when the user navigates away mid-refresh â€” abandon quietly.
         }
         catch (Exception ex)
         {
@@ -162,84 +165,52 @@ public partial class FencersViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Pure CPU computation of each fencer's current-month status (sessions,
-    /// outstanding amount, paid flag) including the credit-carry pre-pass. Safe
-    /// to run on a background thread — touches no UI-bound state.
+    /// Pure CPU computation of each fencer's CUMULATIVE dues summary (status,
+    /// outstanding split, and the months that still owe) via the shared ledger,
+    /// plus their current-month session count. Safe to run on a background thread.
     /// </summary>
-    private static Dictionary<string, (int Sessions, decimal Amount, bool Paid)> ComputeStatuses(
+    private static Dictionary<string, (int Sessions, FencerDuesLedger.DuesSummary Summary)> ComputeStatuses(
         List<Fencer> all,
         List<TrainingSession> allTrainings,
-        List<Payment> payments,
-        List<(int Y, int M)> priorMonths,
-        Dictionary<(int Y, int M), List<Payment>> priorPayments,
+        List<(int Y, int M)> monthSpan,
+        Dictionary<(int Y, int M), List<Payment>> paymentsByMonth,
         List<PriceRule> allRules,
         DateTime today)
     {
-        List<PriceRule> RulesForMonth(int y, int m)
-        {
-            var from = new DateTime(y, m, 1);
-            var to   = from.AddMonths(1).AddDays(-1);
-            return allRules.Where(r => r.StartDate.Date <= to &&
-                                        (r.EndDate is null || r.EndDate.Value.Date >= from))
-                           .ToList();
-        }
-
-        var monthRules = RulesForMonth(today.Year, today.Month);
-
-        var monthTrainings = allTrainings
-            .Where(t => t.Date.Year == today.Year && t.Date.Month == today.Month)
-            .ToList();
-
-        var attendanceByMonth = priorMonths.ToDictionary(
+        var attendanceByMonth = monthSpan.ToDictionary(
             ym => ym,
             ym => allTrainings.Where(t => t.Date.Year == ym.Y && t.Date.Month == ym.M)
                               .SelectMany(t => t.AttendeeFencerIds)
                               .GroupBy(id => id)
                               .ToDictionary(g => g.Key, g => g.Count()));
 
-        var paidByMonthByFencer = priorMonths.ToDictionary(
+        var paidByMonth = monthSpan.ToDictionary(
             ym => ym,
-            ym => priorPayments[ym]
+            ym => paymentsByMonth[ym]
                     .GroupBy(p => p.FencerId)
                     .ToDictionary(g => g.Key, g => g.Sum(p => p.Amount)));
 
-        var creditIntoCurrentMonth = new Dictionary<string, decimal>(all.Count);
+        var currentYm = (today.Year, today.Month);
+
+        var result = new Dictionary<string, (int, FencerDuesLedger.DuesSummary)>(all.Count);
         foreach (var f in all)
         {
-            decimal credit = 0m;
-            foreach (var ym in priorMonths)
+            var inputs = new List<FencerDuesLedger.MonthInput>(monthSpan.Count);
+            foreach (var ym in monthSpan)
             {
                 attendanceByMonth[ym].TryGetValue(f.Id, out var att);
-                paidByMonthByFencer[ym].TryGetValue(f.Id, out var paid);
-                if (att == 0 && paid == 0m && credit == 0m) continue;
-
-                var rules = RulesForMonth(ym.Y, ym.M);
-                var quote = DuesCalculator.Calculate(att, f.IsStudent, rules, paid + credit);
-                credit = quote.Overpayment;
+                paidByMonth[ym].TryGetValue(f.Id, out var paid);
+                inputs.Add(new FencerDuesLedger.MonthInput(ym.Y, ym.M, att, paid));
             }
-            creditIntoCurrentMonth[f.Id] = credit;
+
+            var ledger = FencerDuesLedger.Compute(f.IsStudent, inputs, allRules);
+            var summary = FencerDuesLedger.Summarize(ledger, today.Year, today.Month);
+
+            attendanceByMonth[currentYm].TryGetValue(f.Id, out var sessionsThisMonth);
+            result[f.Id] = (sessionsThisMonth, summary);
         }
 
-        var paidByFencer = payments
-            .GroupBy(p => p.FencerId)
-            .ToDictionary(g => g.Key, g => g.Sum(p => p.Amount));
-
-        var attendance = monthTrainings
-            .SelectMany(t => t.AttendeeFencerIds)
-            .GroupBy(id => id)
-            .ToDictionary(g => g.Key, g => g.Count());
-
-        return all.ToDictionary(
-            f => f.Id,
-            f =>
-            {
-                attendance.TryGetValue(f.Id, out var count);
-                paidByFencer.TryGetValue(f.Id, out var cash);
-                creditIntoCurrentMonth.TryGetValue(f.Id, out var credit);
-
-                var quote = DuesCalculator.Calculate(count, f.IsStudent, monthRules, cash + credit);
-                return (Sessions: count, Amount: quote.Outstanding, Paid: quote.IsCovered);
-            });
+        return result;
     }
 
     partial void OnSelectedFencerChanged(Fencer? value)
@@ -259,14 +230,27 @@ public partial class FencersViewModel : ObservableObject
 
         var monthStatus = _statusByFencer.TryGetValue(SelectedFencer.Id, out var s)
             ? s
-            : (Sessions: 0, Amount: 0m, Paid: true);
+            : (Sessions: 0, Summary: FencerDuesLedger.AllPaidSummary);
 
-        SelectedDetails = BuildDetails(SelectedFencer, monthStatus.Sessions, monthStatus.Amount, monthStatus.Paid);
+        SelectedDetails = BuildDetails(SelectedFencer, monthStatus.Sessions, monthStatus.Summary);
 
         OnPropertyChanged(nameof(HasSelection));
     }
 
-    private FencerDetailsVm BuildDetails(Fencer fencer, int sessionsThisMonth, decimal amountDue, bool isPaid)
+    /// <summary>Maps the cumulative summary to display text + colour flags (green/grey/red).</summary>
+    private static (string Text, bool Green, bool Grey, bool Red) DescribePayment(FencerDuesLedger.DuesSummary s)
+        => s.Status switch
+        {
+            FencerDuesLedger.DuesStatus.Overpaid =>
+                ($"Overpayed by {s.FinalCredit:N0} Ft", true, false, false),
+            FencerDuesLedger.DuesStatus.DueThisMonth =>
+                ($"Due {s.ThisMonthOutstanding:N0} Ft by the end of this month", false, true, false),
+            FencerDuesLedger.DuesStatus.DueWithArrears =>
+                ($"Due {s.TotalOutstanding:N0} Ft", false, false, true),
+            _ => ("All payed up", true, false, false),
+        };
+
+    private FencerDetailsVm BuildDetails(Fencer fencer, int sessionsThisMonth, FencerDuesLedger.DuesSummary summary)
     {
         // Trainings the selected fencer attended, newest first.
         var attended = _allTrainings
@@ -292,7 +276,7 @@ public partial class FencersViewModel : ObservableObject
             .ToList();
 
         string activeMonthsText = perMonth.Count == 0
-            ? "—"
+            ? "ï¿½"
             : string.Join(", ",
                 perMonth
                     .OrderByDescending(x => x.Year).ThenByDescending(x => x.Month)
@@ -303,14 +287,14 @@ public partial class FencersViewModel : ObservableObject
         string mostAttendanceText;
         if (perMonth.Count == 0)
         {
-            averageAttendanceText = "—";
-            mostAttendanceText = "—";
+            averageAttendanceText = "ï¿½";
+            mostAttendanceText = "ï¿½";
         }
         else
         {
-            // Compact stat-sheet format: "1.5 avg · 2 mo"
+            // Compact stat-sheet format: "1.5 avg ï¿½ 2 mo"
             var avg = perMonth.Average(x => x.Count);
-            averageAttendanceText = $"{avg:0.0} avg · {perMonth.Count} mo";
+            averageAttendanceText = $"{avg:0.0} avg ï¿½ {perMonth.Count} mo";
 
             // Compact "most" format: "2 in Jun 2026"
             var top = perMonth.OrderByDescending(x => x.Count).First();
@@ -328,17 +312,51 @@ public partial class FencersViewModel : ObservableObject
             l.InstructorId == fencer.Id &&
             l.Status == IndividualLessonStatus.Accepted);
 
+        var (statusText, green, grey, red) = DescribePayment(summary);
+
+        var unpaidRows = (summary.UnpaidMonths ?? Array.Empty<FencerDuesLedger.UnpaidMonth>())
+            .OrderBy(u => u.Year).ThenBy(u => u.Month)
+            .Select(u => new FencerUnpaidMonthRow(u.Year, u.Month, u.Amount))
+            .ToList();
+
+        // Payment History: regular fencers only see their own; instructors see all.
+        bool showPaymentHistory =
+            _auth.IsLoggedInInstructor || fencer.Id == _auth.CurrentFencer?.Id;
+
+        var paymentHistory = showPaymentHistory
+            ? _allPayments
+                .Where(p => p.FencerId == fencer.Id)
+                .GroupBy(p => (p.Year, p.Month))
+                .OrderByDescending(g => g.Key.Year).ThenByDescending(g => g.Key.Month)
+                .Select(g => new FencerPaymentMonthGroup(
+                    g.Key.Year,
+                    g.Key.Month,
+                    _allTrainings.Count(t => t.Date.Year == g.Key.Year &&
+                                             t.Date.Month == g.Key.Month &&
+                                             t.AttendeeFencerIds.Contains(fencer.Id)),
+                    g.OrderBy(p => p.PaidOn)
+                     .Select(p => new FencerPaymentRow(p.PaidOn, p.Amount))))
+                .ToList()
+            : new List<FencerPaymentMonthGroup>();
+
         return new FencerDetailsVm(
             fencer,
             sessionsThisMonth,
-            amountDue,
-            isPaid,
+            amountDue: summary.TotalOutstanding,
+            isPaid: green,
             recentSessions: recent,
             activeMonthsText: activeMonthsText,
             averageAttendanceText: averageAttendanceText,
             mostAttendanceText: mostAttendanceText,
             oneOnOneReceived: received,
-            oneOnOneGiven: given);
+            oneOnOneGiven: given,
+            paymentStatusText: statusText,
+            paymentAllPaid: green,
+            paymentDueThisMonth: grey,
+            paymentArrears: red,
+            unpaidMonths: unpaidRows,
+            showPaymentHistory: showPaymentHistory,
+            paymentHistory: paymentHistory);
     }
 
     public async Task<string?> PromoteSelectedAsync(string username, string password)

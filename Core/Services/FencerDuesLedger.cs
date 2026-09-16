@@ -36,6 +36,72 @@ public static class FencerDuesLedger
     /// <summary>A month's computed contribution, tagged with its year/month.</summary>
     public readonly record struct MonthResult(int Year, int Month, MonthContribution Contribution);
 
+    /// <summary>Classification of a fencer's cumulative dues, matching the Home card.</summary>
+    public enum DuesStatus
+    {
+        /// <summary>Everything up to and including this month is settled.</summary>
+        AllPaid,
+        /// <summary>Credit remains after this month.</summary>
+        Overpaid,
+        /// <summary>Only the current month is outstanding; every prior month is settled.</summary>
+        DueThisMonth,
+        /// <summary>At least one PRIOR month is still outstanding (arrears).</summary>
+        DueWithArrears
+    }
+
+    /// <summary>A single month that still has an outstanding balance.</summary>
+    public readonly record struct UnpaidMonth(int Year, int Month, decimal Amount);
+
+    /// <summary>
+    /// Cumulative dues picture for one fencer: the overall status, the outstanding
+    /// split into current-month vs prior-month buckets, any forward credit, and the
+    /// full list of months that still owe.
+    /// </summary>
+    public readonly record struct DuesSummary(
+        DuesStatus Status,
+        decimal TotalOutstanding,
+        decimal ThisMonthOutstanding,
+        decimal PriorOutstanding,
+        decimal FinalCredit,
+        IReadOnlyList<UnpaidMonth> UnpaidMonths);
+
+    /// <summary>A fully-settled summary — used as the fallback when no data exists.</summary>
+    public static DuesSummary AllPaidSummary { get; } =
+        new(DuesStatus.AllPaid, 0m, 0m, 0m, 0m, Array.Empty<UnpaidMonth>());
+
+    /// <summary>
+    /// Reduces a computed ledger into the cumulative summary shown on the Home
+    /// payment-status card and the Fencers page. The residual is split into the
+    /// current month vs prior months so the caller can colour it grey (only this
+    /// month due) vs red (arrears), exactly as the Home card does.
+    /// </summary>
+    public static DuesSummary Summarize(
+        IReadOnlyList<MonthResult> results, int currentYear, int currentMonth)
+    {
+        decimal prior = 0m, thisMonth = 0m, finalCredit = 0m;
+        var unpaid = new List<UnpaidMonth>();
+
+        foreach (var r in results)
+        {
+            var outstanding = r.Contribution.Quote.Outstanding;
+            finalCredit = r.Contribution.Quote.Overpayment;
+
+            if (outstanding <= 0m) continue;
+
+            unpaid.Add(new UnpaidMonth(r.Year, r.Month, outstanding));
+            if (r.Year == currentYear && r.Month == currentMonth) thisMonth += outstanding;
+            else prior += outstanding;
+        }
+
+        DuesStatus status =
+            prior > 0m       ? DuesStatus.DueWithArrears :
+            thisMonth > 0m   ? DuesStatus.DueThisMonth   :
+            finalCredit > 0m ? DuesStatus.Overpaid       :
+                               DuesStatus.AllPaid;
+
+        return new DuesSummary(status, prior + thisMonth, thisMonth, prior, finalCredit, unpaid);
+    }
+
     /// <summary>
     /// Rules whose active window overlaps the given calendar month.
     /// </summary>

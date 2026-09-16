@@ -323,11 +323,11 @@ public partial class HomeViewModel : ObservableObject
             var today = DateTime.Today;
 
             var trainingsTask = _sheets.GetTrainingsAsync();
-            var rulesTask     = _sheets.GetPriceRulesAsync();
+            var rulesTask = _sheets.GetPriceRulesAsync();
             await Task.WhenAll(trainingsTask, rulesTask);
 
             var trainings = trainingsTask.Result;
-            var allRules  = rulesTask.Result;
+            var allRules = rulesTask.Result;
 
             // Months (up to the current one) in which this fencer attended
             // anything, in chronological order.
@@ -342,14 +342,31 @@ public partial class HomeViewModel : ObservableObject
             if (attendedMonths.Count == 0)
             {
                 // Nothing was ever owed ? treat as fully paid.
-                PaymentStatusText  = "All payed up";
+                PaymentStatusText = "All payed up";
                 PaymentStatusColor = PaymentGreen;
-                HasPaymentStatus   = true;
+                HasPaymentStatus = true;
                 return;
             }
 
-            // Fetch payments for each attended month in parallel.
-            var paymentTasks = attendedMonths
+            // Walk a CONTIGUOUS range of months from the fencer's first attendance
+            // through the current month — not just the months they attended. A
+            // payment can land in a month with no attendance (a pre-payment, or a
+            // negative refund/correction); those payment-only months MUST stay in
+            // the credit-carry chain or their funds silently vanish and Home would
+            // disagree with Finance (which seeds payment-only months for exactly
+            // this reason). Querying the whole span also captures corrections made
+            // in gap months between attended ones.
+            var firstYm = attendedMonths[0];
+            var allMonths = new List<(int Year, int Month)>();
+            for (var d = new DateTime(firstYm.Year, firstYm.Month, 1);
+                 d <= new DateTime(today.Year, today.Month, 1);
+                 d = d.AddMonths(1))
+            {
+                allMonths.Add((d.Year, d.Month));
+            }
+
+            // Fetch payments for every month in the span in parallel.
+            var paymentTasks = allMonths
                 .Select(ym => _sheets.GetPaymentsAsync(ym.Year, ym.Month))
                 .ToArray();
             await Task.WhenAll(paymentTasks);
@@ -357,10 +374,10 @@ public partial class HomeViewModel : ObservableObject
             // Build the raw per-month facts and hand them to the SHARED ledger,
             // so Home, Finance and the profile all agree on what a fencer owes
             // (custom-period passes and credit carry are handled inside it).
-            var monthInputs = new List<FencerDuesLedger.MonthInput>(attendedMonths.Count);
-            for (int i = 0; i < attendedMonths.Count; i++)
+            var monthInputs = new List<FencerDuesLedger.MonthInput>(allMonths.Count);
+            for (int i = 0; i < allMonths.Count; i++)
             {
-                var ym = attendedMonths[i];
+                var ym = allMonths[i];
 
                 var attendedCount = trainings
                     .Count(t => t.Date.Year == ym.Year && t.Date.Month == ym.Month &&
@@ -374,43 +391,32 @@ public partial class HomeViewModel : ObservableObject
                     ym.Year, ym.Month, attendedCount, cashPaid));
             }
 
-            var ledger = FencerDuesLedger.Compute(me.IsStudent, monthInputs, allRules);
+            // Run the shared ledger and reduce it to the cumulative summary.
+            var results = FencerDuesLedger.Compute(me.IsStudent, monthInputs, allRules);
+            var summary = FencerDuesLedger.Summarize(results, today.Year, today.Month);
 
-            var thisYm = (today.Year, today.Month);
-            decimal priorOutstanding = 0m;      // unpaid dues from months BEFORE this one
-            decimal thisMonthOutstanding = 0m;
-            decimal finalCredit = 0m;
+            switch (summary.Status)
+            {
+                case FencerDuesLedger.DuesStatus.Overpaid:
+                    PaymentStatusText = $"Overpayed by {summary.FinalCredit:0} Ft";
+                    PaymentStatusColor = PaymentGreen;
+                    break;
 
-            foreach (var r in ledger)
-            {
-                if ((r.Year, r.Month) == thisYm)
-                    thisMonthOutstanding += r.Contribution.Quote.Outstanding;
-                else
-                    priorOutstanding += r.Contribution.Quote.Outstanding;
+                case FencerDuesLedger.DuesStatus.DueThisMonth:
+                    PaymentStatusText = $"Due {summary.ThisMonthOutstanding:0} by the end of this month";
+                    PaymentStatusColor = PaymentGrey;
+                    break;
 
-                finalCredit = r.Contribution.Quote.Overpayment;
-            }
+                case FencerDuesLedger.DuesStatus.DueWithArrears:
+                    PaymentStatusText = $"Due {summary.TotalOutstanding:0}";
+                    PaymentStatusColor = PaymentRed;
+                    break;
 
-            if (priorOutstanding > 0m)
-            {
-                var totalDue = priorOutstanding + thisMonthOutstanding;
-                PaymentStatusText  = $"Due {totalDue:N0} Ft";
-                PaymentStatusColor = PaymentRed;
-            }
-            else if (thisMonthOutstanding > 0m)
-            {
-                PaymentStatusText  = $"Due {thisMonthOutstanding:N0} Ft by the end of this month";
-                PaymentStatusColor = PaymentGrey;
-            }
-            else if (finalCredit > 0m)
-            {
-                PaymentStatusText  = $"Overpayed by {finalCredit:N0} Ft";
-                PaymentStatusColor = PaymentGreen;
-            }
-            else
-            {
-                PaymentStatusText  = "All payed up";
-                PaymentStatusColor = PaymentGreen;
+                case FencerDuesLedger.DuesStatus.AllPaid:
+                default:
+                    PaymentStatusText = "All payed up";
+                    PaymentStatusColor = PaymentGreen;
+                    break;
             }
 
             HasPaymentStatus = true;
@@ -422,116 +428,43 @@ public partial class HomeViewModel : ObservableObject
     }
 
     /// <summary>
-    /// The next date on/after <paramref name="from"/> (inclusive) on which the
-    /// rule is active, or null if the rule has ended before then. Scans at most
-    /// 7 days since the rule fires weekly.
+    /// Returns the first date on or after <paramref name="from"/> on which the
+    /// recurring <paramref name="rule"/> fires, or null when the rule has already
+    /// ended before that date. Respects the rule's StartDate/EndDate window and
+    /// its weekly <see cref="RecurringTrainingRule.DayOfWeek"/>.
     /// </summary>
     private static DateTime? NextOccurrenceOnOrAfter(RecurringTrainingRule rule, DateTime from)
     {
-        for (int i = 0; i < 7; i++)
-        {
-            var d = from.Date.AddDays(i);
-            if (rule.EndDate is { } end && d > end.Date) return null;
-            if (rule.IsActiveOn(d)) return d;
-        }
-        return null;
+        var start = from.Date;
+
+        // Never project before the rule actually begins.
+        if (rule.StartDate.Date > start)
+            start = rule.StartDate.Date;
+
+        // Advance to the rule's weekday.
+        int delta = ((int)rule.DayOfWeek - (int)start.DayOfWeek + 7) % 7;
+        var candidate = start.AddDays(delta);
+
+        // Past the rule's end window? No upcoming occurrence.
+        if (rule.EndDate.HasValue && candidate > rule.EndDate.Value.Date)
+            return null;
+
+        return candidate;
     }
 
     /// <summary>
-    /// Human-friendly day label: "Today", "Tomorrow", "This Friday", "Next Tuesday",
-    /// or an absolute "Oct 11th" for dates beyond next week.
+    /// Formats a date for the "Next lesson" card: "Today", "Tomorrow", or the
+    /// weekday name (e.g. "Monday") for dates within the coming week, otherwise a
+    /// short date like "23 Sep".
     /// </summary>
     private static string FormatFriendlyDay(DateTime when)
     {
+        var day = when.Date;
         var today = DateTime.Today;
-        var date = when.Date;
-        var days = (date - today).Days;
 
-        if (days == 0) return "Today";
-        if (days == 1) return "Tomorrow";
-
-        // Week-based buckets (weeks start on Monday). "This <weekday>" means the
-        // date falls in the current calendar week; "Next <weekday>" means it falls
-        // in the following calendar week — regardless of raw day distance. This is
-        // why e.g. next Monday reads "Next Monday" even though it's only 6 days off.
-        int daysSinceMonday = ((int)today.DayOfWeek + 6) % 7;
-        var endOfThisWeek = today.AddDays(6 - daysSinceMonday); // Sunday of this week
-        var endOfNextWeek = endOfThisWeek.AddDays(7);
-
-        if (date <= endOfThisWeek)
-            return $"This {date.DayOfWeek}";
-
-        if (date <= endOfNextWeek)
-            return $"Next {date.DayOfWeek}";
-
-        // Further out: absolute "MMM d" with an ordinal suffix, e.g. "Oct 11th".
-        return $"{date:MMM} {date.Day}{OrdinalSuffix(date.Day)}";
+        if (day == today) return "Today";
+        if (day == today.AddDays(1)) return "Tomorrow";
+        if (day < today.AddDays(7)) return day.ToString("dddd");
+        return day.ToString("d MMM");
     }
-
-    private static string OrdinalSuffix(int day)
-    {
-        if (day is >= 11 and <= 13) return "th";
-        return (day % 10) switch
-        {
-            1 => "st",
-            2 => "nd",
-            3 => "rd",
-            _ => "th"
-        };
-    }
-
-    /// <summary>
-    /// Toggles the current fencer's attendance on the next lesson. Works both ways:
-    /// attend if not yet attending, or undo (cancel) if already attending.
-    /// </summary>
-    [RelayCommand]
-    private async Task ToggleAttendNextLessonAsync()
-    {
-        var me = _auth.CurrentFencer;
-        if (me is null || _auth.IsGuest) return;
-
-        // If the card is showing a projected occurrence whose row wasn't
-        // materialized yet (proactive materialization failed, e.g. offline),
-        // materialize it now — duplicate-safe — before attending.
-        if (_nextLesson is null && _nextLessonRule is not null)
-        {
-            try
-            {
-                _nextLesson = await _materializer.EnsureOccurrenceAsync(_nextLessonRule, _nextLessonDate);
-                _nextLessonRule = null;
-            }
-            catch { return; } // can't attend a session we couldn't create
-        }
-
-        var lesson = _nextLesson;
-        if (lesson is null) return;
-
-        var wasAttending = lesson.AttendeeFencerIds.Contains(me.Id);
-
-        // Optimistic local update.
-        if (wasAttending) lesson.AttendeeFencerIds.Remove(me.Id);
-        else if (!lesson.AttendeeFencerIds.Contains(me.Id)) lesson.AttendeeFencerIds.Add(me.Id);
-
-        try
-        {
-            await _sheets.UpsertTrainingAsync(lesson);
-            IsAttendingNextLesson = !wasAttending;
-        }
-        catch
-        {
-            // Roll back on failure so the UI stays consistent with the backend.
-            if (wasAttending) lesson.AttendeeFencerIds.Add(me.Id);
-            else lesson.AttendeeFencerIds.Remove(me.Id);
-            IsAttendingNextLesson = wasAttending;
-        }
-    }
-
-    [RelayCommand]
-    private Task OpenInstagramAsync() => Launcher.Default.OpenAsync(InstagramUrl);
-
-    [RelayCommand]
-    private Task OpenFacebookAsync() => Launcher.Default.OpenAsync(FacebookUrl);
-
-    [RelayCommand]
-    private Task OpenTelegramAsync() => Launcher.Default.OpenAsync(TelegramUrl);
 }

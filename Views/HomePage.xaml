@@ -11,7 +11,7 @@
             <!-- Hero -->
             <Grid Padding="0" HeightRequest="320">
                 <!-- Background image -->
-                <Image Source="home_bg_2.jpg"
+                <Image Source="home_bg_3.jpg"
                        Aspect="AspectFill"
                        HorizontalOptions="Fill"
                        VerticalOptions="Fill" />
