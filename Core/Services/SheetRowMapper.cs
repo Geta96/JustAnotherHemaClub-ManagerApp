@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using JustAnotherHemaClub.Models;
 
 namespace JustAnotherHemaClub.Services;
@@ -21,6 +21,18 @@ public static class SheetRowMapper
         s.Equals("yes", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Canonical ISO 8601 shapes we write ("o" round-trip, with/without offset).
+    /// </summary>
+    private static readonly string[] Iso8601Formats =
+    {
+        "o",                              // 2026-08-12T08:14:01.1370812+02:00
+        "yyyy-MM-ddTHH:mm:ss.fffffffK",
+        "yyyy-MM-ddTHH:mm:ssK",
+        "yyyy-MM-ddTHH:mm:ss",
+        "yyyy-MM-dd",
+    };
+
+    /// <summary>
     /// Tolerant date reader. Accepts either an ISO "o" round-trip string (the
     /// canonical format written by the fixed RAW writer / migration) OR a bare
     /// Google Sheets serial number (an OLE Automation date) that a stale
@@ -31,11 +43,17 @@ public static class SheetRowMapper
         value = default;
         if (string.IsNullOrWhiteSpace(s)) return false;
 
+        // Strict ISO 8601 first — unambiguous year/month/day regardless of locale.
+        if (DateTime.TryParseExact(s, Iso8601Formats, CultureInfo.InvariantCulture,
+                                   DateTimeStyles.RoundtripKind, out value))
+            return true;
+
+        // Tolerant fallback (still invariant culture).
         if (DateTime.TryParse(s, CultureInfo.InvariantCulture,
                               DateTimeStyles.RoundtripKind, out value))
             return true;
 
-        // Bare Sheets serial number ? OLE Automation date.
+        // Bare Sheets serial number → OLE Automation date.
         if (double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var serial))
         {
             try { value = DateTime.FromOADate(serial); return true; }
