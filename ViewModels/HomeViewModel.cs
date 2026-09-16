@@ -36,6 +36,32 @@ public partial class HomeViewModel : ObservableObject
     [ObservableProperty] private bool hasWeeklyTrainings;
     public bool HasNoWeeklyTrainings => !HasWeeklyTrainings && !IsLoadingWeekly;
 
+    // --- Payment status card (logged-in fencer only) ---
+    private static readonly Color PaymentGreen = Color.FromArgb("#1F8A2E");
+    private static readonly Color PaymentGrey  = Color.FromArgb("#6B6B6B");
+    private static readonly Color PaymentRed   = Color.FromArgb("#B23A3A"); // matches DangerRed
+
+    private bool _hasPaymentStatus;
+    public bool HasPaymentStatus
+    {
+        get => _hasPaymentStatus;
+        set => SetProperty(ref _hasPaymentStatus, value);
+    }
+
+    private string _paymentStatusText = "";
+    public string PaymentStatusText
+    {
+        get => _paymentStatusText;
+        set => SetProperty(ref _paymentStatusText, value);
+    }
+
+    private Color _paymentStatusColor = PaymentGreen;
+    public Color PaymentStatusColor
+    {
+        get => _paymentStatusColor;
+        set => SetProperty(ref _paymentStatusColor, value);
+    }
+
     // --- Next lesson card ---
     private TrainingSession? _nextLesson;
 
@@ -138,6 +164,9 @@ public partial class HomeViewModel : ObservableObject
         // Load the "Next lesson" card (best-effort; a failure just hides it).
         await LoadNextLessonAsync();
 
+        // Load the personal payment status card (best-effort; hidden on failure).
+        await LoadPaymentStatusAsync();
+
         // Use the user's idle time on the home page to warm the datasets the
         // other tabs need (tournaments, individual lessons, recurring trainings,
         // …). Fire-and-forget: failures are swallowed inside PrefetchAsync's
@@ -196,7 +225,7 @@ public partial class HomeViewModel : ObservableObject
                 }
             }
 
-            // Decide which is sooner: the materialized session or the projected one.
+            // Decide which is sooner: the materialization or the projection.
             DateTime? matStart = nextMaterialized?.Date;
             DateTime? projStart = projectedRule is null
                 ? null
@@ -266,6 +295,129 @@ public partial class HomeViewModel : ObservableObject
             _nextLessonRule = null;
             HasNextLesson = false;
             CanAttendNextLesson = false;
+        }
+    }
+
+    /// <summary>
+    /// Computes the logged-in fencer's payment status across all months up to and
+    /// including the current one, then populates the payment-status card:
+    ///   ? Overpaid  ? "Overpayed by X Ft"            (green)
+    ///   ? All paid  ? "All payed up"                 (green)
+    ///   ? Only this month's dues outstanding, and everything before is settled
+    ///                ? "Due X by the end of this month" (grey)
+    ///   ? Also owes for earlier months
+    ///                ? "Due X"                       (red)
+    /// Guests / instructors / not-logged-in users don't see the card.
+    /// </summary>
+    private async Task LoadPaymentStatusAsync()
+    {
+        try
+        {
+            var me = _auth.CurrentFencer;
+            if (me is null || _auth.IsGuest)
+            {
+                HasPaymentStatus = false;
+                return;
+            }
+
+            var today = DateTime.Today;
+
+            var trainingsTask = _sheets.GetTrainingsAsync();
+            var rulesTask     = _sheets.GetPriceRulesAsync();
+            await Task.WhenAll(trainingsTask, rulesTask);
+
+            var trainings = trainingsTask.Result;
+            var allRules  = rulesTask.Result;
+
+            // Months (up to the current one) in which this fencer attended
+            // anything, in chronological order.
+            var attendedMonths = trainings
+                .Where(t => t.Date.Date <= today &&
+                            t.AttendeeFencerIds.Contains(me.Id))
+                .Select(t => (Year: t.Date.Year, Month: t.Date.Month))
+                .Distinct()
+                .OrderBy(t => t.Year).ThenBy(t => t.Month)
+                .ToList();
+
+            if (attendedMonths.Count == 0)
+            {
+                // Nothing was ever owed ? treat as fully paid.
+                PaymentStatusText  = "All payed up";
+                PaymentStatusColor = PaymentGreen;
+                HasPaymentStatus   = true;
+                return;
+            }
+
+            // Fetch payments for each attended month in parallel.
+            var paymentTasks = attendedMonths
+                .Select(ym => _sheets.GetPaymentsAsync(ym.Year, ym.Month))
+                .ToArray();
+            await Task.WhenAll(paymentTasks);
+
+            // Build the raw per-month facts and hand them to the SHARED ledger,
+            // so Home, Finance and the profile all agree on what a fencer owes
+            // (custom-period passes and credit carry are handled inside it).
+            var monthInputs = new List<FencerDuesLedger.MonthInput>(attendedMonths.Count);
+            for (int i = 0; i < attendedMonths.Count; i++)
+            {
+                var ym = attendedMonths[i];
+
+                var attendedCount = trainings
+                    .Count(t => t.Date.Year == ym.Year && t.Date.Month == ym.Month &&
+                                t.AttendeeFencerIds.Contains(me.Id));
+
+                var cashPaid = paymentTasks[i].Result
+                    .Where(p => p.FencerId == me.Id)
+                    .Sum(p => p.Amount);
+
+                monthInputs.Add(new FencerDuesLedger.MonthInput(
+                    ym.Year, ym.Month, attendedCount, cashPaid));
+            }
+
+            var ledger = FencerDuesLedger.Compute(me.IsStudent, monthInputs, allRules);
+
+            var thisYm = (today.Year, today.Month);
+            decimal priorOutstanding = 0m;      // unpaid dues from months BEFORE this one
+            decimal thisMonthOutstanding = 0m;
+            decimal finalCredit = 0m;
+
+            foreach (var r in ledger)
+            {
+                if ((r.Year, r.Month) == thisYm)
+                    thisMonthOutstanding += r.Contribution.Quote.Outstanding;
+                else
+                    priorOutstanding += r.Contribution.Quote.Outstanding;
+
+                finalCredit = r.Contribution.Quote.Overpayment;
+            }
+
+            if (priorOutstanding > 0m)
+            {
+                var totalDue = priorOutstanding + thisMonthOutstanding;
+                PaymentStatusText  = $"Due {totalDue:N0} Ft";
+                PaymentStatusColor = PaymentRed;
+            }
+            else if (thisMonthOutstanding > 0m)
+            {
+                PaymentStatusText  = $"Due {thisMonthOutstanding:N0} Ft by the end of this month";
+                PaymentStatusColor = PaymentGrey;
+            }
+            else if (finalCredit > 0m)
+            {
+                PaymentStatusText  = $"Overpayed by {finalCredit:N0} Ft";
+                PaymentStatusColor = PaymentGreen;
+            }
+            else
+            {
+                PaymentStatusText  = "All payed up";
+                PaymentStatusColor = PaymentGreen;
+            }
+
+            HasPaymentStatus = true;
+        }
+        catch
+        {
+            HasPaymentStatus = false;
         }
     }
 

@@ -1,9 +1,43 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JustAnotherHemaClub.Models;
 using JustAnotherHemaClub.Services;
 
 namespace JustAnotherHemaClub.ViewModels;
+
+/// <summary>
+/// A single tappable payment option shown inside an expanded fencer card
+/// (e.g. "Pay Remaining (9 000 Ft)"). Its <see cref="ChooseCommand"/> records
+/// the payment via the parent-supplied delegate.
+/// </summary>
+public partial class PaymentOptionVm : ObservableObject
+{
+    private readonly Func<Task> _invoke;
+    public string Text { get; }
+
+    /// <summary>
+    /// Visual grouping for the option. "primary" = the key actions
+    /// (Pay Remaining / Pay Custom Amount); "pass" = a specific tier/pass
+    /// payment. Drives button styling in the Finance view so the two groups
+    /// read differently.
+    /// </summary>
+    public string Kind { get; }
+
+    public bool IsPrimary => Kind == "primary";
+    public bool IsPass => Kind == "pass";
+    public bool IsRemaining => Kind == "remaining";
+
+    public PaymentOptionVm(string text, Func<Task> invoke, string kind = "pass")
+    {
+        Text = text;
+        _invoke = invoke;
+        Kind = kind;
+    }
+
+    [RelayCommand]
+    private Task Choose() => _invoke();
+}
 
 public partial class FencerDueRow : ObservableObject
 {
@@ -17,6 +51,37 @@ public partial class FencerDueRow : ObservableObject
     public Func<FencerDueRow, Task>? MarkPaidAction { get; set; }
 
     /// <summary>
+    /// Parent-supplied handler that (re)builds <see cref="PaymentOptions"/> when
+    /// the card is expanded. Only the instructor's rows populate options.
+    /// </summary>
+    public Func<FencerDueRow, Task>? BuildOptionsAction { get; set; }
+
+    /// <summary>Inline payment options shown while the card is expanded.</summary>
+    public ObservableCollection<PaymentOptionVm> PaymentOptions { get; } = new();
+
+    [ObservableProperty] private bool isExpanded;
+
+    public string ExpandGlyph => IsExpanded ? "\u25BE" : "\u25B8";
+
+    partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(ExpandGlyph));
+
+    [RelayCommand]
+    private async Task ToggleExpand()
+    {
+        // Members have no payment options to show, so keep their cards inert.
+        if (!CanMarkPaid) return;
+
+        IsExpanded = !IsExpanded;
+        if (IsExpanded && BuildOptionsAction is not null)
+            await BuildOptionsAction(this);
+    }
+
+    /// <summary>
+    /// Overpayment credit carried into this month from prior months.
+    /// </summary>
+    public decimal CreditIn { get; }
+
+    /// <summary>
     /// Set by the parent when building the row: true only for instructors.
     /// Combined with the paid state so a single property drives button
     /// visibility (no DataTrigger vs. IsVisible-binding conflict).
@@ -25,11 +90,8 @@ public partial class FencerDueRow : ObservableObject
     public bool CanMarkPaid
     {
         get => _canMarkPaid;
-        set { _canMarkPaid = value; OnPropertyChanged(nameof(ShowMarkPaidButton)); OnPropertyChanged(nameof(ShowNotPaidHint)); }
+        set { _canMarkPaid = value; OnPropertyChanged(nameof(ShowNotPaidHint)); }
     }
-
-    /// <summary>Button shows only for instructors on rows that still owe money.</summary>
-    public bool ShowMarkPaidButton => CanMarkPaid && IsNotPaid;
 
     /// <summary>"Not payed yet" hint shows only for non-instructors on unpaid rows.</summary>
     public bool ShowNotPaidHint => !CanMarkPaid && IsNotPaid;
@@ -102,9 +164,10 @@ public partial class FencerDueRow : ObservableObject
     /// this month tracked separately so month-level income aggregates stay
     /// correct (the quote bundles cash + carried credit into EffectivePaid).
     /// </summary>
-    public FencerDueRow(Fencer fencer, DuesQuote quote, decimal cashPaidThisMonth)
+    public FencerDueRow(Fencer fencer, DuesQuote quote, decimal cashPaidThisMonth, decimal creditIn = 0m)
     {
         Fencer = fencer;
+        CreditIn = creditIn;
         sessionsAttended = quote.SessionsAttended;
         totalCost        = quote.TotalDue;
         alreadyPaid      = cashPaidThisMonth;
@@ -150,7 +213,6 @@ public partial class FencerDueRow : ObservableObject
     {
         OnPropertyChanged(nameof(IsNotPaid));
         OnPropertyChanged(nameof(IsExactlyPaid));
-        OnPropertyChanged(nameof(ShowMarkPaidButton));
         OnPropertyChanged(nameof(ShowNotPaidHint));
         RaiseSummary();
     }

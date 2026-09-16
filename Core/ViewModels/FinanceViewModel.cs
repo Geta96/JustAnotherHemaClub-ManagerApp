@@ -10,9 +10,9 @@ namespace JustAnotherHemaClub.ViewModels;
 public partial class FinanceViewModel : ObservableObject
 {
     public const string TabMonthly = "Monthly";
-    public const string TabYearly  = "Yearly";
+    public const string TabYearly = "Yearly";
     public const string TabAllTime = "All Time";
-    public const string TabPrices  = "Prices";
+    public const string TabPrices = "Prices";
 
     private readonly IGoogleSheetsService _sheets;
     private readonly AuthService _auth;
@@ -30,7 +30,7 @@ public partial class FinanceViewModel : ObservableObject
     public PricesViewModel PricesVm { get; }
 
     public bool IsLoggedInInstructor => _auth.IsLoggedInInstructor;
-    public bool ShowPersonalSummary  => !_auth.IsLoggedInInstructor && _auth.CurrentFencer is not null;
+    public bool ShowPersonalSummary => !_auth.IsLoggedInInstructor && _auth.CurrentFencer is not null;
 
     public IReadOnlyList<FinanceTab> Tabs { get; }
 
@@ -50,9 +50,9 @@ public partial class FinanceViewModel : ObservableObject
 
     [ObservableProperty] private int selectedTabIndex;
     public bool IsMonthlyTab => SelectedTabIndex == 0;
-    public bool IsYearlyTab  => SelectedTabIndex == 1;
+    public bool IsYearlyTab => SelectedTabIndex == 1;
     public bool IsAllTimeTab => SelectedTabIndex == 2;
-    public bool IsPricesTab  => SelectedTabIndex == 3;
+    public bool IsPricesTab => SelectedTabIndex == 3;
 
     partial void OnSelectedTabIndexChanged(int value)
     {
@@ -63,28 +63,28 @@ public partial class FinanceViewModel : ObservableObject
     }
 
     [RelayCommand] private void ShowMonthlyTab() => SelectedTabIndex = 0;
-    [RelayCommand] private void ShowYearlyTab()  => SelectedTabIndex = 1;
+    [RelayCommand] private void ShowYearlyTab() => SelectedTabIndex = 1;
     [RelayCommand] private void ShowAllTimeTab() => SelectedTabIndex = 2;
-    [RelayCommand] private void ShowPricesTab()  => SelectedTabIndex = 3;
+    [RelayCommand] private void ShowPricesTab() => SelectedTabIndex = 3;
 
     // All-time aggregates
     [ObservableProperty] private decimal allTimeIncome;
     [ObservableProperty] private decimal allTimeExpenses;
     [ObservableProperty] private decimal allTimeBalance;
-    [ObservableProperty] private int     allTimeSessions;
-    [ObservableProperty] private int     activeFencers;
-    [ObservableProperty] private double  allTimeAvgAttendance;
+    [ObservableProperty] private int allTimeSessions;
+    [ObservableProperty] private int activeFencers;
+    [ObservableProperty] private double allTimeAvgAttendance;
     [ObservableProperty] private decimal allTimeUnpaid;
 
     // Year aggregates
-    [ObservableProperty] private int     year = DateTime.Today.Year;
+    [ObservableProperty] private int year = DateTime.Today.Year;
     [ObservableProperty] private decimal yearIncome;
     [ObservableProperty] private decimal yearExpenses;
     [ObservableProperty] private decimal yearBalance;
-    [ObservableProperty] private int     yearSessions;
-    [ObservableProperty] private double  yearAvgAttendance;
+    [ObservableProperty] private int yearSessions;
+    [ObservableProperty] private double yearAvgAttendance;
     [ObservableProperty] private decimal yearUnpaid;
-    
+
     public FinanceViewModel(IGoogleSheetsService sheets, AuthService auth, PricesViewModel pricesVm, IDialogService dialogs)
     {
         _sheets = sheets;
@@ -119,7 +119,7 @@ public partial class FinanceViewModel : ObservableObject
         try
         {
             var rangeFrom = new DateTime(2000, 1, 1);
-            var rangeTo   = new DateTime(DateTime.Today.Year + 5, 12, 31);
+            var rangeTo = new DateTime(DateTime.Today.Year + 5, 12, 31);
 
             var isInstructorEarly = _auth.IsLoggedInInstructor;
 
@@ -130,32 +130,32 @@ public partial class FinanceViewModel : ObservableObject
                 ? PricesVm.LoadAsync(showSpinner: false)
                 : Task.CompletedTask;
 
-            var fencersTask   = _sheets.GetFencersAsync();
+            var fencersTask = _sheets.GetFencersAsync();
             var trainingsTask = _sheets.GetTrainingsAsync();
-            var expensesTask  = _sheets.GetExpensesAsync(rangeFrom, rangeTo);
-            var incomesTask   = _sheets.GetIncomesAsync(rangeFrom, rangeTo);
-            var rulesTask     = _sheets.GetPriceRulesAsync();
+            var expensesTask = _sheets.GetExpensesAsync(rangeFrom, rangeTo);
+            var incomesTask = _sheets.GetIncomesAsync(rangeFrom, rangeTo);
+            var rulesTask = _sheets.GetPriceRulesAsync();
             await Task.WhenAll(fencersTask, trainingsTask, expensesTask, incomesTask, rulesTask);
 
             ct.ThrowIfCancellationRequested();
 
-            var fencers     = fencersTask.Result;
-            var trainings   = trainingsTask.Result;
+            var fencers = fencersTask.Result;
+            var trainings = trainingsTask.Result;
             var expensesAll = expensesTask.Result;
-            var incomesAll  = incomesTask.Result;
-            var allRules    = rulesTask.Result;
+            var incomesAll = incomesTask.Result;
+            var allRules = rulesTask.Result;
 
             PricingSummary = BuildPricingSummary(allRules);
             PricingWarning = BuildPricingWarning(allRules, DateTime.Today);
 
-            var today           = DateTime.Today;
-            var isInstructor    = _auth.IsLoggedInInstructor;
+            var today = DateTime.Today;
+            var isInstructor = _auth.IsLoggedInInstructor;
             var currentFencerId = _auth.CurrentFencer?.Id;
 
             var monthsSet = new HashSet<(int Y, int M)> { (today.Year, today.Month) };
-            foreach (var s in trainings)    monthsSet.Add((s.Date.Year, s.Date.Month));
-            foreach (var e in expensesAll)  monthsSet.Add((e.Date.Year, e.Date.Month));
-            foreach (var i in incomesAll)   monthsSet.Add((i.Date.Year, i.Date.Month));
+            foreach (var s in trainings) monthsSet.Add((s.Date.Year, s.Date.Month));
+            foreach (var e in expensesAll) monthsSet.Add((e.Date.Year, e.Date.Month));
+            foreach (var i in incomesAll) monthsSet.Add((i.Date.Year, i.Date.Month));
 
             var ordered = monthsSet
                 .OrderByDescending(t => t.Y).ThenByDescending(t => t.M)
@@ -167,6 +167,34 @@ public partial class FinanceViewModel : ObservableObject
             await Task.WhenAll(paymentTasks);
 
             ct.ThrowIfCancellationRequested();
+
+            // A month may carry a payment (a pre-payment, or a refund/correction)
+            // without any attendance, expense or income to advertise it. Those
+            // months MUST still enter the credit-carry chain or their funds would
+            // silently vanish (the classic "owes X here but Y there" mismatch), so
+            // fold any payment-only months in and re-fetch their payments too.
+            var extraMonths = paymentTasks
+                .SelectMany(t => t.Result)
+                .Select(p => (Y: p.Year, M: p.Month))
+                .Where(ym => !monthsSet.Contains(ym))
+                .Distinct()
+                .ToList();
+
+            if (extraMonths.Count > 0)
+            {
+                foreach (var ym in extraMonths) monthsSet.Add(ym);
+
+                ordered = monthsSet
+                    .OrderByDescending(t => t.Y).ThenByDescending(t => t.M)
+                    .ToList();
+
+                paymentTasks = ordered
+                    .Select(t => _sheets.GetPaymentsAsync(t.Y, t.M))
+                    .ToArray();
+                await Task.WhenAll(paymentTasks);
+
+                ct.ThrowIfCancellationRequested();
+            }
 
             // Everything from here to the UI assignment is pure CPU work
             // (grouping, the credit-carry pre-pass, per-month VM building and the
@@ -192,20 +220,20 @@ public partial class FinanceViewModel : ObservableObject
             Months.Clear();
             foreach (var mv in built) Months.Add(mv);
 
-            AllTimeIncome        = computed.TotalIncome;
-            AllTimeExpenses      = computed.TotalExpenses;
-            AllTimeBalance       = computed.TotalIncome - computed.TotalExpenses;
-            AllTimeSessions      = computed.TotalSessions;
-            ActiveFencers        = fencers.Count(f => f.Active);
+            AllTimeIncome = computed.TotalIncome;
+            AllTimeExpenses = computed.TotalExpenses;
+            AllTimeBalance = computed.TotalIncome - computed.TotalExpenses;
+            AllTimeSessions = computed.TotalSessions;
+            ActiveFencers = fencers.Count(f => f.Active);
             AllTimeAvgAttendance = computed.WeightedAttCount == 0 ? 0 : computed.WeightedAttSum / computed.WeightedAttCount;
-            AllTimeUnpaid        = computed.TotalUnpaid;
+            AllTimeUnpaid = computed.TotalUnpaid;
 
-            YearIncome        = computed.YIncome;
-            YearExpenses      = computed.YExpenses;
-            YearBalance       = computed.YIncome - computed.YExpenses;
-            YearSessions      = computed.YSessions;
+            YearIncome = computed.YIncome;
+            YearExpenses = computed.YExpenses;
+            YearBalance = computed.YIncome - computed.YExpenses;
+            YearSessions = computed.YSessions;
             YearAvgAttendance = computed.YWeightedAttCount == 0 ? 0 : computed.YWeightedAttSum / computed.YWeightedAttCount;
-            YearUnpaid        = computed.YUnpaid;
+            YearUnpaid = computed.YUnpaid;
 
             RecomputePersonalSummary();
             OnPropertyChanged(nameof(ShowPersonalSummary));
@@ -262,15 +290,15 @@ public partial class FinanceViewModel : ObservableObject
     {
         // ===== Per-month inputs (computed once, reused by both the credit
         // pre-pass and the row-building loop). =====
-        var rulesByMonth      = new Dictionary<(int Y, int M), List<PriceRule>>(ordered.Count);
+        var rulesByMonth = new Dictionary<(int Y, int M), List<PriceRule>>(ordered.Count);
         var attendanceByMonth = new Dictionary<(int Y, int M), Dictionary<string, int>>(ordered.Count);
-        var paidByMonth       = new Dictionary<(int Y, int M), Dictionary<string, decimal>>(ordered.Count);
+        var paidByMonth = new Dictionary<(int Y, int M), Dictionary<string, decimal>>(ordered.Count);
 
         for (int i = 0; i < ordered.Count; i++)
         {
             var ym = ordered[i];
             var from = new DateTime(ym.Y, ym.M, 1);
-            var to   = from.AddMonths(1).AddDays(-1);
+            var to = from.AddMonths(1).AddDays(-1);
 
             rulesByMonth[ym] = allRules
                 .Where(r => r.StartDate.Date <= to &&
@@ -291,25 +319,18 @@ public partial class FinanceViewModel : ObservableObject
         // ===== Credit-carry pre-pass =====
         var ascending = ordered.OrderBy(t => t.Y).ThenBy(t => t.M).ToList();
 
-        // ===== Custom-period pass pre-pass =====
-        // Assigns, per fencer, the full unlimited price once for each custom
-        // period window they attended (charged on their first attended month;
-        // other attended months in the window are marked covered). Falls back
-        // to normal per-month billing when that is cheaper for the fencer.
-        var periodOverride = BuildPeriodPasses(
-            fencers.Where(f => f.Active),
-            allRules,
-            ascending,
-            attendanceByMonth,
-            rulesByMonth);
-
-        var creditByFencerMonth = BuildCreditCarry(
+        // ===== Single shared dues ledger =====
+        // Both the Finance page and the Home payment-status card compute dues
+        // through FencerDuesLedger, so the "owes X" figure can never disagree
+        // between screens. Custom-period passes and overpayment credit-carry are
+        // resolved inside it — a custom period is billed exactly like any other
+        // month (full price on the first attended month, covered thereafter).
+        var ledger = FencerDuesLedger.ComputeAll(
             fencers.Where(f => f.Active),
             ascending,
             attendanceByMonth,
             paidByMonth,
-            rulesByMonth,
-            periodOverride);
+            allRules);
 
         var perMonth = new (MonthFinanceVm Vm,
                             decimal Income, decimal Expenses, int Sessions,
@@ -336,18 +357,18 @@ public partial class FinanceViewModel : ObservableObject
             var monthSessionsList = trainings
                 .Where(s => s.Date.Year == y && s.Date.Month == m)
                 .ToList();
-            var attendance   = attendanceByMonth[ym];
+            var attendance = attendanceByMonth[ym];
             var monthPayments = payments[i];
             var paidByFencer = paidByMonth[ym];
-            var monthRules   = rulesByMonth[ym];
+            var monthRules = rulesByMonth[ym];
 
-            var from         = new DateTime(y, m, 1);
-            var to           = from.AddMonths(1).AddDays(-1);
+            var from = new DateTime(y, m, 1);
+            var to = from.AddMonths(1).AddDays(-1);
             var monthOneOffIncomes = incomesAll
                 .Where(x => x.Date >= from && x.Date <= to)
                 .Sum(x => x.Amount);
 
-            var monthIncome   = monthPayments.Sum(p => p.Amount) + monthOneOffIncomes;
+            var monthIncome = monthPayments.Sum(p => p.Amount) + monthOneOffIncomes;
             var monthExpenses = expensesAll
                 .Where(e => e.Date >= from && e.Date <= to)
                 .Sum(e => e.Amount);
@@ -364,15 +385,14 @@ public partial class FinanceViewModel : ObservableObject
             {
                 attendance.TryGetValue(f.Id, out var count);
                 paidByFencer.TryGetValue(f.Id, out var cashPaid);
-                creditByFencerMonth.TryGetValue((f.Id, y, m), out var creditIn);
 
-                DuesQuote quote;
-                if (periodOverride.TryGetValue((f.Id, y, m), out var ov))
-                    quote = DuesCalculator.FixedQuote(
-                        count, ov.TotalDue, cashPaid + creditIn, ov.Label);
-                else
-                    quote = DuesCalculator.Calculate(
-                        count, f.IsStudent, monthRules, cashPaid + creditIn);
+                // Final, credit-aware quote for this fencer/month straight from
+                // the shared ledger (period passes + carry already applied).
+                if (!ledger.TryGetValue((f.Id, y, m), out var contribution))
+                    continue;
+
+                var quote = contribution.Quote;
+                var creditIn = contribution.CreditIn;
 
                 var isMineThisMonth = !isInstructor
                                       && f.Id == currentFencerId
@@ -381,7 +401,12 @@ public partial class FinanceViewModel : ObservableObject
                 if (count == 0 && cashPaid == 0m && creditIn == 0m && !isMineThisMonth)
                     continue;
 
-                monthVm.Dues.Add(new FencerDueRow(f, quote, cashPaid) { MarkPaidAction = MarkPaidAsync, CanMarkPaid = isInstructor });
+                monthVm.Dues.Add(new FencerDueRow(f, quote, cashPaid, creditIn)
+                {
+                    MarkPaidAction = MarkPaidAsync,
+                    BuildOptionsAction = BuildOptionsForRowAsync,
+                    CanMarkPaid = isInstructor
+                });
             }
 
             if (isInstructor)
@@ -410,6 +435,7 @@ public partial class FinanceViewModel : ObservableObject
                     monthVm.Incomes.Add(inc);
             }
 
+            monthVm.ActiveRules = monthRules;
             monthVm.RaiseTotals();
             var monthUnpaid = monthVm.Dues
                 .Where(d => !d.IsPaid)
@@ -427,198 +453,31 @@ public partial class FinanceViewModel : ObservableObject
             var (vm, monthIncome, monthExpenses, sessions, avg, unpaid) = perMonth[i];
             var y = vm.Year;
 
-            result.TotalIncome   += monthIncome;
+            result.TotalIncome += monthIncome;
             result.TotalExpenses += monthExpenses;
             result.TotalSessions += sessions;
-            result.TotalUnpaid   += unpaid;
+            result.TotalUnpaid += unpaid;
             if (sessions > 0)
             {
-                result.WeightedAttSum   += avg * sessions;
+                result.WeightedAttSum += avg * sessions;
                 result.WeightedAttCount += sessions;
             }
             if (y == yearSnapshot)
             {
-                result.YIncome   += monthIncome;
+                result.YIncome += monthIncome;
                 result.YExpenses += monthExpenses;
                 result.YSessions += sessions;
-                result.YUnpaid   += unpaid;
+                result.YUnpaid += unpaid;
 
                 if (sessions > 0)
                 {
-                    result.YWeightedAttSum   += avg * sessions;
+                    result.YWeightedAttSum += avg * sessions;
                     result.YWeightedAttCount += sessions;
                 }
             }
 
             result.Months.Add(vm);
         }
-
-        return result;
-    }
-
-    /// <summary>
-    /// For each active fencer and each custom-period pass, decides whether the
-    /// one-off period price applies. A fencer who attends at least once inside a
-    /// rule's <c>[StartDate, EndDate]</c> window owes the full unlimited price a
-    /// single time for the whole window — charged on their first attended month,
-    /// with every other attended month in the window marked covered (0 due).
-    ///
-    /// Cheaper-wins: if summing normal per-month dues across the fencer's attended
-    /// months in the window would cost less than the period price, the period pass
-    /// is NOT applied and normal billing takes over. Returns a map from
-    /// <c>(fencerId, year, month)</c> to the forced gross cost + label for that
-    /// month; months absent from the map are billed normally.
-    /// </summary>
-    private static Dictionary<(string Fid, int Y, int M), (decimal TotalDue, string Label)> BuildPeriodPasses(
-        IEnumerable<Fencer> activeFencers,
-        IReadOnlyList<PriceRule> allRules,
-        IReadOnlyList<(int Y, int M)> monthsAscending,
-        Dictionary<(int Y, int M), Dictionary<string, int>> attendanceByMonth,
-        Dictionary<(int Y, int M), List<PriceRule>> rulesByMonth)
-    {
-        var result = new Dictionary<(string Fid, int Y, int M), (decimal, string)>();
-
-        var periodRules = allRules
-            .Where(r => r.IsCustomPeriod && r.SessionCount == 0 && r.EndDate is not null)
-            .ToList();
-        if (periodRules.Count == 0) return result;
-
-        foreach (var f in activeFencers)
-        {
-            foreach (var rule in periodRules)
-            {
-                var from = rule.StartDate.Date;
-                var to   = rule.EndDate!.Value.Date;
-
-                // Attended months inside the window, in chronological order.
-                var attendedMonths = monthsAscending
-                    .Where(ym =>
-                    {
-                        var monthStart = new DateTime(ym.Y, ym.M, 1);
-                        var monthEnd   = monthStart.AddMonths(1).AddDays(-1);
-                        if (monthEnd < from || monthStart > to) return false;
-                        return attendanceByMonth[ym].TryGetValue(f.Id, out var att) && att > 0;
-                    })
-                    .ToList();
-
-                if (attendedMonths.Count == 0) continue;
-
-                var periodPrice = DuesCalculator.PriceFor(rule, f.IsStudent);
-
-                // Normal cost if we billed each attended month on its own.
-                decimal normalSum = 0m;
-                foreach (var ym in attendedMonths)
-                {
-                    attendanceByMonth[ym].TryGetValue(f.Id, out var att);
-                    normalSum += DuesCalculator
-                        .Calculate(att, f.IsStudent, rulesByMonth[ym])
-                        .TotalDue;
-                }
-
-                // Cheaper-wins: skip the period pass only when normal billing is a
-                // real, cheaper alternative. normalSum == 0 means there is no
-                // applicable per-month tier at all (the period pass is the only
-                // rule), so it must NOT count as "cheaper".
-                if (normalSum > 0m && normalSum <= periodPrice) continue;
-
-                var label = "period pass";
-                for (int i = 0; i < attendedMonths.Count; i++)
-                {
-                    var ym = attendedMonths[i];
-                    // Full price on the first attended month; covered elsewhere.
-                    result[(f.Id, ym.Y, ym.M)] = i == 0
-                        ? (periodPrice, label)
-                        : (0m, "covered by period pass");
-                }
-            }
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// For each active fencer, walks the supplied months in chronological order
-    /// and accumulates a running overpayment credit. Returns a dictionary
-    /// mapping <c>(fencerId, year, month)</c> to the credit that fencer brings
-    /// into that month. The credit for the *first* applicable month is always
-    /// zero; subsequent months see the previous month's Overpayment, etc.
-    /// </summary>
-    private static Dictionary<(string Fid, int Y, int M), decimal> BuildCreditCarry(
-        IEnumerable<Fencer> activeFencers,
-        IReadOnlyList<(int Y, int M)> monthsAscending,
-        Dictionary<(int Y, int M), Dictionary<string, int>> attendanceByMonth,
-        Dictionary<(int Y, int M), Dictionary<string, decimal>> paidByMonth,
-        Dictionary<(int Y, int M), List<PriceRule>> rulesByMonth,
-        Dictionary<(string Fid, int Y, int M), (decimal TotalDue, string Label)> periodOverride)
-    {
-        var fencerList = activeFencers as IList<Fencer> ?? activeFencers.ToList();
-
-        // Each fencer's credit chain is fully independent, so we can fan the
-        // computation out across CPU cores. Each parallel body writes only to
-        // its own partial dictionary; results are merged single-threaded after.
-        var partials = new Dictionary<(string, int, int), decimal>[fencerList.Count];
-
-        // Cap parallelism so the credit-carry pre-pass leaves a core free for the
-        // UI thread (see note in ComputeFinance) — keeps the Android emulator
-        // responsive while a refresh runs.
-        var parallelOptions = new ParallelOptions
-        {
-            MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1)
-        };
-
-        Parallel.For(0, fencerList.Count, parallelOptions, idx =>
-        {
-            var f = fencerList[idx];
-            var local = new Dictionary<(string, int, int), decimal>(monthsAscending.Count);
-
-            decimal credit = 0m;
-            foreach (var ym in monthsAscending)
-            {
-                local[(f.Id, ym.Y, ym.M)] = credit;
-
-                attendanceByMonth[ym].TryGetValue(f.Id, out var att);
-                paidByMonth[ym].TryGetValue(f.Id, out var paid);
-
-                // No activity AND no carried credit → nothing changes.
-                if (att == 0 && paid == 0m && credit == 0m) continue;
-
-                DuesQuote quote;
-                if (periodOverride.TryGetValue((f.Id, ym.Y, ym.M), out var ov))
-                    quote = DuesCalculator.FixedQuote(att, ov.TotalDue, paid + credit, ov.Label);
-                else
-                    quote = DuesCalculator.Calculate(att, f.IsStudent, rulesByMonth[ym], paid + credit);
-                credit = quote.Overpayment;
-            }
-
-            // Period pass top-up: if this fencer attended any months in the custom
-            // window for which the unlimited rate applies, charge that entire amount
-            // up front (in the first applicable month); subsequent applicable months
-            // see the previous month's Overpayment, etc.
-            if (periodOverride != null)
-            {
-                foreach (var ym in monthsAscending)
-                {
-                    var key = (f.Id, ym.Y, ym.M);
-                    if (!local.ContainsKey(key))
-                        local[key] = 0;
-                    if (credit <= 0)
-                        break;
-
-                    // Covered by the previous month's top-up?
-                    attendanceByMonth[ym].TryGetValue(f.Id, out var att);
-                    if (att > 0)
-                        credit = 0;
-                }
-            }
-
-            partials[idx] = local;
-        });
-
-        var result = new Dictionary<(string Fid, int Y, int M), decimal>(
-            fencerList.Count * Math.Max(1, monthsAscending.Count));
-        foreach (var local in partials)
-            foreach (var kv in local)
-                result[kv.Key] = kv.Value;
 
         return result;
     }
@@ -657,7 +516,7 @@ public partial class FinanceViewModel : ObservableObject
         static bool CoversMonth(IReadOnlyList<PriceRule> rules, int year, int month)
         {
             var from = new DateTime(year, month, 1);
-            var to   = from.AddMonths(1).AddDays(-1);
+            var to = from.AddMonths(1).AddDays(-1);
             return rules.Any(r =>
                 r.StartDate.Date <= to &&
                 (r.EndDate is null || r.EndDate.Value.Date >= from));
@@ -728,10 +587,10 @@ public partial class FinanceViewModel : ObservableObject
             var p = new Payment
             {
                 FencerId = row.Fencer.Id,
-                Year     = month.Year,
-                Month    = month.Month,
-                Amount   = topUp,
-                PaidOn   = DateTime.Now
+                Year = month.Year,
+                Month = month.Month,
+                Amount = topUp,
+                PaidOn = DateTime.Now
             };
             await _sheets.MarkPaidAsync(p);
 
@@ -807,4 +666,105 @@ public partial class FinanceViewModel : ObservableObject
     /// RecyclerView has already been torn down).
     /// </summary>
     public void CancelLoad() => _loadCts?.Cancel();
+
+    private readonly record struct PaymentOption(string Key, decimal Amount, string MenuText, string Kind);
+
+    /// <summary>
+    /// Populates <paramref name="row"/>.PaymentOptions with the tappable inline
+    /// buttons shown when its card is expanded. Called by the row's expand
+    /// toggle. Always appends a "Pay Custom Amount…" option that prompts for a
+    /// free-form value.
+    /// </summary>
+    public Task BuildOptionsForRowAsync(FencerDueRow row)
+    {
+        row.PaymentOptions.Clear();
+
+        if (!IsLoggedInInstructor) return Task.CompletedTask;
+
+        var month = Months.FirstOrDefault(m => m.Dues.Contains(row));
+        if (month is null) return Task.CompletedTask;
+
+        foreach (var opt in BuildPaymentOptions(row, month))
+        {
+            var amount = opt.Amount;
+            row.PaymentOptions.Add(new PaymentOptionVm(
+                opt.MenuText,
+                () => RecordPaymentAsync(row, month, amount),
+                opt.Kind));
+        }
+
+        // "Pay Custom Amount" is always available for safety.
+        row.PaymentOptions.Add(new PaymentOptionVm(
+            "Pay Custom Amount…",
+            () => PromptCustomAmountAsync(row, month),
+            "primary"));
+
+        return Task.CompletedTask;
+    }
+
+    private async Task PromptCustomAmountAsync(FencerDueRow row, MonthFinanceVm month)
+    {
+        var text = await _dialogs.PromptAsync("Custom amount",
+            $"Enter the amount to record for {row.Fencer.DisplayName} (Ft). " +
+            $"Use a negative value to refund/correct an overpayment:",
+            "Record", "Cancel");
+
+        if (!decimal.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out var amount) &&
+            !decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out amount))
+            return;
+        // Zero is a no-op; negatives are allowed so an instructor can refund an
+        // overpayment or correct a mistaken entry.
+        if (amount == 0m) return;
+
+        await RecordPaymentAsync(row, month, amount);
+    }
+
+    /// <summary>
+    /// Builds the enabled payment options for a fencer/month. Every amount is a
+    /// top-up over funds already applied (cash this month + carried credit), so
+    /// no tier can ever be charged twice. Only tiers with an active price rule
+    /// for the month appear; "Pay Custom Amount" is added by the caller and is
+    /// always available.
+    /// </summary>
+    private List<PaymentOption> BuildPaymentOptions(FencerDueRow row, MonthFinanceVm month)
+    {
+        return PaymentOptionBuilder.Build(
+                row.Fencer.IsStudent,
+                row.AlreadyPaid,
+                row.CreditIn,
+                row.SessionsAttended,
+                row.TotalCost,
+                row.AmountDue,
+                month.ActiveRules)
+            .Select(o => new PaymentOption(o.Key, o.Amount, o.MenuText, o.Kind))
+            .ToList();
+    }
+
+    private async Task RecordPaymentAsync(FencerDueRow row, MonthFinanceVm month, decimal amount)
+    {
+        // Zero is a no-op; negatives are permitted (refund / accounting correction).
+        if (amount == 0m) return;
+        try
+        {
+            await _sheets.MarkPaidAsync(new Payment
+            {
+                FencerId = row.Fencer.Id,
+                Year = month.Year,
+                Month = month.Month,
+                Amount = amount,
+                PaidOn = DateTime.Now
+            });
+
+            // Reload so the credit-carry pre-pass re-derives outstanding /
+            // overpayment / carried credit across all months (ApplyTopUp can't
+            // move a row into the overpaid state — pay-ahead must go through
+            // the full recompute).
+            await LoadAsync(showSpinner: true);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[FinanceViewModel.RecordPaymentAsync] {ex}");
+            await _dialogs.ShowAsync("Payment failed", ex.Message);
+        }
+    }
 }

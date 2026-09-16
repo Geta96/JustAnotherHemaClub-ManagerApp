@@ -25,13 +25,19 @@
         <RuntimeIdentifiers>android-arm64;android-arm</RuntimeIdentifiers>
     </PropertyGroup>
 
-    <!-- Debug: disable Fast Deployment so assemblies are embedded in the APK.
-         The arm64-on-x86_64 (Berberis-translated) emulator fails to populate the
-         .__override__ fast-deploy folder, so the runtime finds no assemblies and
-         aborts (SIGABRT at monodroid-glue.cc). Embedding avoids that path. -->
+    <!-- Debug: the arm64-on-x86_64 (Berberis-translated) emulator can't populate
+         the .__override__ fast-deploy folder, so Fast Deployment makes the app
+         abort on launch (SIGABRT at monodroid-glue.cc). Embedding the assemblies
+         into the APK is the known-good path that actually launches here.
+
+         To keep redeploys from being slow we DON'T force a full clean each time:
+         only the app dll changes are repackaged incrementally, and we skip the
+         assembly store + keep compression off so packaging stays light. -->
     <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
         <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
         <AndroidUseSharedRuntime>false</AndroidUseSharedRuntime>
+        <AndroidUseAssemblyStore>false</AndroidUseAssemblyStore>
+        <AndroidEnableAssemblyCompression>false</AndroidEnableAssemblyCompression>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)' == 'Release'">
@@ -44,7 +50,7 @@
         <!-- Keep shrinking, but drop obfuscation for now -->
         <AndroidLinkMode>SdkOnly</AndroidLinkMode>
         <AndroidLinkTool>r8</AndroidLinkTool>
-        <AndroidEnableObfuscation>true</AndroidEnableObfuscation>
+        <AndroidEnableObfuscation>false</AndroidEnableObfuscation>
         <AndroidCreateSymbolArchive>true</AndroidCreateSymbolArchive>
         <DebugSymbols>true</DebugSymbols>
         <DebugType>portable</DebugType>
@@ -142,7 +148,10 @@
 
     <ItemGroup>
         <!-- Shared platform-neutral core (models, data layer, dues math, auth, Group A VMs) -->
-        <ProjectReference Include="Core\JustAnotherHemaClub.Core.csproj" />
+        <ProjectReference Include="Core\JustAnotherHemaClub.Core.csproj">
+            <Private>true</Private>
+            <ReferenceOutputAssembly>true</ReferenceOutputAssembly>
+        </ProjectReference>
     </ItemGroup>
 
 </Project>

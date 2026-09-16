@@ -86,50 +86,92 @@
                                             <BindableLayout.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:FencerDueRow">
                                                     <Border Style="{StaticResource Card}">
-                                                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12">
-                                                            <Label Grid.Row="0" Grid.Column="0"
-                                                                   Text="{Binding Fencer.DisplayName}" FontAttributes="Bold"
-                                                                   TextColor="{StaticResource Wine}" />
-                                                            <Label Grid.Row="1" Grid.Column="0"
-                                                                   Text="{Binding Summary}" Style="{StaticResource Caption}" />
+                                                        <VerticalStackLayout Spacing="10">
+                                                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12">
+                                                                <Grid.GestureRecognizers>
+                                                                    <TapGestureRecognizer Command="{Binding ToggleExpandCommand}" />
+                                                                </Grid.GestureRecognizers>
+                                                                <Label Grid.Row="0" Grid.Column="0"
+                                                                       Text="{Binding Fencer.DisplayName}" FontAttributes="Bold"
+                                                                       TextColor="{StaticResource Wine}" />
+                                                                <Label Grid.Row="1" Grid.Column="0"
+                                                                       Text="{Binding Summary}" Style="{StaticResource Caption}" />
 
-                                                            <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
-                                                                    Text="Mark Paid"
-                                                                    IsVisible="{Binding ShowMarkPaidButton}"
-                                                                    Command="{Binding MarkPaidCommand}"
-                                                                    VerticalOptions="Center">
-                                                            </Button>
+                                                                <HorizontalStackLayout Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                                                                                       Spacing="6"
+                                                                                       VerticalOptions="Center"
+                                                                                       IsVisible="{Binding IsNotPaid}">
+                                                                    <Label Text="{Binding AmountDue, StringFormat='Owes {0:N0} Ft'}"
+                                                                           TextColor="{StaticResource DangerRed}"
+                                                                           FontAttributes="Bold"
+                                                                           FontSize="18"
+                                                                           HorizontalTextAlignment="End"
+                                                                           VerticalOptions="Center" />
+                                                                </HorizontalStackLayout>
 
-                                                            <HorizontalStackLayout Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
-                                                                                   Spacing="6"
-                                                                                   VerticalOptions="Center"
-                                                                                   IsVisible="{Binding ShowNotPaidHint}">
-                                                                <Label Text="Not payed yet"
-                                                                       TextColor="{StaticResource DangerRed}"
-                                                                       FontAttributes="Bold"
+                                                                <!-- Exactly paid: outstanding=0 AND no overpayment. -->
+                                                                <Label Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                                                                       Text="✓ Paid"
+                                                                       IsVisible="{Binding IsExactlyPaid}"
+                                                                       TextColor="#1F8A2E" FontAttributes="Bold" FontSize="18"
                                                                        VerticalOptions="Center" />
-                                                                <Label Text="✗"
-                                                                       FontSize="20" FontAttributes="Bold"
-                                                                       TextColor="{StaticResource DangerRed}"
+
+                                                                <!-- Overpaid: replaces "Paid" so the credit going forward is visible. -->
+                                                                <Label Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                                                                       Text="{Binding Overpayment, StringFormat='✓ Overpayed by {0:N0} Ft'}"
+                                                                       IsVisible="{Binding IsOverpaid}"
+                                                                       TextColor="#1F8A2E" FontAttributes="Bold" FontSize="14"
+                                                                       LineBreakMode="WordWrap"
+                                                                       HorizontalTextAlignment="End"
                                                                        VerticalOptions="Center" />
-                                                            </HorizontalStackLayout>
+                                                            </Grid>
 
-                                                            <!-- Exactly paid: outstanding=0 AND no overpayment. -->
-                                                            <Label Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
-                                                                   Text="✓ Paid"
-                                                                   IsVisible="{Binding IsExactlyPaid}"
-                                                                   TextColor="#1F8A2E" FontAttributes="Bold" FontSize="18"
-                                                                   VerticalOptions="Center" />
-
-                                                            <!-- Overpaid: replaces "Paid" so the credit going forward is visible. -->
-                                                            <Label Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
-                                                                   Text="{Binding Overpayment, StringFormat='✓ Overpayed by {0:N0} Ft'}"
-                                                                   IsVisible="{Binding IsOverpaid}"
-                                                                   TextColor="#1F8A2E" FontAttributes="Bold" FontSize="14"
-                                                                   LineBreakMode="WordWrap"
-                                                                   HorizontalTextAlignment="End"
-                                                                   VerticalOptions="Center" />
-                                                        </Grid>
+                                                            <!-- Expanded: inline payment options (instructor only) -->
+                                                            <VerticalStackLayout IsVisible="{Binding IsExpanded}" Spacing="6">
+                                                                <BoxView HeightRequest="1"
+                                                                         BackgroundColor="{StaticResource Muted}"
+                                                                         Margin="0,2" />
+                                                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding PaymentOptions}" Spacing="8">
+                                                                    <BindableLayout.ItemTemplate>
+                                                                        <DataTemplate x:DataType="vm:PaymentOptionVm">
+                                                                            <!-- Primary actions (Pay Remaining / Pay Custom Amount)
+                                                                                 use the solid Wine fill so they read as the main
+                                                                                 call-to-action; pass/tier options use a lighter
+                                                                                 cream-outlined style so they read as secondary
+                                                                                 alternatives. -->
+                                                                            <Button Text="{Binding Text}"
+                                                                                    HeightRequest="48"
+                                                                                    FontAttributes="Bold"
+                                                                                    CornerRadius="10"
+                                                                                    BackgroundColor="{StaticResource CreamSoft}"
+                                                                                    TextColor="{StaticResource Wine}"
+                                                                                    BorderColor="{StaticResource Wine}"
+                                                                                    BorderWidth="1.5"
+                                                                                    Command="{Binding ChooseCommand}">
+                                                                                <Button.Triggers>
+                                                                                    <DataTrigger TargetType="Button"
+                                                                                                 Binding="{Binding IsPrimary}"
+                                                                                                 Value="True">
+                                                                                        <Setter Property="BackgroundColor" Value="{StaticResource Wine}" />
+                                                                                        <Setter Property="TextColor" Value="{StaticResource Cream}" />
+                                                                                        <Setter Property="BorderWidth" Value="0" />
+                                                                                        <Setter Property="FontSize" Value="16" />
+                                                                                    </DataTrigger>
+                                                                                    <DataTrigger TargetType="Button"
+                                                                                                 Binding="{Binding IsRemaining}"
+                                                                                                 Value="True">
+                                                                                        <Setter Property="BackgroundColor" Value="#476FB5" />
+                                                                                        <Setter Property="TextColor" Value="{StaticResource Cream}" />
+                                                                                        <Setter Property="BorderWidth" Value="0" />
+                                                                                        <Setter Property="FontSize" Value="16" />
+                                                                                    </DataTrigger>
+                                                                                </Button.Triggers>
+                                                                            </Button>
+                                                                        </DataTemplate>
+                                                                    </BindableLayout.ItemTemplate>
+                                                                </VerticalStackLayout>
+                                                            </VerticalStackLayout>
+                                                        </VerticalStackLayout>
                                                     </Border>
                                                 </DataTemplate>
                                             </BindableLayout.ItemTemplate>

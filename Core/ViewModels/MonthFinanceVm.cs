@@ -15,6 +15,9 @@ public partial class MonthFinanceVm : ObservableObject
     public ObservableCollection<Expense> Expenses { get; } = new();
     public ObservableCollection<Income> Incomes { get; } = new();
 
+    /// <summary>Price rules applicable to this month (newest-per-tier resolved by the calculator).</summary>
+    public IReadOnlyList<PriceRule> ActiveRules { get; set; } = Array.Empty<PriceRule>();
+
     [ObservableProperty] private string newExpenseCategory = "";
     [ObservableProperty] private string newExpenseDescription = "";
     [ObservableProperty] private decimal newExpenseAmount;
