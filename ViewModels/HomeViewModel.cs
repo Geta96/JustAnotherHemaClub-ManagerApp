@@ -22,8 +22,8 @@ public partial class HomeViewModel : ObservableObject
     public const string FacebookUrl =
         "https://www.facebook.com/share/18VtVUQPW5/";
 
-    public const string TelegramUrl =
-        "https://t.me/+6EUfQu6kXPY4NWM8";
+    public const string DiscordUrl =
+        "https://discord.gg/tEcynS94d";
 
     private readonly IGoogleSheetsService _sheets;
     private readonly ICacheControl _cache;
@@ -260,10 +260,9 @@ public partial class HomeViewModel : ObservableObject
                 topic = projectedRule!.Topic ?? "";
 
                 // Proactively materialize the projected occurrence NOW so the row
-                // exists as soon as the card shows it (no need to wait for Attend).
-                // EnsureOccurrenceAsync is duplicate-safe. Best-effort: if it fails
-                // (offline), the card still shows the projected data and Attend will
-                // retry the materialization.
+                // exists as soon as the card shows it. EnsureOccurrenceAsync is
+                // duplicate-safe. If it fails we KEEP _nextLessonRule so the
+                // Attend command can retry the materialization on demand.
                 try
                 {
                     var session = await _materializer.EnsureOccurrenceAsync(projectedRule, projectedDate);
@@ -272,7 +271,7 @@ public partial class HomeViewModel : ObservableObject
                     whenStart = session.Date;
                     topic     = session.Topic ?? "";
                 }
-                catch { /* keep projected display; Attend will materialize later */ }
+                catch { /* keep _nextLessonRule so Attend can materialize later */ }
             }
             else
             {
@@ -284,7 +283,10 @@ public partial class HomeViewModel : ObservableObject
             NextLessonWhen  = $"{FormatFriendlyDay(whenStart)} at {whenStart:HH\\:mm}";
             NextLessonTopic = topic;
 
-            CanAttendNextLesson = me is not null && !_auth.IsGuest;
+            // Only offer Attend when we actually have something to attend against:
+            // a materialized session OR a recurring rule we can still materialize.
+            CanAttendNextLesson = me is not null && !_auth.IsGuest &&
+                                  (_nextLesson is not null || _nextLessonRule is not null);
             IsAttendingNextLesson = me is not null && _nextLesson is not null &&
                                     _nextLesson.AttendeeFencerIds.Contains(me.Id);
             HasNextLesson = true;
@@ -467,4 +469,61 @@ public partial class HomeViewModel : ObservableObject
         if (day < today.AddDays(7)) return day.ToString("dddd");
         return day.ToString("d MMM");
     }
+
+    [RelayCommand]
+    private async Task ToggleAttendNextLessonAsync()
+    {
+        var me = _auth.CurrentFencer;
+        if (me is null || _auth.IsGuest) return;
+
+        // If the up-front materialization failed, recover the real row now.
+        if (_nextLesson is null && _nextLessonRule is not null)
+        {
+            try
+            {
+                _nextLesson = await _materializer.EnsureOccurrenceAsync(_nextLessonRule, _nextLessonDate);
+                _nextLessonRule = null;
+            }
+            catch
+            {
+                // Still couldn't reach Sheets - leave state untouched so the
+                // user can retry rather than seeing a phantom "attended".
+                return;
+            }
+        }
+
+        if (_nextLesson is null) return;
+
+        var wasAttending = _nextLesson.AttendeeFencerIds.Contains(me.Id);
+        if (wasAttending)
+            _nextLesson.AttendeeFencerIds.Remove(me.Id);
+        else
+            _nextLesson.AttendeeFencerIds.Add(me.Id);
+
+        try
+        {
+            await _sheets.UpsertTrainingAsync(_nextLesson);
+            _cache.InvalidateTrainings();
+            IsAttendingNextLesson = !wasAttending;
+        }
+        catch
+        {
+            // Roll back the optimistic change so the UI reflects reality.
+            if (wasAttending) _nextLesson.AttendeeFencerIds.Add(me.Id);
+            else _nextLesson.AttendeeFencerIds.Remove(me.Id);
+            throw;
+        }
+    }
+
+    [RelayCommand]
+    private static Task OpenInstagram() =>
+        Launcher.Default.OpenAsync(InstagramUrl);
+
+    [RelayCommand]
+    private static Task OpenFacebook() =>
+        Launcher.Default.OpenAsync(FacebookUrl);
+
+    [RelayCommand]
+    private static Task OpenDiscord() =>
+        Launcher.Default.OpenAsync(DiscordUrl);
 }

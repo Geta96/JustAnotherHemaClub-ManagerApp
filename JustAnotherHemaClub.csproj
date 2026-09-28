@@ -148,10 +148,7 @@
 
     <ItemGroup>
         <!-- Shared platform-neutral core (models, data layer, dues math, auth, Group A VMs) -->
-        <ProjectReference Include="Core\JustAnotherHemaClub.Core.csproj">
-            <Private>true</Private>
-            <ReferenceOutputAssembly>true</ReferenceOutputAssembly>
-        </ProjectReference>
+        <ProjectReference Include="Core\JustAnotherHemaClub.Core.csproj" />
     </ItemGroup>
 
 </Project>

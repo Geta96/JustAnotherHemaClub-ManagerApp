@@ -126,7 +126,7 @@ public class RecurringTrainingMaterializer
             Id      = id,
             Date    = day + rule.TimeOfDay,
             EndDate = day + rule.EndTimeOfDay,
-            Topic   = rule.Topic,
+            Topic   = rule.Topic ?? "",
         };
         await _sheets.UpsertTrainingAsync(session);
         _cache.InvalidateTrainings();
