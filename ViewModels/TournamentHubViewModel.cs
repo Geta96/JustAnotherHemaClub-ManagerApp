@@ -1,4 +1,4 @@
-ï»¿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JustAnotherHemaClub.Models;
 using JustAnotherHemaClub.Services;
@@ -33,7 +33,7 @@ public partial class TournamentHubViewModel : ObservableObject
     /// <summary>
     /// Set by the page so the VM can ask for a fencer to withdraw.
     /// Returns the picked fencer, or null if the user cancelled.
-    /// (Plain property, not an event â€” there's only ever one subscriber.)
+    /// (Plain property, not an event — there's only ever one subscriber.)
     /// </summary>
     public Func<IReadOnlyList<TournamentFencer>, Task<TournamentFencer?>>? PickFencerToWithdrawAsync { get; set; }
 
@@ -155,7 +155,7 @@ public partial class TournamentHubViewModel : ObservableObject
 
     /// <summary>
     /// Cheap refresh used when returning from MatchPage. Skips the 5-read
-    /// aggregate fetch â€” only the Matches sheet is re-read, the in-memory
+    /// aggregate fetch — only the Matches sheet is re-read, the in-memory
     /// session is patched in place, then polling resumes. ~3-5x faster than
     /// <see cref="LoadAsync"/>.
     /// </summary>
@@ -256,7 +256,7 @@ public partial class TournamentHubViewModel : ObservableObject
 
     /// <summary>
     /// Prompts the page for a fencer, then walks-over every unfinished match they're
-    /// in (0â€“0, opponent wins). Refreshes every tab so the cascade is visible.
+    /// in (0–0, opponent wins). Refreshes every tab so the cascade is visible.
     /// </summary>
     [RelayCommand]
     private async Task WithdrawFencerPromptAsync()
@@ -289,7 +289,7 @@ public partial class TournamentHubViewModel : ObservableObject
             fencer.IsWithdrawn = true;
             await _sheets.UpsertTournamentFencerAsync(t.Id, fencer);
 
-            // Walk-over every unfinished match, then persist them in PARALLEL â€”
+            // Walk-over every unfinished match, then persist them in PARALLEL —
             // each Match has its own Version token, so they don't contend with
             // each other. For a fencer in N unfinished matches this turns N
             // serial round-trips into max-of-N parallel.

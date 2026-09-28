@@ -1,0 +1,437 @@
+﻿using System.Globalization;
+using Google.Apis.Auth.OAuth2;
+using Google.Apis.Services;
+using Google.Apis.Sheets.v4;
+using Google.Apis.Sheets.v4.Data;
+using JustAnotherHemaClub.Models;
+
+namespace JustAnotherHemaClub.Services;
+
+public partial class GoogleSheetsService : IGoogleSheetsService
+{
+    private readonly string _spreadsheetId;
+    private readonly ICredentialProvider _credentials;
+    private SheetsService? _service;
+    private readonly SemaphoreSlim _serviceGate = new(1, 1);
+
+    public GoogleSheetsService(string spreadsheetId, ICredentialProvider credentials)
+    {
+        _spreadsheetId = spreadsheetId;
+        _credentials = credentials;
+    }
+
+    /// <summary>
+    /// Warms the credential-independent parts of the Sheets client: reading the
+    /// bundled service-account file, building the OAuth credential and the
+    /// <see cref="SheetsService"/> / HttpClient. This needs NO user login (it's a
+    /// service account), so it can run at app launch — while the user is still on
+    /// the login screen — removing this one-time handshake cost from the first
+    /// real read after sign-in. Safe to call multiple times; it's a no-op once
+    /// the service exists.
+    /// </summary>
+    public Task InitializeAsync() => GetServiceAsync();
+
+    private async Task<SheetsService> GetServiceAsync()
+    {
+        if (_service is not null) return _service;
+
+        await _serviceGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_service is not null) return _service;
+
+            using var stream = await _credentials.OpenServiceAccountAsync();
+            var credential = GoogleCredential.FromStream(stream)
+                .CreateScoped(SheetsService.Scope.Spreadsheets);
+
+            var service = new SheetsService(new BaseClientService.Initializer
+            {
+                HttpClientInitializer = credential,
+                ApplicationName = "JAHC Manager"
+            });
+            // Fail faster than the default 100 s, so users get a clearer error sooner.
+            service.HttpClient.Timeout = TimeSpan.FromSeconds(20);
+            _service = service;
+            return _service;
+        }
+        finally { _serviceGate.Release(); }
+    }
+
+    private async Task<IList<IList<object>>> ReadAsync(string range)
+    {
+        var svc = await GetServiceAsync();
+        var resp = await svc.Spreadsheets.Values.Get(_spreadsheetId, range).ExecuteAsync();
+        return resp.Values ?? new List<IList<object>>();
+    }
+
+    private async Task AppendAsync(string range, IList<object> row)
+    {
+        var svc = await GetServiceAsync();
+        var body = new ValueRange { Values = new List<IList<object>> { row } };
+        var req = svc.Spreadsheets.Values.Append(body, _spreadsheetId, range);
+        req.ValueInputOption = SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.RAW;
+        req.InsertDataOption = SpreadsheetsResource.ValuesResource.AppendRequest.InsertDataOptionEnum.INSERTROWS;
+        await req.ExecuteAsync();
+    }
+
+    private async Task UpdateAsync(string range, IList<object> row)
+    {
+        var svc = await GetServiceAsync();
+        var body = new ValueRange { Values = new List<IList<object>> { row } };
+        var req = svc.Spreadsheets.Values.Update(body, _spreadsheetId, range);
+        req.ValueInputOption = SpreadsheetsResource.ValuesResource.UpdateRequest.ValueInputOptionEnum.RAW;
+        await req.ExecuteAsync();
+    }
+
+    /// <summary>
+    /// (sheet, key1, key2) → 0-based row index inside the data range.
+    /// Populated whenever an upsert successfully resolves a row, dropped on
+    /// concurrency-conflict refetch. Halves round-trips for repeat edits to
+    /// the same match / pool / fencer in one app session.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<(string sheet, string a, string b), int> _rowIndexCache = new();
+
+    // --- Fencers ---
+    // Columns: A=Id, B=Username, C=PasswordHash, D=Name, E=Email,
+    //          F=Active, G=IsStudent, H=GdprAccepted, I=LiabilityAccepted, J=IsInstructor
+    public async Task<List<Fencer>> GetFencersAsync()
+    {
+        var rows = await ReadAsync("Fencers!A2:J");
+        return rows.Select(r => new Fencer
+        {
+            Id = S(r, 0),
+            Username = S(r, 1),
+            PasswordHash = S(r, 2),
+            Name = S(r, 3),
+            Email = S(r, 4),
+            Active = ParseBool(S(r, 5)),
+            IsStudent = ParseBool(S(r, 6)),
+            GdprAccepted = ParseBool(S(r, 7)),
+            LiabilityAccepted = ParseBool(S(r, 8)),
+            IsInstructor = ParseBool(S(r, 9))
+        }).ToList();
+    }
+
+    public Task AddFencerAsync(Fencer f) =>
+        AppendAsync("Fencers!A1", new List<object>
+        {
+            f.Id, f.Username ?? "", f.PasswordHash ?? "",
+            f.Name, f.Email ?? "",
+            B(f.Active), B(f.IsStudent), B(f.GdprAccepted), B(f.LiabilityAccepted), B(f.IsInstructor)
+        });
+
+    public async Task UpsertFencerAsync(Fencer f)
+    {
+        var rows = await ReadAsync("Fencers!A2:J");
+        int rowIndex = -1;
+        for (int i = 0; i < rows.Count; i++)
+            if (S(rows[i], 0) == f.Id) { rowIndex = i; break; }
+
+        var values = new List<object>
+        {
+            f.Id, f.Username ?? "", f.PasswordHash ?? "",
+            f.Name, f.Email ?? "",
+            B(f.Active), B(f.IsStudent), B(f.GdprAccepted), B(f.LiabilityAccepted), B(f.IsInstructor)
+        };
+
+        if (rowIndex >= 0)
+            await UpdateAsync($"Fencers!A{rowIndex + 2}:J{rowIndex + 2}", values);
+        else
+            await AppendAsync("Fencers!A1", values);
+    }
+
+    // --- Trainings ---
+    // Columns: A=Id, B=Date, C=Topic, D=AttendeeFencerIds, E=EndDate
+    public async Task<List<TrainingSession>> GetTrainingsAsync()
+    {
+        var rows = await ReadAsync("Trainings!A2:E");
+
+        // Keyed by Id so historical duplicate rows (created before
+        // UpsertTrainingAsync became a real upsert) are merged into a single
+        // session instead of being shown twice. Later rows win for scalar
+        // fields; attendee lists are unioned so anyone who attended either
+        // copy keeps their attendance.
+        var byId = new Dictionary<string, TrainingSession>(StringComparer.Ordinal);
+
+        foreach (var r in rows)
+        {
+            var id = S(r, 0);
+            if (string.IsNullOrWhiteSpace(id)) continue;
+
+            if (!DateTime.TryParse(S(r, 1), CultureInfo.InvariantCulture,
+                                   DateTimeStyles.RoundtripKind, out var date))
+                continue; // skip rows with an unparseable start date instead of throwing
+
+            DateTime end;
+            var endStr = S(r, 4);
+            if (!string.IsNullOrWhiteSpace(endStr) &&
+                DateTime.TryParse(endStr, CultureInfo.InvariantCulture,
+                                  DateTimeStyles.RoundtripKind, out var parsedEnd))
+                end = parsedEnd;
+            else
+                end = date.AddMinutes(90); // legacy rows default to a 90-minute session
+
+            var attendees = S(r, 3)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .ToList();
+
+            if (byId.TryGetValue(id, out var existing))
+            {
+                existing.Date    = date;
+                existing.EndDate = end;
+                existing.Topic   = S(r, 2);
+                foreach (var fid in attendees)
+                    if (!existing.AttendeeFencerIds.Contains(fid))
+                        existing.AttendeeFencerIds.Add(fid);
+            }
+            else
+            {
+                byId[id] = new TrainingSession
+                {
+                    Id = id,
+                    Date = date,
+                    EndDate = end,
+                    Topic = S(r, 2),
+                    AttendeeFencerIds = attendees
+                };
+            }
+        }
+
+        return byId.Values.ToList();
+    }
+
+    public async Task UpsertTrainingAsync(TrainingSession t)
+    {
+        var rows = await ReadAsync("Trainings!A2:E");
+        int rowIndex = -1;
+        for (int i = 0; i < rows.Count; i++)
+            if (S(rows[i], 0) == t.Id) { rowIndex = i; break; }
+
+        var values = new List<object>
+        {
+            t.Id,
+            t.Date.ToString("o", CultureInfo.InvariantCulture),
+            t.Topic,
+            string.Join(",", t.AttendeeFencerIds),
+            t.EndDate.ToString("o", CultureInfo.InvariantCulture)
+        };
+
+        if (rowIndex >= 0)
+            await UpdateAsync($"Trainings!A{rowIndex + 2}:E{rowIndex + 2}", values);
+        else
+            await AppendAsync("Trainings!A1", values);
+    }
+
+    public async Task DeleteTrainingAsync(string trainingId)
+    {
+        if (string.IsNullOrWhiteSpace(trainingId)) return;
+
+        var rows = await ReadAsync("Trainings!A2:E");
+
+        var rangesToClear = new List<string>();
+        for (int i = 0; i < rows.Count; i++)
+            if (S(rows[i], 0) == trainingId)
+                rangesToClear.Add($"Trainings!A{i + 2}:E{i + 2}");
+        if (rangesToClear.Count == 0) return;
+
+        var svc = await GetServiceAsync();
+        var batch = new Google.Apis.Sheets.v4.Data.BatchClearValuesRequest { Ranges = rangesToClear };
+        await svc.Spreadsheets.Values.BatchClear(batch, _spreadsheetId).ExecuteAsync();
+    }
+
+    // --- Payments ---
+    public async Task<List<Payment>> GetPaymentsAsync(int year, int month)
+    {
+        var rows = await ReadAsync("Payments!A2:E");
+        return rows
+            .Where(r => !string.IsNullOrWhiteSpace(S(r, 0)))   // skip blank/partial rows
+            .Select(r => new Payment
+            {
+                FencerId = S(r, 0),
+                Year = int.TryParse(S(r, 1), out var y) ? y : 0,
+                Month = int.TryParse(S(r, 2), out var mo) ? mo : 0,
+                Amount = decimal.TryParse(S(r, 3), NumberStyles.Any, CultureInfo.InvariantCulture, out var a) ? a : 0m,
+                PaidOn = DateTime.TryParse(S(r, 4), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var d) ? d : default
+            })
+            .Where(p => p.Year == year && p.Month == month)
+            .ToList();
+    }
+
+    public Task MarkPaidAsync(Payment p) =>
+        AppendAsync("Payments!A1", new List<object>
+        {
+            p.FencerId, p.Year, p.Month,
+            p.Amount.ToString(CultureInfo.InvariantCulture),
+            p.PaidOn.ToString("o", CultureInfo.InvariantCulture)
+        });
+
+    // --- Expenses ---
+    public async Task<List<Expense>> GetExpensesAsync(DateTime from, DateTime to)
+    {
+        var rows = await ReadAsync("Expenses!A2:E");
+        return rows
+            .Where(r => !string.IsNullOrWhiteSpace(S(r, 0)))   // skip blank/partial rows
+            .Select(r => new Expense
+            {
+                Id = S(r, 0),
+                Date = DateTime.TryParse(S(r, 1), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var d) ? d : default,
+                Category = S(r, 2),
+                Description = S(r, 3),
+                Amount = decimal.TryParse(S(r, 4), NumberStyles.Any, CultureInfo.InvariantCulture, out var a) ? a : 0m
+            })
+            .Where(e => e.Date >= from && e.Date <= to)
+            .ToList();
+    }
+
+    public Task AddExpenseAsync(Expense e) =>
+        AppendAsync("Expenses!A1", new List<object>
+        {
+            e.Id,
+            e.Date.ToString("o", CultureInfo.InvariantCulture),
+            e.Category, e.Description,
+            e.Amount.ToString(CultureInfo.InvariantCulture)
+        });
+
+    // --- Month notes ---
+    public async Task<List<MonthNote>> GetMonthNotesAsync()
+    {
+        var rows = await ReadAsync("MonthNotes!A2:C");
+        return rows.Select(r => new MonthNote
+        {
+            Year = int.TryParse(S(r, 0), out var y) ? y : 0,
+            Month = int.TryParse(S(r, 1), out var m) ? m : 0,
+            Note = S(r, 2)
+        }).ToList();
+    }
+
+    // Append-only; the latest row wins when read via GetMonthNotesAsync filtering by (Year, Month).
+    public Task UpsertMonthNoteAsync(MonthNote note) =>
+        AppendAsync("MonthNotes!A1", new List<object> { note.Year, note.Month, note.Note });
+
+    // --- Individual lessons ---
+    // Columns: A=Id, B=Date, C=StudentId, D=InstructorId, E=Topic,
+    //          F=Notes, G=NextIdea, H=Status, I=RequestedInstructorIds (CSV)
+    public async Task<List<IndividualLesson>> GetIndividualLessonsAsync()
+    {
+        var rows = await ReadAsync("IndividualLessons!A2:I");
+        var list = new List<IndividualLesson>();
+        foreach (var r in rows)
+        {
+            var id = S(r, 0);
+            if (string.IsNullOrWhiteSpace(id)) continue;
+
+            var statusStr = S(r, 7);
+            if (!Enum.TryParse<IndividualLessonStatus>(statusStr, true, out var status))
+                status = IndividualLessonStatus.Accepted;
+
+            // Rejected rows are treated as deleted.
+            if (status == IndividualLessonStatus.Rejected) continue;
+
+            list.Add(new IndividualLesson
+            {
+                Id = id,
+                Date = DateTime.TryParse(S(r, 1), CultureInfo.InvariantCulture,
+                                         DateTimeStyles.RoundtripKind, out var d) ? d : DateTime.MinValue,
+                StudentId = S(r, 2),
+                InstructorId = S(r, 3),
+                Topic = S(r, 4),
+                Notes = S(r, 5),
+                NextIdea = S(r, 6),
+                Status = status,
+                RequestedInstructorIds = S(r, 8)
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .ToList()
+            });
+        }
+        return list;
+    }
+
+    public async Task UpsertIndividualLessonAsync(IndividualLesson l)
+    {
+        var rows = await ReadAsync("IndividualLessons!A2:I");
+        int rowIndex = -1;
+        for (int i = 0; i < rows.Count; i++)
+            if (S(rows[i], 0) == l.Id) { rowIndex = i; break; }
+
+        var values = new List<object>
+        {
+            l.Id,
+            l.Date.ToString("o", CultureInfo.InvariantCulture),
+            l.StudentId,
+            l.InstructorId ?? "",
+            l.Topic ?? "",
+            l.Notes ?? "",
+            l.NextIdea ?? "",
+            l.Status.ToString(),
+            string.Join(",", l.RequestedInstructorIds ?? new())
+        };
+
+        if (rowIndex >= 0)
+            await UpdateAsync($"IndividualLessons!A{rowIndex + 2}:I{rowIndex + 2}", values);
+        else
+            await AppendAsync("IndividualLessons!A1", values);
+    }
+
+    // --- Recurring trainings ---
+    // Columns: A=Id, B=DayOfWeek, C=TimeOfDay, D=Topic,
+    //          E=StartDate, F=EndDate, G=CreatedByFencerId, H=EndTimeOfDay
+    public async Task<List<RecurringTrainingRule>> GetRecurringTrainingsAsync()
+    {
+        var rows = await ReadAsync("RecurringTrainings!A2:H");
+        return rows
+            .Select(SheetRowMapper.MapRecurring)
+            .Where(r => r is not null)
+            .Select(r => r!)
+            .ToList();
+    }
+
+    public async Task UpsertRecurringTrainingAsync(RecurringTrainingRule rule)
+    {
+        var rows = await ReadAsync("RecurringTrainings!A2:H");
+        int rowIndex = -1;
+        for (int i = 0; i < rows.Count; i++)
+            if (S(rows[i], 0) == rule.Id) { rowIndex = i; break; }
+
+        var values = new List<object>
+        {
+            rule.Id,
+            rule.DayOfWeek.ToString(),
+            rule.TimeOfDay.ToString(@"hh\:mm", CultureInfo.InvariantCulture),
+            rule.Topic ?? "",
+            rule.StartDate.ToString("o", CultureInfo.InvariantCulture),
+            rule.EndDate?.ToString("o", CultureInfo.InvariantCulture) ?? "",
+            rule.CreatedByFencerId ?? "",
+            rule.EndTimeOfDay.ToString(@"hh\:mm", CultureInfo.InvariantCulture)
+        };
+
+        if (rowIndex >= 0)
+            await UpdateAsync($"RecurringTrainings!A{rowIndex + 2}:H{rowIndex + 2}", values);
+        else
+            await AppendAsync("RecurringTrainings!A1", values);
+    }
+
+    public async Task DeleteRecurringTrainingAsync(string ruleId)
+    {
+        var rows = await ReadAsync("RecurringTrainings!A2:H");
+        int rowIndex = -1;
+        for (int i = 0; i < rows.Count; i++)
+            if (S(rows[i], 0) == ruleId) { rowIndex = i; break; }
+        if (rowIndex < 0) return;
+
+        var blanks = new List<object> { "", "", "", "", "", "", "", "" };
+        await UpdateAsync($"RecurringTrainings!A{rowIndex + 2}:H{rowIndex + 2}", blanks);
+    }
+
+    private static string S(IList<object> row, int i) =>
+        i < row.Count ? row[i]?.ToString() ?? "" : "";
+
+    /// <summary>Serializes a bool as the canonical "TRUE"/"FALSE" text that
+    /// <see cref="ParseBool"/> round-trips reliably, avoiding the ambiguity of
+    /// writing raw boxed bools through USER_ENTERED.</summary>
+    private static string B(bool value) => value ? "TRUE" : "FALSE";
+
+    private static bool ParseBool(string s) =>
+        s.Equals("TRUE", StringComparison.OrdinalIgnoreCase) ||
+        s == "1" ||
+        s.Equals("yes", StringComparison.OrdinalIgnoreCase);
+}

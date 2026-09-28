@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+        Shared, platform-neutral core for JAHC Manager.
+
+        Referenced by BOTH the MAUI app (net9.0-android) and the future Blazor
+        web app. Targets plain net9.0 so it carries NO platform/UI dependencies:
+        only models, the Google Sheets data layer, dues math, auth, and the
+        host-agnostic (Group A) view-models live here. Anything touching MAUI
+        (timers, colours, dispatchers, pages) stays in the app project.
+
+        Google Play note: this library is UI-less and adds no native/Android
+        surface. The MAUI app keeps its existing single-project packaging; this
+        reference does not change the produced AAB in any way that affects Play
+        (no extra permissions, no native libs, no manifest changes).
+    -->
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <RootNamespace>JustAnotherHemaClub</RootNamespace>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsTrimmable>true</IsTrimmable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+        <PackageReference Include="Google.Apis.Sheets.v4" Version="1.69.0.3694" />
+        <PackageReference Include="Google.Apis.Auth" Version="1.70.0" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
+    </ItemGroup>
+
+</Project>

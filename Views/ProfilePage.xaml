@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels"
+             xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels;assembly=JustAnotherHemaClub.Core"
              x:Class="JustAnotherHemaClub.Views.ProfilePage"
              x:DataType="vm:ProfileViewModel"
              Title="My Profile">
@@ -119,6 +119,20 @@
 
                     <Button Text="Save" Command="{Binding SaveCommand}" />
                     <Label Text="{Binding StatusMessage}" Style="{StaticResource Caption}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- TEMP: one-time date migration. Instructor-only. DELETE after running once. -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding IsInstructor}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Maintenance (one-time)" Style="{StaticResource H2}" />
+                    <Label Text="Rewrites all stored dates to a safe, locale-independent format. Run once, then this button will be removed."
+                           Style="{StaticResource Caption}" />
+                    <Button x:Name="MigrateDatesButton"
+                            Text="Fix stored dates"
+                            Clicked="OnMigrateDatesClicked" />
+                    <Label x:Name="MigrateStatusLabel"
+                           Style="{StaticResource Caption}" />
                 </VerticalStackLayout>
             </Border>
 

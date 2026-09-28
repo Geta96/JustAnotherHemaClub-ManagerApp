@@ -35,13 +35,14 @@
 
 | Area | Detail |
 |---|---|
-| Framework | **.NET MAUI** (`net8.0-android`, C# 12) |
+| Framework | **.NET MAUI** (`net9.0-android`, C# 13) |
 | Architecture | MVVM via **CommunityToolkit.Mvvm** |
+| Solution layout | **`JustAnotherHemaClub.Core`** — platform-neutral `net9.0` library (models, Google Sheets data layer, dues math, auth, host-agnostic view-models) referenced by the MAUI app and shared with the in-progress web app; **MAUI app** — Android head (pages, MAUI-specific view-models, DI); **`JustAnotherHemaClub.Tests`** — xUnit + FluentAssertions + Moq |
 | Navigation | `Shell` flyout; multi-tab pages use `CarouselView` + `DataTemplateSelector` |
 | Backend | **Google Sheets** via `Google.Apis.Sheets.v4` (service account) |
 | Caching | In-memory decorator (`CachedGoogleSheetsService` + `ICacheControl`), warmed on login |
 | Auth | SHA-256 credentials + **Plugin.Fingerprint**, persisted in `SecureStorage` |
-| Min Android | API 24 (Android 7.0); target SDK 34 |
+| Min Android | API 24 (Android 7.0); target SDK 36 |
 
 ### Data model (Google Sheets tabs)
 
