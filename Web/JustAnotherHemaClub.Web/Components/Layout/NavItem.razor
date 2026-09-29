@@ -1,0 +1,12 @@
+<NavLink class="nav-item" href="@Href" Match="@(Href == "" ? NavLinkMatch.All : NavLinkMatch.Prefix)"
+         @onclick="OnNavigate">
+    <span class="nav-icon">@Icon</span>
+    <span class="nav-label">@Label</span>
+</NavLink>
+
+@code {
+    [Parameter] public string Href { get; set; } = "";
+    [Parameter] public string Icon { get; set; } = "";
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public EventCallback OnNavigate { get; set; }
+}

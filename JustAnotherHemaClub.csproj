@@ -10,7 +10,7 @@
         <Nullable>enable</Nullable>
 
         <NoWarn>$(NoWarn);XC0025</NoWarn>
-        <DefaultItemExcludes>$(DefaultItemExcludes);Tests\**;UITests\**;Core\**</DefaultItemExcludes>
+        <DefaultItemExcludes>$(DefaultItemExcludes);Tests\**;UITests\**;Core\**;Web\**</DefaultItemExcludes>
 
         <ApplicationTitle>JAHC Manager</ApplicationTitle>
         <ApplicationId>com.jahc.manager</ApplicationId>
@@ -140,6 +140,10 @@
 
     <ItemGroup Condition="'$(Configuration)' == 'Release'">
         <ProguardConfiguration Include="Platforms\Android\proguard.cfg" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Include="Web\JustAnotherHemaClub.Web\JustAnotherHemaClub.Web.csproj" />
     </ItemGroup>
 
     <ItemGroup>

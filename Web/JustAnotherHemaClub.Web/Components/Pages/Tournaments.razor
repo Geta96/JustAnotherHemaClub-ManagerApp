@@ -1,0 +1,49 @@
+@page "/tournaments"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject IGoogleSheetsService Sheets
+
+<PageTitle>Tournaments · JAHC Manager</PageTitle>
+
+<h1 class="page-title">Tournaments</h1>
+
+<section class="card">
+    <h2 class="card-title">Tournaments</h2>
+
+    @if (_loading)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else if (_tournaments.Count == 0)
+    {
+        <p class="muted">No tournaments yet.</p>
+    }
+    else
+    {
+        <ul class="weekly-list">
+            @foreach (var t in _tournaments)
+            {
+                <li class="weekly-row">
+                    <span class="day">@t.CreatedAt.ToLocalTime().ToString("dd MMM yyyy")</span>
+                    <span class="time">@t.Name</span>
+                    <span class="topic">@t.State</span>
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+@code {
+    private readonly List<Tournament> _tournaments = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var all = await Sheets.GetTournamentHeadersAsync();
+            _tournaments.AddRange(all.OrderByDescending(t => t.CreatedAt));
+        }
+        finally { _loading = false; }
+    }
+}

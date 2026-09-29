@@ -1,0 +1,55 @@
+@page "/fencers"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject IGoogleSheetsService Sheets
+
+<PageTitle>Fencers · JAHC Manager</PageTitle>
+
+<h1 class="page-title">Fencers</h1>
+
+<section class="card">
+    <h2 class="card-title">Members</h2>
+
+    @if (_loading)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else if (_fencers.Count == 0)
+    {
+        <p class="muted">No fencers found.</p>
+    }
+    else
+    {
+        <ul class="weekly-list">
+            @foreach (var f in _fencers)
+            {
+                <li class="weekly-row">
+                    <span class="day">@f.DisplayName</span>
+                    <span class="time">@(f.IsInstructor ? "Instructor" : (f.IsStudent ? "Student" : "Member"))</span>
+                    @if (!string.IsNullOrWhiteSpace(f.Email))
+                    {
+                        <span class="topic">@f.Email</span>
+                    }
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+@code {
+    private readonly List<Fencer> _fencers = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var all = await Sheets.GetFencersAsync();
+            _fencers.AddRange(all
+                .Where(f => f.Active)
+                .OrderByDescending(f => f.IsInstructor)
+                .ThenBy(f => f.DisplayName));
+        }
+        finally { _loading = false; }
+    }
+}

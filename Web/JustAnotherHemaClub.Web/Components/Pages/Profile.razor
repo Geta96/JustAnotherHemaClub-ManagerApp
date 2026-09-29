@@ -1,0 +1,45 @@
+@page "/profile"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject UserSession Session
+
+<PageTitle>My Profile · JAHC Manager</PageTitle>
+
+<h1 class="page-title">My Profile</h1>
+
+<section class="card">
+    <h2 class="card-title">Account</h2>
+
+    @if (Session.CurrentFencer is { } f)
+    {
+        <ul class="weekly-list">
+            <li class="weekly-row">
+                <span class="day">Name</span>
+                <span class="time">@f.DisplayName</span>
+            </li>
+            <li class="weekly-row">
+                <span class="day">Username</span>
+                <span class="time">@f.Username</span>
+            </li>
+            <li class="weekly-row">
+                <span class="day">Email</span>
+                <span class="time">@f.Email</span>
+            </li>
+            <li class="weekly-row">
+                <span class="day">Role</span>
+                <span class="time">@(f.IsInstructor ? "Instructor" : (f.IsStudent ? "Student" : "Member"))</span>
+            </li>
+        </ul>
+    }
+    else
+    {
+        <p class="muted">Not signed in.</p>
+    }
+</section>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureRestoredAsync();
+    }
+}

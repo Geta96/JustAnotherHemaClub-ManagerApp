@@ -1,0 +1,66 @@
+@page "/finance"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject IGoogleSheetsService Sheets
+
+<PageTitle>Finance · JAHC Manager</PageTitle>
+
+<h1 class="page-title">Finance</h1>
+
+<section class="card">
+    <h2 class="card-title">This month (@_monthLabel)</h2>
+
+    @if (_loading)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else
+    {
+        <ul class="weekly-list">
+            <li class="weekly-row">
+                <span class="day">Dues collected</span>
+                <span class="time">@_duesTotal.ToString("N0") Ft</span>
+            </li>
+            <li class="weekly-row">
+                <span class="day">Other income</span>
+                <span class="time">@_incomeTotal.ToString("N0") Ft</span>
+            </li>
+            <li class="weekly-row">
+                <span class="day">Expenses</span>
+                <span class="time">@_expenseTotal.ToString("N0") Ft</span>
+            </li>
+            <li class="weekly-row">
+                <span class="day"><strong>Balance</strong></span>
+                <span class="time"><strong>@((_duesTotal + _incomeTotal - _expenseTotal).ToString("N0")) Ft</strong></span>
+            </li>
+        </ul>
+    }
+</section>
+
+@code {
+    private bool _loading = true;
+    private decimal _duesTotal;
+    private decimal _incomeTotal;
+    private decimal _expenseTotal;
+    private string _monthLabel = DateTime.Today.ToString("MMMM yyyy");
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var now = DateTime.Today;
+            var from = new DateTime(now.Year, now.Month, 1);
+            var to = from.AddMonths(1).AddDays(-1);
+
+            var payments = await Sheets.GetPaymentsAsync(now.Year, now.Month);
+            _duesTotal = payments.Sum(p => p.Amount);
+
+            var incomes = await Sheets.GetIncomesAsync(from, to);
+            _incomeTotal = incomes.Sum(i => i.Amount);
+
+            var expenses = await Sheets.GetExpensesAsync(from, to);
+            _expenseTotal = expenses.Sum(e => e.Amount);
+        }
+        finally { _loading = false; }
+    }
+}

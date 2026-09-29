@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <RootNamespace>JustAnotherHemaClub.Web</RootNamespace>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+      <UserSecretsId>bd2f683d-64b0-4afe-a10c-f187535039ae</UserSecretsId>
+  </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Shared platform-neutral core (models, data layer, dues math, auth, Group A VMs) -->
+        <ProjectReference Include="..\..\Core\JustAnotherHemaClub.Core.csproj" />
+    </ItemGroup>
+
+</Project>

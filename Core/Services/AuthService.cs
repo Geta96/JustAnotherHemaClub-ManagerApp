@@ -91,6 +91,17 @@ public class AuthService
         CurrentFencer = null;
     }
 
+    /// <summary>
+    /// Rehydrates <see cref="CurrentFencer"/> from an already-authenticated
+    /// identity (e.g. a web auth cookie) without re-hitting the backend. Used by
+    /// the Blazor web app to restore the signed-in fencer on each new scope.
+    /// </summary>
+    public void RestoreSession(Fencer fencer)
+    {
+        IsGuest = false;
+        CurrentFencer = fencer;
+    }
+
     public void Logout()
     {
         CurrentFencer = null;

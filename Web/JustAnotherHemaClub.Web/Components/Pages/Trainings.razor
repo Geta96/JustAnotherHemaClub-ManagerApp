@@ -1,0 +1,54 @@
+@page "/trainings"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject IGoogleSheetsService Sheets
+
+<PageTitle>Trainings · JAHC Manager</PageTitle>
+
+<h1 class="page-title">Trainings</h1>
+
+<section class="card">
+    <h2 class="card-title">Upcoming trainings</h2>
+
+    @if (_loading)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else if (_trainings.Count == 0)
+    {
+        <p class="muted">No trainings scheduled.</p>
+    }
+    else
+    {
+        <ul class="weekly-list">
+            @foreach (var t in _trainings)
+            {
+                <li class="weekly-row">
+                    <span class="day">@t.Date.ToString("ddd dd MMM")</span>
+                    <span class="time">@t.Date.ToString(@"HH\:mm") – @t.EndDate.ToString(@"HH\:mm")</span>
+                    @if (!string.IsNullOrWhiteSpace(t.Topic))
+                    {
+                        <span class="topic">@t.Topic</span>
+                    }
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+@code {
+    private readonly List<TrainingSession> _trainings = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var all = await Sheets.GetTrainingsAsync();
+            _trainings.AddRange(all
+                .Where(t => t.Date.Date >= DateTime.Today)
+                .OrderBy(t => t.Date));
+        }
+        finally { _loading = false; }
+    }
+}

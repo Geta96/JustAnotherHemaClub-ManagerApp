@@ -1,0 +1,61 @@
+@page "/statistics"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Instructor")]
+@inject IGoogleSheetsService Sheets
+
+<PageTitle>Statistics · JAHC Manager</PageTitle>
+
+<h1 class="page-title">Statistics</h1>
+
+<section class="card">
+    <h2 class="card-title">Club overview</h2>
+
+    @if (_loading)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else
+    {
+        <ul class="weekly-list">
+            <li class="weekly-row">
+                <span class="day">Active members</span>
+                <span class="time">@_activeMembers</span>
+            </li>
+            <li class="weekly-row">
+                <span class="day">Instructors</span>
+                <span class="time">@_instructors</span>
+            </li>
+            <li class="weekly-row">
+                <span class="day">Trainings recorded</span>
+                <span class="time">@_trainingCount</span>
+            </li>
+            <li class="weekly-row">
+                <span class="day">Total attendances</span>
+                <span class="time">@_attendanceCount</span>
+            </li>
+        </ul>
+    }
+</section>
+
+@code {
+    private bool _loading = true;
+    private int _activeMembers;
+    private int _instructors;
+    private int _trainingCount;
+    private int _attendanceCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var fencers = await Sheets.GetFencersAsync();
+            _activeMembers = fencers.Count(f => f.Active);
+            _instructors = fencers.Count(f => f.IsInstructor);
+
+            var trainings = await Sheets.GetTrainingsAsync();
+            _trainingCount = trainings.Count;
+            _attendanceCount = trainings.Sum(t => t.AttendeeFencerIds.Count);
+        }
+        finally { _loading = false; }
+    }
+}

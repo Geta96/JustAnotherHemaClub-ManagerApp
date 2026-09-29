@@ -1,0 +1,171 @@
+:root {
+    /* Brand palette — ported from Resources/Styles/Colors.xaml */
+    --wine: #5D1312;
+    --wine-dark: #3F0B0A;
+    --cream: #EEE7D5;
+    --cream-soft: #F6F1E2;
+    --slate: #4A78B5;
+    --ink: #2B0707;
+    --muted: #8C5A59;
+    --danger: #B23A3A;
+
+    --flyout-width: 280px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    font-family: "Open Sans", system-ui, sans-serif;
+    background: var(--cream);
+    color: var(--ink);
+}
+
+.jahc-shell { min-height: 100vh; }
+
+/* --- Top bar (mobile only) --- */
+.topbar {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    height: 56px;
+    padding: 0 12px;
+    background: var(--wine);
+    color: var(--cream);
+    position: sticky;
+    top: 0;
+    z-index: 30;
+}
+.topbar-title { font-weight: 700; font-size: 18px; }
+.hamburger {
+    background: none; border: none; color: var(--cream);
+    font-size: 24px; cursor: pointer; line-height: 1;
+}
+
+/* --- Flyout / side nav --- */
+.flyout {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: var(--flyout-width);
+    background: var(--cream);
+    display: flex;
+    flex-direction: column;
+    z-index: 40;
+}
+.flyout-header {
+    background: var(--wine);
+    padding: 48px 16px 16px;
+    text-align: center;
+}
+.crest { max-height: 220px; width: auto; }
+.user-line { color: var(--cream); opacity: .8; font-size: 13px; margin-top: 4px; }
+
+.flyout-items { display: flex; flex-direction: column; padding: 8px 0; }
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 52px;
+    padding: 0 16px;
+    color: var(--wine);
+    font-weight: 700;
+    font-size: 16px;
+    text-decoration: none;
+}
+.nav-item:hover { background: var(--cream-soft); }
+.nav-item.active { background: var(--cream-soft); }
+.nav-icon {
+    width: 28px; text-align: center;
+    font-size: 22px; font-weight: 700;
+}
+
+.logout-form { margin-top: auto; }
+.logout {
+    margin-top: 0;
+    width: 100%;
+    display: flex; align-items: center; gap: 12px;
+    height: 48px; padding: 0 16px;
+    background: none; border: none; cursor: pointer;
+    color: var(--danger); font-weight: 700; font-size: 15px;
+}
+
+.scrim {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.4);
+    z-index: 35;
+    display: none;
+}
+
+/* --- Content --- */
+.content {
+    margin-left: var(--flyout-width);
+    padding: 24px;
+    min-height: 100vh;
+}
+.page-title { color: var(--wine); font-size: 24px; margin: 0 0 16px; }
+.card {
+    background: var(--cream-soft);
+    border: 1px solid rgba(140,90,89,.35);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 14px;
+}
+.card-title { color: var(--wine); font-size: 16px; margin: 0 0 10px; }
+.muted { color: var(--muted); }
+
+/* --- Login page --- */
+.login-page { min-height: 100vh; }
+.login-shell {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--wine);
+    padding: 24px;
+}
+.login-card {
+    width: 100%;
+    max-width: 380px;
+    background: var(--cream);
+    border-radius: 14px;
+    padding: 32px 24px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.3);
+    text-align: center;
+}
+.login-crest { max-height: 140px; width: auto; }
+.login-title { color: var(--wine); font-size: 22px; margin: 8px 0 20px; }
+.login-form { display: flex; flex-direction: column; text-align: left; }
+.login-label { color: var(--wine); font-weight: 700; font-size: 14px; margin: 10px 0 4px; }
+.login-input {
+    height: 44px; padding: 0 12px;
+    border: 1px solid var(--muted); border-radius: 8px;
+    font-size: 15px; background: #fff;
+}
+.login-input:focus { outline: none; border-color: var(--slate); }
+.login-button {
+    margin-top: 20px; height: 46px;
+    background: var(--wine); color: var(--cream);
+    border: none; border-radius: 8px;
+    font-size: 16px; font-weight: 700; cursor: pointer;
+}
+.login-button:hover { background: var(--wine-dark); }
+.login-error {
+    background: var(--danger); color: #fff;
+    border-radius: 8px; padding: 10px 12px;
+    font-size: 14px; margin-bottom: 8px;
+}
+.auth-loading { padding: 24px; color: var(--muted); }
+
+/* --- Phone breakpoint: flyout becomes an off-canvas drawer --- */
+@media (max-width: 768px) {
+    .topbar { display: flex; }
+    .content { margin-left: 0; padding: 16px; }
+    .flyout {
+        transform: translateX(-100%);
+        transition: transform .2s ease;
+        box-shadow: 2px 0 12px rgba(0,0,0,.25);
+    }
+    .flyout-open .flyout { transform: translateX(0); }
+    .scrim { display: block; }
+    .flyout-header { padding-top: 24px; }
+    .crest { max-height: 140px; }
+}

@@ -1,0 +1,64 @@
+﻿@inherits LayoutComponentBase
+@implements IDisposable
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject UserSession Session
+
+<div class="jahc-shell @(_flyoutOpen ? "flyout-open" : "")">
+
+    <header class="topbar">
+        <button class="hamburger" @onclick="ToggleFlyout" aria-label="Menu">☰</button>
+        <span class="topbar-title">JAHC Manager</span>
+    </header>
+
+    <nav class="flyout">
+        <div class="flyout-header">
+            <img src="images/monochrome_logo.jpg" alt="Just Another HEMA Club" class="crest" />
+            @if (Session.CurrentFencer is not null)
+            {
+                <div class="user-line">@Session.CurrentFencer.Name</div>
+            }
+        </div>
+
+        <div class="flyout-items">
+            <NavItem Href="" Icon="⌂" Label="Home" OnNavigate="CloseFlyout" />
+            <NavItem Href="trainings" Icon="⚔" Label="Trainings" OnNavigate="CloseFlyout" />
+            <NavItem Href="tournaments" Icon="⚑" Label="Tournaments" OnNavigate="CloseFlyout" />
+            <NavItem Href="fencers" Icon="☰" Label="Fencers" OnNavigate="CloseFlyout" />
+            <NavItem Href="finance" Icon="₣" Label="Finance" OnNavigate="CloseFlyout" />
+            @if (Session.IsInstructor)
+            {
+                <NavItem Href="statistics" Icon="▦" Label="Statistics" OnNavigate="CloseFlyout" />
+            }
+            <NavItem Href="profile" Icon="◉" Label="My Profile" OnNavigate="CloseFlyout" />
+        </div>
+
+        <form method="post" action="/auth/logout" class="logout-form">
+            <button class="logout" type="submit">⎋ Logout</button>
+        </form>
+    </nav>
+
+    @if (_flyoutOpen)
+    {
+        <div class="scrim" @onclick="CloseFlyout"></div>
+    }
+
+    <main class="content">
+        @Body
+    </main>
+</div>
+
+@code {
+    private bool _flyoutOpen;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.Changed += StateHasChanged;
+        await Session.EnsureRestoredAsync();
+    }
+
+    public void Dispose() => Session.Changed -= StateHasChanged;
+
+    private void ToggleFlyout() => _flyoutOpen = !_flyoutOpen;
+    private void CloseFlyout() => _flyoutOpen = false;
+}

@@ -1,0 +1,92 @@
+@page "/"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject IGoogleSheetsService Sheets
+
+<PageTitle>Home · JAHC Manager</PageTitle>
+
+<h1 class="page-title">Home</h1>
+
+<section class="card">
+    <h2 class="card-title">About us</h2>
+    <p>We're a HEMA (Historical European Martial Arts) club located in Budapest focused on
+       longsword, footwork drills and free sparring.</p>
+</section>
+
+<section class="card">
+    <h2 class="card-title">Weekly Trainings</h2>
+
+    @if (_loading)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else if (_weekly.Count == 0)
+    {
+        <p class="muted">No weekly trainings scheduled.</p>
+    }
+    else
+    {
+        <ul class="weekly-list">
+            @foreach (var row in _weekly)
+            {
+                <li class="weekly-row">
+                    <span class="day">@row.DayShort</span>
+                    <span class="time">@row.TimeRange</span>
+                    @if (row.HasTopic)
+                    {
+                        <span class="topic">@row.Topic</span>
+                    }
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+<section class="card">
+    <h2 class="card-title">Follow or Contact us</h2>
+    <div class="social-grid">
+        <a class="social-btn instagram" href="@InstagramUrl" target="_blank" rel="noopener">Instagram</a>
+        <a class="social-btn facebook" href="@FacebookUrl" target="_blank" rel="noopener">Facebook</a>
+        <a class="social-btn discord" href="@DiscordUrl" target="_blank" rel="noopener">Discord</a>
+    </div>
+</section>
+
+@code {
+    private const string InstagramUrl =
+        "https://www.instagram.com/just.another.hema.club?igsh=MXZudjI3MDJ4eWw1aA==";
+    private const string FacebookUrl = "https://www.facebook.com/share/18VtVUQPW5/";
+    private const string DiscordUrl = "https://discord.gg/tEcynS94d";
+
+    private record WeeklyRow(string DayShort, string TimeRange, string Topic)
+    {
+        public bool HasTopic => !string.IsNullOrWhiteSpace(Topic);
+    }
+
+    private readonly List<WeeklyRow> _weekly = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var rules = await Sheets.GetRecurringTrainingsAsync();
+            var ordered = rules
+                .Where(r => !r.EndDate.HasValue || r.EndDate.Value.Date >= DateTime.Today)
+                .OrderBy(r => ((int)r.DayOfWeek + 6) % 7)
+                .ThenBy(r => r.TimeOfDay);
+
+            foreach (var r in ordered)
+            {
+                var end = r.EndTimeOfDay == default
+                    ? r.TimeOfDay.Add(TimeSpan.FromMinutes(90))
+                    : r.EndTimeOfDay;
+
+                _weekly.Add(new WeeklyRow(
+                    r.DayOfWeek.ToString()[..3],
+                    $"{r.TimeOfDay:hh\\:mm} – {end:hh\\:mm}",
+                    r.Topic ?? ""));
+            }
+        }
+        finally { _loading = false; }
+    }
+}
