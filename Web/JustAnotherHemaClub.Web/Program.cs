@@ -440,6 +440,25 @@ app.MapPost("/lessons/delete", async (
     return Results.Redirect(back);
 }).RequireAuthorization().DisableAntiforgery();
 
+// --- Fencers: promote a member to instructor (instructor-only) ---
+app.MapPost("/fencers/promote", async (
+    HttpContext http, IGoogleSheetsService sheets, AuthService auth,
+    [Microsoft.AspNetCore.Mvc.FromForm] string fencerId) =>
+{
+    var back = $"/fencers?fencer={Uri.EscapeDataString(fencerId ?? "")}";
+    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    if (string.IsNullOrWhiteSpace(fencerId)) return Results.Redirect("/fencers");
+
+    var fencers = await sheets.GetFencersAsync();
+    var target = fencers.FirstOrDefault(f => f.Id == fencerId);
+    if (target is not null && !target.IsInstructor)
+    {
+        target.IsInstructor = true;
+        await sheets.UpsertFencerAsync(target);
+    }
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
