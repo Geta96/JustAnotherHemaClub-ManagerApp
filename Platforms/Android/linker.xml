@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<linker>
+  <assembly fullname="Google.Apis.Sheets.v4" preserve="all" />
+  <assembly fullname="Google.Apis.Auth" preserve="all" />
+  <assembly fullname="Google.Apis.Core" preserve="all" />
+  <assembly fullname="Google.Apis" preserve="all" />
+  <assembly fullname="Newtonsoft.Json" preserve="all" />
+
+  <assembly fullname="JustAnotherHemaClub" preserve="all" />
+  <assembly fullname="JustAnotherHemaClub.Core" preserve="all" />
+</linker>
