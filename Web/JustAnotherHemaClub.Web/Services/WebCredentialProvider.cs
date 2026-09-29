@@ -5,7 +5,7 @@ namespace JustAnotherHemaClub.Web.Services;
 /// <summary>
 /// Server-side source of the Google service-account JSON for the web app.
 /// The file path comes from configuration/secrets and the JSON is only ever
-/// read on the server — it is never shipped to the browser.
+/// read on the server ? it is never shipped to the browser.
 /// </summary>
 public sealed class WebCredentialProvider : ICredentialProvider
 {

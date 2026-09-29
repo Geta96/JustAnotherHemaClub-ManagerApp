@@ -2,53 +2,440 @@
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
 @inject IGoogleSheetsService Sheets
+@inject AuthService Auth
+@inject UserSession Session
 
 <PageTitle>Trainings · JAHC Manager</PageTitle>
 
 <h1 class="page-title">Trainings</h1>
 
-<section class="card">
-    <h2 class="card-title">Upcoming trainings</h2>
+<div class="tab-bar">
+    <a class="tab @(Tab == "trainings" ? "active" : "")" href="/trainings?tab=trainings">Trainings</a>
+    <a class="tab @(Tab == "weekly" ? "active" : "")" href="/trainings?tab=weekly">Weekly</a>
+    <a class="tab @(Tab == "lessons" ? "active" : "")" href="/trainings?tab=lessons">1 on 1</a>
+</div>
 
-    @if (_loading)
+@if (_loading)
+{
+    <section class="card"><p class="muted">Loading…</p></section>
+}
+else if (Tab == "weekly")
+{
+    <section class="card">
+        <h2 class="card-title">Weekly trainings</h2>
+        @if (_weekly.Count == 0)
+        {
+            <p class="muted">No recurring trainings yet.</p>
+        }
+        else
+        {
+            <ul class="weekly-list">
+                @foreach (var r in _weekly)
+                {
+                    <li class="weekly-row">
+                        <div class="weekly-when">
+                            <span class="day">@r.DayOfWeek</span>
+                            <span class="time">@FormatTime(r.TimeOfDay) – @FormatTime(EndOf(r))</span>
+                            @if (r.EndDate.HasValue)
+                            {
+                                <span class="topic">until @r.EndDate.Value.ToString("yyyy-MM-dd")</span>
+                            }
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(r.Topic))
+                        {
+                            <span class="topic">Topic: @r.Topic</span>
+                        }
+
+                        @if (Auth.IsLoggedInInstructor)
+                        {
+                            <details class="attendee-editor">
+                                <summary>Edit</summary>
+                                <form method="post" action="/weekly/save" class="stack-form">
+                                    <input type="hidden" name="ruleId" value="@r.Id" />
+                                    <label>Topic
+                                        <input type="text" name="topic" value="@r.Topic" />
+                                    </label>
+                                    <div class="field-row">
+                                        <label>Start
+                                            <input type="time" name="startTime" value="@FormatTime(r.TimeOfDay)" />
+                                        </label>
+                                        <label>End
+                                            <input type="time" name="endTime" value="@FormatTime(EndOf(r))" />
+                                        </label>
+                                        <label>Starts on
+                                            <input type="date" name="startDate" value="@r.StartDate.ToString("yyyy-MM-dd")" />
+                                        </label>
+                                    </div>
+                                    <label class="attendee-check">
+                                        <input type="checkbox" name="hasEndDate" checked="@r.EndDate.HasValue" />
+                                        <span>Has end date</span>
+                                    </label>
+                                    <label>End date
+                                        <input type="date" name="endDate"
+                                               value="@((r.EndDate ?? DateTime.Today.AddMonths(1)).ToString("yyyy-MM-dd"))" />
+                                    </label>
+                                    <button class="attend-btn" type="submit">Save changes</button>
+                                </form>
+                                <form method="post" action="/weekly/delete" class="stack-form">
+                                    <input type="hidden" name="ruleId" value="@r.Id" />
+                                    <button class="danger-btn" type="submit">Delete</button>
+                                </form>
+                            </details>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+
+        @if (Auth.IsLoggedInInstructor)
+        {
+            <details class="attendee-editor add-block">
+                <summary>Add weekly training</summary>
+                <form method="post" action="/weekly/add" class="stack-form">
+                    <label>Topic
+                        <input type="text" name="topic" />
+                    </label>
+                    <div class="field-row">
+                        <label>Day
+                            <select name="dayOfWeek">
+                                @foreach (var d in Enum.GetValues<DayOfWeek>())
+                                {
+                                    <option value="@d">@d</option>
+                                }
+                            </select>
+                        </label>
+                        <label>Start
+                            <input type="time" name="startTime" value="18:00" />
+                        </label>
+                        <label>End
+                            <input type="time" name="endTime" value="20:00" />
+                        </label>
+                    </div>
+                    <div class="field-row">
+                        <label>Starts on
+                            <input type="date" name="startDate" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                        </label>
+                    </div>
+                    <label class="attendee-check">
+                        <input type="checkbox" name="hasEndDate" />
+                        <span>Has end date</span>
+                    </label>
+                    <label>End date
+                        <input type="date" name="endDate"
+                               value="@DateTime.Today.AddMonths(1).ToString("yyyy-MM-dd")" />
+                    </label>
+                    <button class="attend-btn" type="submit">Add weekly training</button>
+                </form>
+            </details>
+        }
+    </section>
+}
+else if (Tab == "lessons")
+{
+    <section class="card">
+        <h2 class="card-title">1 on 1 lessons</h2>
+
+        @if (_lessons.Count == 0)
+        {
+            <p class="muted">No 1 on 1 lessons.</p>
+        }
+        else
+        {
+            <ul class="weekly-list">
+                @foreach (var l in _lessons)
+                {
+                    var targeted = l.Status == IndividualLessonStatus.Requested &&
+                                   _meId is not null && l.RequestedInstructorIds.Contains(_meId);
+                    <li class="weekly-row training-row-outer">
+                        <div class="weekly-when">
+                            <span class="day">@l.Date.ToString("ddd dd MMM HH:mm")</span>
+                            @if (l.Status == IndividualLessonStatus.Requested)
+                            {
+                                <span class="pill pending">Pending</span>
+                            }
+                        </div>
+                        <span class="topic">
+                            @NameOf(l.StudentId) • @InstructorLabel(l)
+                            @(string.IsNullOrWhiteSpace(l.Topic) ? "" : $" — {l.Topic}")
+                        </span>
+
+                        @* Instructor targeted by a request: accept / reject *@
+                        @if (Auth.IsLoggedInInstructor && targeted)
+                        {
+                            <div class="field-row">
+                                <form method="post" action="/lessons/accept" class="inline-form">
+                                    <input type="hidden" name="lessonId" value="@l.Id" />
+                                    <button class="accept-btn" type="submit">Accept</button>
+                                </form>
+                                <form method="post" action="/lessons/reject" class="inline-form">
+                                    <input type="hidden" name="lessonId" value="@l.Id" />
+                                    <button class="danger-btn" type="submit">Reject</button>
+                                </form>
+                            </div>
+                        }
+
+                        @* Instructor: edit private notes + delete on accepted lessons *@
+                        @if (Auth.IsLoggedInInstructor)
+                        {
+                            <details class="attendee-editor">
+                                <summary>Details</summary>
+                                @if (l.Status == IndividualLessonStatus.Accepted)
+                                {
+                                    <form method="post" action="/lessons/save" class="stack-form">
+                                        <input type="hidden" name="lessonId" value="@l.Id" />
+                                        <label>Topic
+                                            <input type="text" name="topic" value="@l.Topic" />
+                                        </label>
+                                        <label>Notes (hidden from students)
+                                            <textarea name="notes" rows="2">@l.Notes</textarea>
+                                        </label>
+                                        <label>Next session idea (hidden from students)
+                                            <textarea name="nextIdea" rows="2">@l.NextIdea</textarea>
+                                        </label>
+                                        <button class="attend-btn" type="submit">Save</button>
+                                    </form>
+                                }
+                                <form method="post" action="/lessons/delete" class="stack-form">
+                                    <input type="hidden" name="lessonId" value="@l.Id" />
+                                    <button class="danger-btn" type="submit">Delete</button>
+                                </form>
+                            </details>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+
+        @* New lesson / request form *@
+        @if (Auth.IsLoggedInInstructor)
+        {
+            <details class="attendee-editor add-block">
+                <summary>Add as instructor (direct)</summary>
+                <form method="post" action="/lessons/create" class="stack-form">
+                    <input type="hidden" name="mode" value="direct" />
+                    <div class="field-row">
+                        <label>Date <input type="date" name="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></label>
+                        <label>Time <input type="time" name="time" value="18:00" /></label>
+                    </div>
+                    <label>Student
+                        <select name="studentId">
+                            @foreach (var f in _activeFencers.Where(f => f.Id != _meId))
+                            {
+                                <option value="@f.Id">@f.DisplayName</option>
+                            }
+                        </select>
+                    </label>
+                    <label>Instructor
+                        <select name="instructorId">
+                            @foreach (var f in _instructors)
+                            {
+                                <option value="@f.Id" selected="@(f.Id == _meId)">@f.DisplayName</option>
+                            }
+                        </select>
+                    </label>
+                    <label>Topic <input type="text" name="topic" /></label>
+                    <label>Notes (hidden from students) <textarea name="notes" rows="2"></textarea></label>
+                    <label>Next session idea (hidden from students) <textarea name="nextIdea" rows="2"></textarea></label>
+                    <button class="attend-btn" type="submit">Save lesson</button>
+                </form>
+            </details>
+        }
+
+        @if (Auth.IsLoggedInFencer && !Auth.IsGuest)
+        {
+            <details class="attendee-editor add-block">
+                <summary>Request a 1 on 1 lesson</summary>
+                <form method="post" action="/lessons/create" class="stack-form">
+                    <input type="hidden" name="mode" value="request" />
+                    <div class="field-row">
+                        <label>Date <input type="date" name="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></label>
+                        <label>Time <input type="time" name="time" value="18:00" /></label>
+                    </div>
+                    <label>Topic <input type="text" name="topic" /></label>
+                    <div class="request-targets">
+                        <span class="field-label">Request from instructor(s)</span>
+                        @foreach (var f in _instructors.Where(i => i.Id != _meId))
+                        {
+                            <label class="attendee-check">
+                                <input type="checkbox" name="instructor" value="@f.Id" />
+                                <span>@f.DisplayName</span>
+                            </label>
+                        }
+                    </div>
+                    <button class="attend-btn" type="submit">Send request</button>
+                </form>
+            </details>
+        }
+    </section>
+}
+else
+{
+    @if (_trainingsByMonth.Count == 0)
     {
-        <p class="muted">Loading…</p>
-    }
-    else if (_trainings.Count == 0)
-    {
-        <p class="muted">No trainings scheduled.</p>
+        <section class="card"><p class="muted">No trainings yet.</p></section>
     }
     else
     {
-        <ul class="weekly-list">
-            @foreach (var t in _trainings)
-            {
-                <li class="weekly-row">
-                    <span class="day">@t.Date.ToString("ddd dd MMM")</span>
-                    <span class="time">@t.Date.ToString(@"HH\:mm") – @t.EndDate.ToString(@"HH\:mm")</span>
-                    @if (!string.IsNullOrWhiteSpace(t.Topic))
+        @foreach (var month in _trainingsByMonth)
+        {
+            <section class="card">
+                <h2 class="card-title">@month.Title</h2>
+                <ul class="weekly-list">
+                    @foreach (var t in month.Trainings)
                     {
-                        <span class="topic">@t.Topic</span>
+                        var attending = _meId is not null && t.AttendeeFencerIds.Contains(_meId);
+                        <li class="weekly-row training-row-outer">
+                            <div class="training-row">
+                                <div class="training-main">
+                                    <div class="weekly-when">
+                                        <span class="day">@t.Date.ToString("ddd dd MMM")</span>
+                                        <span class="time">@t.Date.ToString(@"HH\:mm") – @t.EndDate.ToString(@"HH\:mm")</span>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(t.Topic))
+                                    {
+                                        <span class="topic">@t.Topic</span>
+                                    }
+                                </div>
+
+                                @if (!Auth.IsGuest && _meId is not null)
+                                {
+                                    <form method="post" action="/home/attend" class="attend-form">
+                                        <input type="hidden" name="trainingId" value="@t.Id" />
+                                        <input type="hidden" name="attending" value="@(attending ? "1" : "0")" />
+                                        <input type="hidden" name="returnUrl" value="/trainings?tab=trainings" />
+                                        @if (attending)
+                                        {
+                                            <button class="undo-attend" type="submit">&#10003; Attending</button>
+                                        }
+                                        else
+                                        {
+                                            <button class="attend-btn" type="submit">Attend</button>
+                                        }
+                                    </form>
+                                }
+                            </div>
+
+                            @if (Auth.IsLoggedInInstructor)
+                            {
+                                <details class="attendee-editor">
+                                    <summary>Attendees (@t.AttendeeFencerIds.Count)</summary>
+                                    <form method="post" action="/trainings/attendees" class="attendee-form">
+                                        <input type="hidden" name="trainingId" value="@t.Id" />
+                                        <input type="hidden" name="returnUrl" value="/trainings?tab=trainings" />
+                                        <div class="attendee-grid">
+                                            @foreach (var f in _activeFencers)
+                                            {
+                                                <label class="attendee-check">
+                                                    <input type="checkbox" name="attendee" value="@f.Id"
+                                                           checked="@(t.AttendeeFencerIds.Contains(f.Id))" />
+                                                    <span>@f.DisplayName</span>
+                                                </label>
+                                            }
+                                        </div>
+                                        <button class="attend-btn" type="submit">Save attendees</button>
+                                    </form>
+                                </details>
+                            }
+                        </li>
                     }
-                </li>
-            }
-        </ul>
+                </ul>
+            </section>
+        }
     }
-</section>
+}
 
 @code {
-    private readonly List<TrainingSession> _trainings = new();
+    [SupplyParameterFromQuery(Name = "tab")]
+    private string? TabParam { get; set; }
+
+    private string Tab => TabParam switch
+    {
+        "weekly" => "weekly",
+        "lessons" => "lessons",
+        _ => "trainings"
+    };
+
+    private readonly List<TrainingSession> _upcoming = new();
+    private readonly List<TrainingSession> _past = new();
+    private readonly List<RecurringTrainingRule> _weekly = new();
+    private readonly List<IndividualLesson> _lessons = new();
+    private readonly Dictionary<string, string> _names = new();
+    private readonly List<MonthGroup> _trainingsByMonth = new();
+    private readonly List<Fencer> _activeFencers = new();
+    private readonly List<Fencer> _instructors = new();
+    private string? _meId;
     private bool _loading = true;
+
+    private sealed record MonthGroup(string Title, List<TrainingSession> Trainings);
 
     protected override async Task OnInitializedAsync()
     {
+        await Session.EnsureRestoredAsync();
+        _meId = Auth.CurrentFencer?.Id;
+
         try
         {
-            var all = await Sheets.GetTrainingsAsync();
-            _trainings.AddRange(all
-                .Where(t => t.Date.Date >= DateTime.Today)
-                .OrderBy(t => t.Date));
+            var today = DateTime.Today;
+
+            var trainings = await Sheets.GetTrainingsAsync();
+
+            // Group ALL trainings by month (newest first), so fencers can attend
+            // any session, not just today's. Mirrors the MAUI "Past trainings by
+            // month" list which also lists upcoming sessions.
+            foreach (var g in trainings
+                .GroupBy(t => new DateTime(t.Date.Year, t.Date.Month, 1))
+                .OrderByDescending(g => g.Key))
+            {
+                _trainingsByMonth.Add(new MonthGroup(
+                    g.Key.ToString("MMMM yyyy"),
+                    g.OrderByDescending(t => t.Date).ToList()));
+            }
+
+            var rules = await Sheets.GetRecurringTrainingsAsync();
+            _weekly.AddRange(rules
+                .OrderBy(r => ((int)r.DayOfWeek + 6) % 7)
+                .ThenBy(r => r.TimeOfDay));
+
+            var fencers = await Sheets.GetFencersAsync();
+            foreach (var f in fencers)
+                _names[f.Id] = f.DisplayName;
+            _activeFencers.AddRange(fencers.Where(f => f.Active).OrderBy(f => f.DisplayName));
+            _instructors.AddRange(fencers.Where(f => f.Active && f.IsInstructor).OrderBy(f => f.DisplayName));
+
+            var lessons = await Sheets.GetIndividualLessonsAsync();
+
+            if (Auth.IsLoggedInInstructor)
+            {
+                // Instructors see all non-deleted lessons.
+                _lessons.AddRange(lessons
+                    .Where(l => l.Status != IndividualLessonStatus.Rejected)
+                    .OrderByDescending(l => l.Date));
+            }
+            else if (_meId is not null)
+            {
+                // Students only see their own accepted lessons and pending
+                // requests that still have targets — matching the MAUI Rebuild().
+                _lessons.AddRange(lessons
+                    .Where(l => l.StudentId == _meId &&
+                                (l.Status == IndividualLessonStatus.Accepted ||
+                                 (l.Status == IndividualLessonStatus.Requested &&
+                                  l.RequestedInstructorIds.Count > 0)))
+                    .OrderByDescending(l => l.Date));
+            }
         }
         finally { _loading = false; }
     }
+
+    private string NameOf(string id) =>
+        _names.TryGetValue(id, out var n) ? n : "—";
+
+    private string InstructorLabel(IndividualLesson l) =>
+        l.Status == IndividualLessonStatus.Requested
+            ? $"Requested ({l.RequestedInstructorIds.Count})"
+            : NameOf(l.InstructorId);
+
+    private static string FormatTime(TimeSpan t) => t.ToString(@"hh\:mm");
+
+    private static TimeSpan EndOf(RecurringTrainingRule r) =>
+        r.EndTimeOfDay == default ? r.TimeOfDay.Add(TimeSpan.FromMinutes(90)) : r.EndTimeOfDay;
 }

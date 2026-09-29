@@ -2,6 +2,9 @@
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
 @inject IGoogleSheetsService Sheets
+@inject ICacheControl Cache
+@inject AuthService Auth
+@inject UserSession Session
 
 <PageTitle>Home · JAHC Manager</PageTitle>
 
@@ -12,6 +15,40 @@
     <p>We're a HEMA (Historical European Martial Arts) club located in Budapest focused on
        longsword, footwork drills and free sparring.</p>
 </section>
+
+@if (_hasNextLesson)
+{
+    <section class="card next-lesson @(_isAttending ? "attending" : "")">
+        <div class="next-lesson-row">
+            <div class="next-lesson-info">
+                <h2 class="card-title">Next lesson:</h2>
+                <div class="next-lesson-when">@_nextLessonWhen</div>
+                @if (!string.IsNullOrWhiteSpace(_nextLessonTopic))
+                {
+                    <div class="topic">@_nextLessonTopic</div>
+                }
+            </div>
+
+            @if (_canAttend)
+            {
+                <form method="post" action="/home/attend" class="attend-form">
+                    <input type="hidden" name="trainingId" value="@(_nextLesson?.Id ?? "")" />
+                    <input type="hidden" name="ruleId" value="@(_nextLessonRule?.Id ?? "")" />
+                    <input type="hidden" name="date" value="@_nextLessonDate.ToString("yyyy-MM-dd")" />
+                    <input type="hidden" name="attending" value="@(_isAttending ? "1" : "0")" />
+                    @if (_isAttending)
+                    {
+                        <button class="undo-attend" type="submit">&#8617; Undo</button>
+                    }
+                    else
+                    {
+                        <button class="attend-btn" type="submit">Attend</button>
+                    }
+                </form>
+            }
+        </div>
+    </section>
+}
 
 <section class="card">
     <h2 class="card-title">Weekly Trainings</h2>
@@ -30,8 +67,10 @@
             @foreach (var row in _weekly)
             {
                 <li class="weekly-row">
-                    <span class="day">@row.DayShort</span>
-                    <span class="time">@row.TimeRange</span>
+                    <div class="weekly-when">
+                        <span class="day">@row.DayShort</span>
+                        <span class="time">@row.TimeRange</span>
+                    </div>
                     @if (row.HasTopic)
                     {
                         <span class="topic">@row.Topic</span>
@@ -65,8 +104,21 @@
     private readonly List<WeeklyRow> _weekly = new();
     private bool _loading = true;
 
+    // --- Next lesson state ---
+    private TrainingSession? _nextLesson;
+    private RecurringTrainingRule? _nextLessonRule;
+    private DateTime _nextLessonDate;
+
+    private bool _hasNextLesson;
+    private bool _canAttend;
+    private bool _isAttending;
+    private string _nextLessonWhen = "";
+    private string _nextLessonTopic = "";
+
     protected override async Task OnInitializedAsync()
     {
+        await Session.EnsureRestoredAsync();
+
         try
         {
             var rules = await Sheets.GetRecurringTrainingsAsync();
@@ -88,5 +140,173 @@
             }
         }
         finally { _loading = false; }
+
+        await LoadNextLessonAsync();
+    }
+
+    /// <summary>
+    /// Finds the soonest upcoming training (materialized session or projected
+    /// recurring occurrence) and populates the "Next lesson" card. Mirrors the
+    /// MAUI HomeViewModel logic. Only logged-in (non-guest) fencers can attend.
+    /// </summary>
+    private async Task LoadNextLessonAsync()
+    {
+        try
+        {
+            var todayStart = DateTime.Today;
+
+            var trainingsTask = Sheets.GetTrainingsAsync();
+            var rulesTask = Sheets.GetRecurringTrainingsAsync();
+            await Task.WhenAll(trainingsTask, rulesTask);
+
+            var trainings = trainingsTask.Result;
+            var rules = rulesTask.Result;
+
+            var nextMaterialized = trainings
+                .Where(t => t.Date.Date >= todayStart)
+                .OrderBy(t => t.Date)
+                .FirstOrDefault();
+
+            RecurringTrainingRule? projectedRule = null;
+            DateTime projectedDate = default;
+            foreach (var rule in rules)
+            {
+                var occ = NextOccurrenceOnOrAfter(rule, todayStart);
+                if (occ is null) continue;
+                var start = occ.Value.Date + rule.TimeOfDay;
+                if (projectedRule is null || start < (projectedDate.Date + projectedRule.TimeOfDay))
+                {
+                    projectedRule = rule;
+                    projectedDate = occ.Value;
+                }
+            }
+
+            DateTime? matStart = nextMaterialized?.Date;
+            DateTime? projStart = projectedRule is null
+                ? null
+                : projectedDate.Date + projectedRule.TimeOfDay;
+
+            _nextLesson = null;
+            _nextLessonRule = null;
+
+            if (matStart is null && projStart is null)
+            {
+                _hasNextLesson = false;
+                _canAttend = false;
+                _isAttending = false;
+                return;
+            }
+
+            bool useProjected = projStart is not null &&
+                                (matStart is null || projStart < matStart);
+
+            DateTime whenStart;
+            string topic;
+            var me = Auth.CurrentFencer;
+
+            if (useProjected)
+            {
+                _nextLessonRule = projectedRule;
+                _nextLessonDate = projectedDate;
+                whenStart = projStart!.Value;
+                topic = projectedRule!.Topic ?? "";
+
+                // Proactively materialize the occurrence so the row exists when the
+                // card shows it. Duplicate-safe. If it fails we keep the rule so the
+                // Attend command can retry the materialization on demand.
+                try
+                {
+                    var session = await EnsureOccurrenceAsync(projectedRule, projectedDate);
+                    _nextLesson = session;
+                    _nextLessonRule = null;
+                    whenStart = session.Date;
+                    topic = session.Topic ?? "";
+                }
+                catch { /* keep _nextLessonRule so Attend can materialize later */ }
+            }
+            else
+            {
+                _nextLesson = nextMaterialized;
+                whenStart = matStart!.Value;
+                topic = nextMaterialized!.Topic ?? "";
+            }
+
+            _nextLessonWhen = $"{FormatFriendlyDay(whenStart)} at {whenStart:HH\\:mm}";
+            _nextLessonTopic = topic;
+
+            _canAttend = me is not null && !Auth.IsGuest &&
+                         (_nextLesson is not null || _nextLessonRule is not null);
+            _isAttending = me is not null && _nextLesson is not null &&
+                           _nextLesson.AttendeeFencerIds.Contains(me.Id);
+            _hasNextLesson = true;
+        }
+        catch
+        {
+            _nextLesson = null;
+            _nextLessonRule = null;
+            _hasNextLesson = false;
+            _canAttend = false;
+        }
+    }
+
+    /// <summary>
+    /// Ensures the occurrence of a rule on a date exists as a materialized
+    /// TrainingSession and returns it. Duplicate-safe by deterministic id and by
+    /// a (date, start-time, topic) look-alike match. Mirrors the MAUI
+    /// RecurringTrainingMaterializer.EnsureOccurrenceAsync.
+    /// </summary>
+    private async Task<TrainingSession> EnsureOccurrenceAsync(RecurringTrainingRule rule, DateTime date)
+    {
+        var day = date.Date;
+        var id = $"rec_{rule.Id}_{day:yyyyMMdd}";
+        var topicKey = (rule.Topic ?? "").Trim().ToLowerInvariant();
+
+        var existing = await Sheets.GetTrainingsAsync();
+
+        var byId = existing.FirstOrDefault(t => t.Id == id);
+        if (byId is not null) return byId;
+
+        var bySlot = existing.FirstOrDefault(t =>
+            t.Date.Date == day &&
+            t.Date.TimeOfDay == rule.TimeOfDay &&
+            (t.Topic ?? "").Trim().ToLowerInvariant() == topicKey);
+        if (bySlot is not null) return bySlot;
+
+        var session = new TrainingSession
+        {
+            Id = id,
+            Date = day + rule.TimeOfDay,
+            EndDate = day + rule.EndTimeOfDay,
+            Topic = rule.Topic ?? "",
+        };
+        await Sheets.UpsertTrainingAsync(session);
+        Cache.InvalidateTrainings();
+        return session;
+    }
+
+    private static DateTime? NextOccurrenceOnOrAfter(RecurringTrainingRule rule, DateTime from)
+    {
+        var start = from.Date;
+        if (rule.StartDate.Date > start)
+            start = rule.StartDate.Date;
+
+        int delta = ((int)rule.DayOfWeek - (int)start.DayOfWeek + 7) % 7;
+        var candidate = start.AddDays(delta);
+
+        if (rule.EndDate.HasValue && candidate > rule.EndDate.Value.Date)
+            return null;
+
+        return candidate;
+    }
+
+    private static string FormatFriendlyDay(DateTime when)
+    {
+        var day = when.Date;
+        var today = DateTime.Today;
+
+        if (day == today) return "Today";
+        if (day == today.AddDays(1)) return "Tomorrow";
+        if (day < today.AddDays(7)) return day.ToString("dddd");
+        return day.ToString("d MMM");
     }
 }
