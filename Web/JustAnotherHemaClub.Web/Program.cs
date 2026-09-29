@@ -29,21 +29,16 @@ builder.Services.AddSingleton<CachedGoogleSheetsService>(sp =>
 builder.Services.AddSingleton<IGoogleSheetsService>(sp => sp.GetRequiredService<CachedGoogleSheetsService>());
 builder.Services.AddSingleton<ICacheControl>(sp => sp.GetRequiredService<CachedGoogleSheetsService>());
 
-// Test user in-memory data store (no network, no backend)
 builder.Services.AddSingleton<TestDataService>();
 
-// Auth + proxy. Scoped per circuit; rehydrated from the auth cookie each scope.
 builder.Services.AddScoped<ICredentialStore, WebCredentialStore>();
 builder.Services.AddScoped(sp =>
     new AuthService(sp, sp.GetRequiredService<ICredentialStore>()));
 
-// Web dialog seam (JS-interop backed).
 builder.Services.AddScoped<IDialogService, WebDialogService>();
 
-// Shared session state for the signed-in user across components.
 builder.Services.AddScoped<UserSession>();
 
-// --- Cookie authentication ---
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -440,7 +435,7 @@ app.MapPost("/lessons/delete", async (
     return Results.Redirect(back);
 }).RequireAuthorization().DisableAntiforgery();
 
-// --- Fencers: promote a member to instructor (instructor-only) ---
+// --- Finance: promote a member to instructor (instructor-only) ---
 app.MapPost("/fencers/promote", async (
     HttpContext http, IGoogleSheetsService sheets, AuthService auth,
     [Microsoft.AspNetCore.Mvc.FromForm] string fencerId) =>
@@ -456,6 +451,161 @@ app.MapPost("/fencers/promote", async (
         target.IsInstructor = true;
         await sheets.UpsertFencerAsync(target);
     }
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+// ================= FINANCE =================
+// Instructor-only money actions. Members never reach these (buttons are hidden),
+// but the endpoints re-check the role server-side.
+app.MapPost("/finance/markpaid", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, AuthService auth,
+    [Microsoft.AspNetCore.Mvc.FromForm] string fencerId,
+    [Microsoft.AspNetCore.Mvc.FromForm] int year,
+    [Microsoft.AspNetCore.Mvc.FromForm] int month,
+    [Microsoft.AspNetCore.Mvc.FromForm] string amount) =>
+{
+    const string back = "/finance?tab=monthly";
+    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    if (string.IsNullOrWhiteSpace(fencerId)) return Results.Redirect(back);
+
+    if (!decimal.TryParse(amount, System.Globalization.NumberStyles.Number,
+            System.Globalization.CultureInfo.InvariantCulture, out var value) || value == 0m)
+        return Results.Redirect(back);
+
+    await sheets.MarkPaidAsync(new Payment
+    {
+        FencerId = fencerId,
+        Year = year,
+        Month = month,
+        Amount = value,
+        PaidOn = DateTime.Now,
+    });
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+app.MapPost("/finance/expense/add", async (
+    HttpContext http, IGoogleSheetsService sheets, AuthService auth,
+    [Microsoft.AspNetCore.Mvc.FromForm] int year,
+    [Microsoft.AspNetCore.Mvc.FromForm] int month,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? category,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? description,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? amount) =>
+{
+    const string back = "/finance?tab=monthly";
+    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    decimal.TryParse(amount, System.Globalization.NumberStyles.Number,
+        System.Globalization.CultureInfo.InvariantCulture, out var value);
+    if (string.IsNullOrWhiteSpace(description) && value <= 0m) return Results.Redirect(back);
+
+    var day = Math.Min(DateTime.Today.Day, DateTime.DaysInMonth(year, month));
+    await sheets.AddExpenseAsync(new Expense
+    {
+        Date = new DateTime(year, month, day),
+        Category = category ?? "",
+        Description = description ?? "",
+        Amount = value,
+    });
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+app.MapPost("/finance/income/add", async (
+    HttpContext http, IGoogleSheetsService sheets, AuthService auth,
+    [Microsoft.AspNetCore.Mvc.FromForm] int year,
+    [Microsoft.AspNetCore.Mvc.FromForm] int month,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? category,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? description,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? amount) =>
+{
+    const string back = "/finance?tab=monthly";
+    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    decimal.TryParse(amount, System.Globalization.NumberStyles.Number,
+        System.Globalization.CultureInfo.InvariantCulture, out var value);
+    if (string.IsNullOrWhiteSpace(description) && value <= 0m) return Results.Redirect(back);
+
+    var day = Math.Min(DateTime.Today.Day, DateTime.DaysInMonth(year, month));
+    await sheets.AddIncomeAsync(new Income
+    {
+        Date = new DateTime(year, month, day),
+        Category = category ?? "",
+        Description = description ?? "",
+        Amount = value,
+    });
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+app.MapPost("/finance/price/add", async (
+    HttpContext http, IGoogleSheetsService sheets, AuthService auth) =>
+{
+    const string back = "/finance?tab=prices";
+    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+
+    var form = await http.Request.ReadFormAsync();
+    decimal.TryParse(form["fullPrice"], System.Globalization.NumberStyles.Number,
+        System.Globalization.CultureInfo.InvariantCulture, out var full);
+    if (full <= 0m) return Results.Redirect(back);
+    decimal.TryParse(form["studentPrice"], System.Globalization.NumberStyles.Number,
+        System.Globalization.CultureInfo.InvariantCulture, out var student);
+
+    var (sessions, months, isCustom) = form["tier"].ToString() switch
+    {
+        "0" => (1, 1, false),
+        "1" => (4, 1, false),
+        "2" => (0, 1, false),
+        _ => (0, 1, true),
+    };
+    var hasEnd = form["hasEndDate"] == "on";
+    if (isCustom && !hasEnd) return Results.Redirect(back);
+
+    DateTime.TryParse(form["startDate"], out var start);
+    if (start == default) start = DateTime.Today;
+    DateTime.TryParse(form["endDate"], out var end);
+
+    await sheets.UpsertPriceRuleAsync(new PriceRule
+    {
+        SessionCount = sessions,
+        MonthCount = months,
+        IsCustomPeriod = isCustom,
+        FullPrice = full,
+        StudentPrice = student > 0 ? student : DuesCalculator.SuggestStudentPrice(full),
+        StartDate = start,
+        EndDate = hasEnd ? end : null,
+    });
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+app.MapPost("/finance/price/save", async (
+    HttpContext http, IGoogleSheetsService sheets, AuthService auth) =>
+{
+    const string back = "/finance?tab=prices";
+    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+
+    var form = await http.Request.ReadFormAsync();
+    var rules = await sheets.GetPriceRulesAsync();
+    var rule = rules.FirstOrDefault(r => r.Id == form["ruleId"].ToString());
+    if (rule is null) return Results.Redirect(back);
+
+    if (decimal.TryParse(form["fullPrice"], System.Globalization.NumberStyles.Number,
+            System.Globalization.CultureInfo.InvariantCulture, out var full)) rule.FullPrice = full;
+    if (decimal.TryParse(form["studentPrice"], System.Globalization.NumberStyles.Number,
+            System.Globalization.CultureInfo.InvariantCulture, out var student)) rule.StudentPrice = student;
+    if (DateTime.TryParse(form["startDate"], out var start)) rule.StartDate = start;
+    var hasEnd = form["hasEndDate"] == "on";
+    rule.EndDate = hasEnd && DateTime.TryParse(form["endDate"], out var end) ? end : null;
+    rule.IsCustomPeriod = form["isCustomPeriod"] == "on";
+    if (rule.IsCustomPeriod && rule.EndDate is null) return Results.Redirect(back);
+
+    await sheets.UpsertPriceRuleAsync(rule);
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+app.MapPost("/finance/price/delete", async (
+    HttpContext http, IGoogleSheetsService sheets, AuthService auth,
+    [Microsoft.AspNetCore.Mvc.FromForm] string ruleId) =>
+{
+    const string back = "/finance?tab=prices";
+    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    if (!string.IsNullOrWhiteSpace(ruleId))
+        await sheets.DeletePriceRuleAsync(ruleId);
     return Results.Redirect(back);
 }).RequireAuthorization().DisableAntiforgery();
 

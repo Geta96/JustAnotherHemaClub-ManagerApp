@@ -1,66 +1,616 @@
 @page "/finance"
+@using System.Globalization
 @using Microsoft.AspNetCore.Authorization
+@using JustAnotherHemaClub.Services
 @attribute [Authorize]
 @inject IGoogleSheetsService Sheets
+@inject AuthService Auth
+@inject UserSession Session
 
 <PageTitle>Finance · JAHC Manager</PageTitle>
 
 <h1 class="page-title">Finance</h1>
 
-<section class="card">
-    <h2 class="card-title">This month (@_monthLabel)</h2>
+@if (_loading)
+{
+    <section class="card"><p class="muted">Loading…</p></section>
+}
+else
+{
+    <div class="pricing-line">
+        <span class="muted">@_pricingSummary</span>
+        @if (!string.IsNullOrWhiteSpace(_pricingWarning))
+        {
+            <span class="pricing-warning">@_pricingWarning</span>
+        }
+    </div>
 
-    @if (_loading)
+    @* Tab buttons: instructor-only. Members only ever see the Monthly view. *@
+    @if (Auth.IsLoggedInInstructor)
     {
-        <p class="muted">Loading…</p>
+        <div class="tab-bar">
+            <a class="tab @(Tab == "monthly" ? "active" : "")" href="/finance?tab=monthly">Monthly</a>
+            <a class="tab @(Tab == "yearly" ? "active" : "")" href="/finance?tab=yearly">Yearly</a>
+            <a class="tab @(Tab == "alltime" ? "active" : "")" href="/finance?tab=alltime">All Time</a>
+            <a class="tab @(Tab == "prices" ? "active" : "")" href="/finance?tab=prices">Prices</a>
+        </div>
+    }
+
+    @if (Tab == "yearly" && Auth.IsLoggedInInstructor)
+    {
+        <section class="card">
+            <h2 class="card-title">@_year</h2>
+            <div class="stat-grid">
+                <div><div class="stat-cap">Income</div><div class="stat-val slate">@_yearIncome.ToString("N0")</div></div>
+                <div><div class="stat-cap">Expenses</div><div class="stat-val wine">@_yearExpenses.ToString("N0")</div></div>
+                <div><div class="stat-cap">Unpaid dues</div><div class="stat-val danger">@_yearUnpaid.ToString("N0")</div></div>
+                <div class="span2"><div class="stat-cap">Balance</div><div class="stat-val big">@_yearBalance.ToString("N0")</div></div>
+                <div><div class="stat-cap">Sessions</div><div class="stat-val">@_yearSessions</div></div>
+                <div><div class="stat-cap">Avg attendance</div><div class="stat-val">@_yearAvgAttendance.ToString("N2")</div></div>
+            </div>
+        </section>
+    }
+    else if (Tab == "alltime" && Auth.IsLoggedInInstructor)
+    {
+        <section class="card">
+            <h2 class="card-title">All time</h2>
+            <div class="stat-grid">
+                <div><div class="stat-cap">Income</div><div class="stat-val slate">@_allTimeIncome.ToString("N0")</div></div>
+                <div><div class="stat-cap">Expenses</div><div class="stat-val wine">@_allTimeExpenses.ToString("N0")</div></div>
+                <div><div class="stat-cap">Unpaid dues</div><div class="stat-val danger">@_allTimeUnpaid.ToString("N0")</div></div>
+                <div class="span2"><div class="stat-cap">Balance</div><div class="stat-val big">@_allTimeBalance.ToString("N0")</div></div>
+                <div><div class="stat-cap">Sessions</div><div class="stat-val">@_allTimeSessions</div></div>
+                <div><div class="stat-cap">Avg attendance</div><div class="stat-val">@_allTimeAvgAttendance.ToString("N2")</div></div>
+            </div>
+            <p class="muted">Active fencers: @_activeFencers</p>
+        </section>
+    }
+    else if (Tab == "prices" && Auth.IsLoggedInInstructor)
+    {
+        <section class="card">
+            <h2 class="card-title">Price rules</h2>
+
+            @if (_rules.Count == 0)
+            {
+                <p class="muted">No price rules yet. Add one below (defaults are used until you do).</p>
+            }
+            else
+            {
+                <ul class="weekly-list">
+                    @foreach (var r in _rules)
+                    {
+                        <li class="weekly-row training-row-outer">
+                            <div class="weekly-when">
+                                <span class="day">@TierName(r)</span>
+                                <span class="pill @(r.IsActiveOn(DateTime.Today) ? "active-pill" : "")">
+                                    @(r.IsActiveOn(DateTime.Today) ? "? Active" : "? Inactive")
+                                </span>
+                            </div>
+                            <span class="topic">@r.FullPrice.ToString("N0") Ft · students @r.StudentPrice.ToString("N0") Ft</span>
+                            <span class="topic">@DateRange(r)</span>
+
+                            <details class="attendee-editor">
+                                <summary>Edit</summary>
+                                <form method="post" action="/finance/price/save" class="stack-form">
+                                    <input type="hidden" name="ruleId" value="@r.Id" />
+                                    <div class="field-row">
+                                        <label>Full price (Ft)<input type="number" name="fullPrice" value="@r.FullPrice" /></label>
+                                        <label>Student price (Ft)<input type="number" name="studentPrice" value="@r.StudentPrice" /></label>
+                                    </div>
+                                    <label>Start date<input type="date" name="startDate" value="@r.StartDate.ToString("yyyy-MM-dd")" /></label>
+                                    <label class="attendee-check">
+                                        <input type="checkbox" name="hasEndDate" checked="@r.EndDate.HasValue" />
+                                        <span>Has end date</span>
+                                    </label>
+                                    <label>End date<input type="date" name="endDate"
+                                        value="@((r.EndDate ?? DateTime.Today.AddMonths(6)).ToString("yyyy-MM-dd"))" /></label>
+                                    <label class="attendee-check">
+                                        <input type="checkbox" name="isCustomPeriod" checked="@r.IsCustomPeriod" />
+                                        <span>Custom period (charge once for the whole window)</span>
+                                    </label>
+                                    <button class="attend-btn" type="submit">Save changes</button>
+                                </form>
+                                <form method="post" action="/finance/price/delete" class="stack-form">
+                                    <input type="hidden" name="ruleId" value="@r.Id" />
+                                    <button class="danger-btn" type="submit">Delete</button>
+                                </form>
+                            </details>
+                        </li>
+                    }
+                </ul>
+            }
+
+            <details class="attendee-editor add-block">
+                <summary>Add price rule</summary>
+                <form method="post" action="/finance/price/add" class="stack-form">
+                    <label>Applies to
+                        <select name="tier">
+                            <option value="0">1 session</option>
+                            <option value="1">4 sessions</option>
+                            <option value="2">Unlimited (1 month)</option>
+                            <option value="3">Custom period (unlimited)</option>
+                        </select>
+                    </label>
+                    <div class="field-row">
+                        <label>Full price (Ft)<input type="number" name="fullPrice" value="0" /></label>
+                        <label>Student price (Ft)<input type="number" name="studentPrice" value="0" /></label>
+                    </div>
+                    <label>Start date<input type="date" name="startDate" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></label>
+                    <label class="attendee-check">
+                        <input type="checkbox" name="hasEndDate" />
+                        <span>Has end date (required for custom period)</span>
+                    </label>
+                    <label>End date<input type="date" name="endDate" value="@DateTime.Today.AddMonths(6).ToString("yyyy-MM-dd")" /></label>
+                    <button class="attend-btn" type="submit">Add price rule</button>
+                </form>
+            </details>
+        </section>
     }
     else
     {
-        <ul class="weekly-list">
-            <li class="weekly-row">
-                <span class="day">Dues collected</span>
-                <span class="time">@_duesTotal.ToString("N0") Ft</span>
-            </li>
-            <li class="weekly-row">
-                <span class="day">Other income</span>
-                <span class="time">@_incomeTotal.ToString("N0") Ft</span>
-            </li>
-            <li class="weekly-row">
-                <span class="day">Expenses</span>
-                <span class="time">@_expenseTotal.ToString("N0") Ft</span>
-            </li>
-            <li class="weekly-row">
-                <span class="day"><strong>Balance</strong></span>
-                <span class="time"><strong>@((_duesTotal + _incomeTotal - _expenseTotal).ToString("N0")) Ft</strong></span>
-            </li>
-        </ul>
+        @* ===================== MONTHLY (default; the only tab members see) ===================== *@
+        @if (ShowPersonalSummary)
+        {
+            <section class="card">
+                <h2 class="card-title">My payments</h2>
+                @if (_personalAllPaid)
+                {
+                    <p class="pay-ok">&#10003; All payed up. Thank you!</p>
+                }
+                else
+                {
+                    <p class="pay-due">&#10007; @_personalTotalDue.ToString("N0") Ft is due</p>
+                }
+            </section>
+        }
+
+        @if (_months.Count == 0)
+        {
+            <section class="card"><p class="muted">No months to show yet.</p></section>
+        }
+        else
+        {
+            @foreach (var m in _months)
+            {
+                <section class="card">
+                    <h2 class="card-title">@m.Title</h2>
+                    <p class="muted">@m.Summary</p>
+
+                    @* --- Dues --- *@
+                    @if (m.Dues.Count > 0)
+                    {
+                        <div class="sub-title wine">Dues</div>
+                        <ul class="weekly-list">
+                            @foreach (var d in m.Dues)
+                            {
+                                <li class="weekly-row training-row-outer">
+                                    <div class="training-row">
+                                        <div class="training-main">
+                                            <span class="day wine">@d.Fencer.DisplayName</span>
+                                            <span class="topic">@d.Summary</span>
+                                        </div>
+                                        <div class="due-status">
+                                            @if (d.IsOverpaid)
+                                            {
+                                                <span class="pay-ok">&#10003; Overpayed by @d.Overpayment.ToString("N0") Ft</span>
+                                            }
+                                            else if (d.IsPaid)
+                                            {
+                                                <span class="pay-ok">&#10003; Paid</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="pay-due">Owes @d.AmountDue.ToString("N0") Ft</span>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    @* Instructor-only inline payment actions *@
+                                    @if (Auth.IsLoggedInInstructor && !d.IsPaid && d.AmountDue > 0)
+                                    {
+                                        <details class="attendee-editor">
+                                            <summary>Record payment</summary>
+                                            <div class="pay-options">
+                                                @foreach (var opt in BuildOptions(d, m))
+                                                {
+                                                    <form method="post" action="/finance/markpaid" class="inline-form">
+                                                        <input type="hidden" name="fencerId" value="@d.Fencer.Id" />
+                                                        <input type="hidden" name="year" value="@m.Year" />
+                                                        <input type="hidden" name="month" value="@m.Month" />
+                                                        <input type="hidden" name="amount" value="@opt.Amount.ToString(CultureInfo.InvariantCulture)" />
+                                                        <button class="attend-btn" type="submit">@opt.MenuText</button>
+                                                    </form>
+                                                }
+                                            </div>
+                                            <form method="post" action="/finance/markpaid" class="stack-form">
+                                                <input type="hidden" name="fencerId" value="@d.Fencer.Id" />
+                                                <input type="hidden" name="year" value="@m.Year" />
+                                                <input type="hidden" name="month" value="@m.Month" />
+                                                <label>Custom amount (Ft; negative to refund)
+                                                    <input type="number" name="amount" step="any" />
+                                                </label>
+                                                <button class="attend-btn" type="submit">Record custom amount</button>
+                                            </form>
+                                        </details>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+
+                    @* --- Expenses / Income (instructor only) --- *@
+                    @if (Auth.IsLoggedInInstructor)
+                    {
+                        <div class="sub-title wine">Expenses</div>
+                        @if (m.Expenses.Count > 0)
+                        {
+                            <ul class="weekly-list">
+                                @foreach (var e in m.Expenses)
+                                {
+                                    <li class="weekly-row">
+                                        <span class="day wine">@e.Date.ToString("yyyy-MM-dd")</span>
+                                        <span class="topic">@e.Category — @e.Description</span>
+                                        <span class="time">@e.Amount.ToString("N0") Ft</span>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                        <details class="attendee-editor add-block">
+                            <summary>Add expense</summary>
+                            <form method="post" action="/finance/expense/add" class="stack-form">
+                                <input type="hidden" name="year" value="@m.Year" />
+                                <input type="hidden" name="month" value="@m.Month" />
+                                <label>Category<input type="text" name="category" /></label>
+                                <label>Description<input type="text" name="description" /></label>
+                                <label>Amount<input type="number" name="amount" step="any" /></label>
+                                <button class="attend-btn" type="submit">Save expense</button>
+                            </form>
+                        </details>
+
+                        <div class="sub-title wine">Income</div>
+                        @if (m.Incomes.Count > 0)
+                        {
+                            <ul class="weekly-list">
+                                @foreach (var inc in m.Incomes)
+                                {
+                                    <li class="weekly-row">
+                                        <span class="day wine">@inc.Date.ToString("yyyy-MM-dd")</span>
+                                        <span class="topic">@inc.Category — @inc.Description</span>
+                                        <span class="time">@inc.Amount.ToString("N0") Ft</span>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                        <details class="attendee-editor add-block">
+                            <summary>Add income</summary>
+                            <form method="post" action="/finance/income/add" class="stack-form">
+                                <input type="hidden" name="year" value="@m.Year" />
+                                <input type="hidden" name="month" value="@m.Month" />
+                                <label>Category<input type="text" name="category" /></label>
+                                <label>Description<input type="text" name="description" /></label>
+                                <label>Amount<input type="number" name="amount" step="any" /></label>
+                                <button class="attend-btn" type="submit">Save income</button>
+                            </form>
+                        </details>
+                    }
+                </section>
+            }
+        }
     }
-</section>
+}
 
 @code {
+    [SupplyParameterFromQuery(Name = "tab")]
+    private string? TabParam { get; set; }
+
+    private string Tab => TabParam switch
+    {
+        "yearly" => "yearly",
+        "alltime" => "alltime",
+        "prices" => "prices",
+        _ => "monthly"
+    };
+
     private bool _loading = true;
-    private decimal _duesTotal;
-    private decimal _incomeTotal;
-    private decimal _expenseTotal;
-    private string _monthLabel = DateTime.Today.ToString("MMMM yyyy");
+    private bool ShowPersonalSummary => !Auth.IsLoggedInInstructor && Auth.CurrentFencer is not null;
+
+    private string _pricingSummary = "";
+    private string _pricingWarning = "";
+
+    private readonly List<MonthView> _months = new();
+    private readonly List<PriceRule> _rules = new();
+
+    private decimal _personalTotalDue;
+    private bool _personalAllPaid = true;
+
+    private readonly int _year = DateTime.Today.Year;
+    private decimal _yearIncome, _yearExpenses, _yearBalance, _yearUnpaid;
+    private int _yearSessions;
+    private double _yearAvgAttendance;
+
+    private decimal _allTimeIncome, _allTimeExpenses, _allTimeBalance, _allTimeUnpaid;
+    private int _allTimeSessions, _activeFencers;
+    private double _allTimeAvgAttendance;
+
+    private sealed class MonthView
+    {
+        public int Year;
+        public int Month;
+        public string Title => new DateTime(Year, Month, 1).ToString("yyyy MMMM");
+        public List<DueRow> Dues = new();
+        public List<Expense> Expenses = new();
+        public List<Income> Incomes = new();
+        public IReadOnlyList<PriceRule> ActiveRules = Array.Empty<PriceRule>();
+
+        public decimal TotalDue => Dues.Sum(d => d.TotalCost);
+        public decimal TotalPaid => Dues.Sum(d => d.AlreadyPaid);
+        public decimal TotalExpenses => Expenses.Sum(e => e.Amount);
+        public decimal TotalIncomes => Incomes.Sum(i => i.Amount);
+        public decimal Balance => TotalPaid + TotalIncomes - TotalExpenses;
+
+        public string Summary =>
+            $"Dues {TotalDue:N0} · Paid {TotalPaid:N0} · Income {TotalIncomes:N0} · Expenses {TotalExpenses:N0} · Balance {Balance:N0}";
+    }
+
+    private sealed class DueRow
+    {
+        public required Fencer Fencer;
+        public int SessionsAttended;
+        public decimal TotalCost;
+        public decimal AlreadyPaid;
+        public decimal CreditIn;
+        public decimal AmountDue;
+        public decimal Overpayment;
+        public string TierLabel = "—";
+        public bool IsPaid;
+        public bool IsOverpaid;
+
+        public string Summary
+        {
+            get
+            {
+                var student = Fencer.IsStudent ? " · student" : "";
+                if (SessionsAttended == 0) return "No sessions";
+                var s = $"{SessionsAttended} session{(SessionsAttended == 1 ? "" : "s")}";
+                if (IsOverpaid) return $"{s} · {TierLabel} · overpayed by {Overpayment:N0} Ft{student}";
+                if (IsPaid)
+                    return AlreadyPaid > 0
+                        ? $"{s} · {TierLabel} · paid {AlreadyPaid:N0} Ft \u2713{student}"
+                        : $"{s} · {TierLabel} · covered by credit \u2713{student}";
+                if (AlreadyPaid > 0) return $"{s} · {TierLabel} · paid {AlreadyPaid:N0}, +{AmountDue:N0} Ft due{student}";
+                return $"{s} · {TierLabel} · {AmountDue:N0} Ft{student}";
+            }
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
-        try
-        {
-            var now = DateTime.Today;
-            var from = new DateTime(now.Year, now.Month, 1);
-            var to = from.AddMonths(1).AddDays(-1);
-
-            var payments = await Sheets.GetPaymentsAsync(now.Year, now.Month);
-            _duesTotal = payments.Sum(p => p.Amount);
-
-            var incomes = await Sheets.GetIncomesAsync(from, to);
-            _incomeTotal = incomes.Sum(i => i.Amount);
-
-            var expenses = await Sheets.GetExpensesAsync(from, to);
-            _expenseTotal = expenses.Sum(e => e.Amount);
-        }
+        await Session.EnsureRestoredAsync();
+        try { await LoadAsync(); }
         finally { _loading = false; }
+    }
+
+    private async Task LoadAsync()
+    {
+        var rangeFrom = new DateTime(2000, 1, 1);
+        var rangeTo = new DateTime(DateTime.Today.Year + 5, 12, 31);
+        var today = DateTime.Today;
+        var isInstructor = Auth.IsLoggedInInstructor;
+        var myId = Auth.CurrentFencer?.Id;
+
+        var fencersTask = Sheets.GetFencersAsync();
+        var trainingsTask = Sheets.GetTrainingsAsync();
+        var expensesTask = Sheets.GetExpensesAsync(rangeFrom, rangeTo);
+        var incomesTask = Sheets.GetIncomesAsync(rangeFrom, rangeTo);
+        var rulesTask = Sheets.GetPriceRulesAsync();
+        await Task.WhenAll(fencersTask, trainingsTask, expensesTask, incomesTask, rulesTask);
+
+        var fencers = fencersTask.Result;
+        var trainings = trainingsTask.Result;
+        var expensesAll = expensesTask.Result;
+        var incomesAll = incomesTask.Result;
+        var allRules = rulesTask.Result;
+
+        _pricingSummary = BuildPricingSummary(allRules);
+        _pricingWarning = BuildPricingWarning(allRules, today);
+        _activeFencers = fencers.Count(f => f.Active);
+
+        // Prices tab needs the ordered rules.
+        _rules.AddRange(allRules
+            .OrderByDescending(r => r.IsActiveOn(today))
+            .ThenBy(r => r.SessionCount == 0 ? int.MaxValue : r.SessionCount)
+            .ThenBy(r => r.StartDate));
+
+        // Month set from any activity, plus current month.
+        var monthsSet = new HashSet<(int Y, int M)> { (today.Year, today.Month) };
+        foreach (var s in trainings) monthsSet.Add((s.Date.Year, s.Date.Month));
+        foreach (var e in expensesAll) monthsSet.Add((e.Date.Year, e.Date.Month));
+        foreach (var i in incomesAll) monthsSet.Add((i.Date.Year, i.Date.Month));
+
+        var ordered = monthsSet.OrderByDescending(t => t.Y).ThenByDescending(t => t.M).ToList();
+
+        var paymentTasks = ordered.ToDictionary(ym => ym, ym => Sheets.GetPaymentsAsync(ym.Y, ym.M));
+        await Task.WhenAll(paymentTasks.Values);
+
+        // Fold in payment-only months (pre-payments/refunds) so credit-carry stays correct.
+        var extra = paymentTasks.Values
+            .SelectMany(t => t.Result)
+            .Select(p => (Y: p.Year, M: p.Month))
+            .Where(ym => !monthsSet.Contains(ym))
+            .Distinct().ToList();
+        foreach (var ym in extra)
+        {
+            monthsSet.Add(ym);
+            paymentTasks[ym] = Sheets.GetPaymentsAsync(ym.Y, ym.M);
+        }
+        await Task.WhenAll(paymentTasks.Values);
+
+        ordered = monthsSet.OrderByDescending(t => t.Y).ThenByDescending(t => t.M).ToList();
+        var ascending = ordered.OrderBy(t => t.Y).ThenBy(t => t.M).ToList();
+        var paymentsByMonth = ordered.ToDictionary(ym => ym, ym => paymentTasks[ym].Result);
+
+        var attendanceByMonth = ascending.ToDictionary(
+            ym => ym,
+            ym => trainings.Where(s => s.Date.Year == ym.Y && s.Date.Month == ym.M)
+                           .SelectMany(s => s.AttendeeFencerIds)
+                           .GroupBy(id => id)
+                           .ToDictionary(g => g.Key, g => g.Count()));
+        var paidByMonth = ascending.ToDictionary(
+            ym => ym,
+            ym => paymentsByMonth[ym].GroupBy(p => p.FencerId)
+                                     .ToDictionary(g => g.Key, g => g.Sum(p => p.Amount)));
+
+        var ledger = FencerDuesLedger.ComputeAll(
+            fencers.Where(f => f.Active), ascending, attendanceByMonth, paidByMonth, allRules);
+
+        // Build per-month views (newest first).
+        foreach (var ym in ordered)
+        {
+            var (y, m) = ym;
+            var mv = new MonthView { Year = y, Month = m };
+
+            var from = new DateTime(y, m, 1);
+            var to = from.AddMonths(1).AddDays(-1);
+            mv.ActiveRules = FencerDuesLedger.RulesForMonth(allRules, y, m);
+
+            var attendance = attendanceByMonth[ym];
+            var paidByFencer = paidByMonth[ym];
+
+            var fencersForMonth = isInstructor
+                ? fencers.Where(f => f.Active)
+                : fencers.Where(f => f.Active && f.Id == myId);
+
+            foreach (var f in fencersForMonth)
+            {
+                attendance.TryGetValue(f.Id, out var count);
+                paidByFencer.TryGetValue(f.Id, out var cashPaid);
+                if (!ledger.TryGetValue((f.Id, y, m), out var contribution)) continue;
+
+                var quote = contribution.Quote;
+                var isMineThisMonth = !isInstructor && f.Id == myId && y == today.Year && m == today.Month;
+                if (count == 0 && cashPaid == 0m && contribution.CreditIn == 0m && !isMineThisMonth) continue;
+
+                mv.Dues.Add(new DueRow
+                {
+                    Fencer = f,
+                    SessionsAttended = quote.SessionsAttended,
+                    TotalCost = quote.TotalDue,
+                    AlreadyPaid = cashPaid,
+                    CreditIn = contribution.CreditIn,
+                    AmountDue = quote.Outstanding,
+                    Overpayment = quote.Overpayment,
+                    TierLabel = quote.TierLabel,
+                    IsPaid = quote.IsCovered,
+                    IsOverpaid = quote.IsOverpaid,
+                });
+            }
+
+            if (isInstructor)
+            {
+                mv.Expenses.AddRange(expensesAll.Where(e => e.Date >= from && e.Date <= to));
+                mv.Incomes.AddRange(incomesAll.Where(i => i.Date >= from && i.Date <= to));
+            }
+
+            _months.Add(mv);
+        }
+
+        // Personal summary for members.
+        if (ShowPersonalSummary && myId is not null)
+        {
+            _personalTotalDue = _months.SelectMany(mv => mv.Dues)
+                .Where(d => d.Fencer.Id == myId && !d.IsPaid)
+                .Sum(d => d.AmountDue);
+            _personalAllPaid = _personalTotalDue <= 0;
+        }
+
+        // Aggregates for Yearly / All Time.
+        foreach (var mv in _months)
+        {
+            var from = new DateTime(mv.Year, mv.Month, 1);
+            var to = from.AddMonths(1).AddDays(-1);
+            var monthSessions = trainings.Where(s => s.Date.Year == mv.Year && s.Date.Month == mv.Month).ToList();
+            var monthIncome = paymentsByMonth[(mv.Year, mv.Month)].Sum(p => p.Amount)
+                              + incomesAll.Where(i => i.Date >= from && i.Date <= to).Sum(i => i.Amount);
+            var monthExpenses = expensesAll.Where(e => e.Date >= from && e.Date <= to).Sum(e => e.Amount);
+            var avg = monthSessions.Count == 0 ? 0 : monthSessions.Average(s => s.AttendeeFencerIds.Count);
+            var monthUnpaid = mv.Dues.Where(d => !d.IsPaid).Sum(d => d.AmountDue);
+
+            _allTimeIncome += monthIncome;
+            _allTimeExpenses += monthExpenses;
+            _allTimeSessions += monthSessions.Count;
+            _allTimeUnpaid += monthUnpaid;
+            if (monthSessions.Count > 0) { _allTimeAvgAttendanceSum += avg * monthSessions.Count; _allTimeAvgAttendanceCount += monthSessions.Count; }
+
+            if (mv.Year == _year)
+            {
+                _yearIncome += monthIncome;
+                _yearExpenses += monthExpenses;
+                _yearSessions += monthSessions.Count;
+                _yearUnpaid += monthUnpaid;
+                if (monthSessions.Count > 0) { _yearAvgAttendanceSum += avg * monthSessions.Count; _yearAvgAttendanceCount += monthSessions.Count; }
+            }
+        }
+        _allTimeBalance = _allTimeIncome - _allTimeExpenses;
+        _yearBalance = _yearIncome - _yearExpenses;
+        _allTimeAvgAttendance = _allTimeAvgAttendanceCount == 0 ? 0 : _allTimeAvgAttendanceSum / _allTimeAvgAttendanceCount;
+        _yearAvgAttendance = _yearAvgAttendanceCount == 0 ? 0 : _yearAvgAttendanceSum / _yearAvgAttendanceCount;
+    }
+
+    private double _allTimeAvgAttendanceSum; private int _allTimeAvgAttendanceCount;
+    private double _yearAvgAttendanceSum; private int _yearAvgAttendanceCount;
+
+    private IEnumerable<PaymentOptionSpec> BuildOptions(DueRow d, MonthView m) =>
+        PaymentOptionBuilder.Build(
+            d.Fencer.IsStudent, d.AlreadyPaid, d.CreditIn, d.SessionsAttended,
+            d.TotalCost, d.AmountDue, m.ActiveRules);
+
+    private static string TierName(PriceRule r) => (r.SessionCount, r.MonthCount) switch
+    {
+        _ when r.IsCustomPeriod => "Custom period pass",
+        (0, 2) => "2-month unlimited pass",
+        (0, _) => "Unlimited monthly pass",
+        (1, _) => "Single-session ticket",
+        _ => $"{r.SessionCount}-session pass"
+    };
+
+    private static string DateRange(PriceRule r) => r.EndDate is { } e
+        ? $"{r.StartDate:yyyy-MM-dd} ? {e:yyyy-MM-dd}"
+        : $"from {r.StartDate:yyyy-MM-dd}";
+
+    private static string BuildPricingSummary(IReadOnlyList<PriceRule> all)
+    {
+        if (all.Count == 0)
+            return "Pricing (defaults): 1 session 3 500 · 4 sessions 9 000 · monthly pass 12 000";
+        var activeToday = all.Where(r => r.IsActiveOn(DateTime.Today))
+            .OrderBy(r => r.SessionCount == 0 ? int.MaxValue : r.SessionCount).ToList();
+        if (activeToday.Count == 0)
+            return "No active price rules for today — add one on the Prices tab.";
+        return "Pricing: " + string.Join(" · ", activeToday.Select(r => r.SessionCount switch
+        {
+            0 when r.IsCustomPeriod => r.EndDate is { } e ? $"period pass {r.FullPrice:N0} (until {e:yyyy-MM-dd})" : $"period pass {r.FullPrice:N0}",
+            0 => Math.Max(1, r.MonthCount) == 1 ? $"monthly pass {r.FullPrice:N0}" : $"{Math.Max(1, r.MonthCount)} months pass {r.FullPrice:N0}",
+            1 => $"1 session {r.FullPrice:N0}",
+            _ => $"{r.SessionCount} sessions {r.FullPrice:N0}"
+        }));
+    }
+
+    private static string BuildPricingWarning(IReadOnlyList<PriceRule> all, DateTime today)
+    {
+        if (all.Count == 0) return "";
+        static bool Covers(IReadOnlyList<PriceRule> rules, int year, int month)
+        {
+            var from = new DateTime(year, month, 1);
+            var to = from.AddMonths(1).AddDays(-1);
+            return rules.Any(r => r.StartDate.Date <= to && (r.EndDate is null || r.EndDate.Value.Date >= from));
+        }
+        var thisMonth = new DateTime(today.Year, today.Month, 1);
+        var nextMonth = thisMonth.AddMonths(1);
+        var thisCovered = Covers(all, thisMonth.Year, thisMonth.Month);
+        var nextCovered = Covers(all, nextMonth.Year, nextMonth.Month);
+        if (thisCovered && nextCovered) return "";
+        static string Label(DateTime d) => d.ToString("MMM yyyy", CultureInfo.InvariantCulture);
+        if (!thisCovered && !nextCovered) return $"? No active price rule for {Label(thisMonth)} or {Label(nextMonth)} — using default prices.";
+        if (!thisCovered) return $"? No active price rule for {Label(thisMonth)} — using default prices.";
+        return $"? No active price rule for {Label(nextMonth)} — using default prices.";
     }
 }

@@ -461,3 +461,40 @@ html, body {
 .sub-title { font-weight: 700; color: var(--muted); font-size: 13px; margin-bottom: 6px; }
 
 .fencer-hero .stack-form { margin: 14px 20px 20px; }
+
+/* --- Finance --- */
+.pricing-line {
+    max-width: 860px;
+    margin: 0 auto 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.pricing-warning { color: var(--danger); font-weight: 700; }
+
+.stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+.stat-grid .span2 { grid-column: 1 / -1; }
+.stat-cap { color: var(--muted); font-size: 13px; }
+.stat-val { font-size: 18px; font-weight: 700; }
+.stat-val.big { font-size: 30px; }
+.stat-val.slate { color: var(--slate); }
+.stat-val.wine { color: var(--wine); }
+.stat-val.danger { color: var(--danger); }
+
+.pay-ok { color: #1F8A2E; font-weight: 700; }
+.pay-due { color: var(--danger); font-weight: 700; }
+.due-status { text-align: right; white-space: nowrap; }
+
+.pay-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0;
+}
+.pay-options .attend-btn { height: 40px; padding: 0 14px; font-size: 14px; }
+
+.active-pill { background: #DFF3E0; color: #1F8A2E; }
