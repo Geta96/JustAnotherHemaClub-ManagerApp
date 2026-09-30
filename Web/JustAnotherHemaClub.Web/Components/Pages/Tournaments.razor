@@ -1,14 +1,33 @@
 @page "/tournaments"
 @using Microsoft.AspNetCore.Authorization
+@using JustAnotherHemaClub.Services
+@using JustAnotherHemaClub.Web.Services
 @attribute [Authorize]
 @inject IGoogleSheetsService Sheets
+@inject AuthService Auth
+@inject UserSession Session
+@inject TournamentAccessRegistry Access
 
 <PageTitle>Tournaments · JAHC Manager</PageTitle>
 
 <h1 class="page-title">Tournaments</h1>
 
+@if (!string.IsNullOrEmpty(_error))
+{
+    <section class="card"><p class="pay-due">@_error</p></section>
+}
+
 <section class="card">
-    <h2 class="card-title">Tournaments</h2>
+    <h2 class="card-title">Create a tournament</h2>
+    <form method="post" action="/tournaments/create" class="stack-form">
+        <label>Name <input type="text" name="name" required /></label>
+        <label>Organiser password <input type="text" name="password" required /></label>
+        <button class="attend-btn" type="submit">Create</button>
+    </form>
+</section>
+
+<section class="card">
+    <h2 class="card-title">All tournaments</h2>
 
     @if (_loading)
     {
@@ -23,10 +42,36 @@
         <ul class="weekly-list">
             @foreach (var t in _tournaments)
             {
-                <li class="weekly-row">
-                    <span class="day">@t.CreatedAt.ToLocalTime().ToString("dd MMM yyyy")</span>
-                    <span class="time">@t.Name</span>
-                    <span class="topic">@t.State</span>
+                <li class="weekly-row training-row-outer">
+                    <div class="training-row">
+                        <div class="training-main">
+                            <div class="weekly-when">
+                                <span class="day">@t.Name</span>
+                                <span class="pill @StatePill(t.State)">@StateLabel(t.State)</span>
+                            </div>
+                            <span class="topic">@t.Fencers.Count fencers · @t.CreatedAt.ToLocalTime().ToString("dd MMM yyyy")
+                                @if (Access.IsOrganiser(_meId, t.Id))
+                                {
+                                    <strong class="wine"> · Organiser</strong>
+                                }
+                            </span>
+                        </div>
+                        <div class="due-status">
+                            <a class="attend-btn open-btn" href="/tournaments/@t.Id">Open</a>
+                        </div>
+                    </div>
+
+                    @if (Access.IsOrganiser(_meId, t.Id))
+                    {
+                        <details class="attendee-editor">
+                            <summary>Danger zone</summary>
+                            <form method="post" action="/tournaments/delete" class="stack-form"
+                                  onsubmit="return confirm('Delete this tournament and all its data?');">
+                                <input type="hidden" name="tournamentId" value="@t.Id" />
+                                <button class="danger-btn" type="submit">Delete tournament</button>
+                            </form>
+                        </details>
+                    }
                 </li>
             }
         </ul>
@@ -34,11 +79,20 @@
 </section>
 
 @code {
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? ErrorParam { get; set; }
+
     private readonly List<Tournament> _tournaments = new();
     private bool _loading = true;
+    private string? _meId;
+    private string? _error;
 
     protected override async Task OnInitializedAsync()
     {
+        await Session.EnsureRestoredAsync();
+        _meId = Auth.CurrentFencer?.Id;
+        if (!string.IsNullOrWhiteSpace(ErrorParam)) _error = ErrorParam;
+
         try
         {
             var all = await Sheets.GetTournamentHeadersAsync();
@@ -46,4 +100,21 @@
         }
         finally { _loading = false; }
     }
+
+    private static string StateLabel(TournamentState s) => s switch
+    {
+        TournamentState.Setup => "Setup",
+        TournamentState.PoolsInProgress => "Pools in progress",
+        TournamentState.PoolsClosed => "Pools closed",
+        TournamentState.EliminationInProgress => "Elimination",
+        TournamentState.Finished => "Finished",
+        _ => "-"
+    };
+
+    private static string StatePill(TournamentState s) => s switch
+    {
+        TournamentState.Finished => "active-pill",
+        TournamentState.Setup => "pending",
+        _ => ""
+    };
 }

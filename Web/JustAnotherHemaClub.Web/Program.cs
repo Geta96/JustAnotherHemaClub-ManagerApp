@@ -39,6 +39,8 @@ builder.Services.AddScoped<IDialogService, WebDialogService>();
 
 builder.Services.AddScoped<UserSession>();
 
+builder.Services.AddSingleton<TournamentAccessRegistry>();
+
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -645,9 +647,730 @@ app.MapPost("/finance/price/delete", async (
     return Results.Redirect(back);
 }).RequireAuthorization().DisableAntiforgery();
 
+// ================= TOURNAMENTS =================
+// The web app reads/writes the SAME sheets as the MAUI app, reusing the Core
+// TournamentEngine + IGoogleSheetsService, so a PC and a phone can co-organise
+// one tournament. Organiser access is granted per-user by entering the password
+// (tracked server-side in TournamentAccessRegistry, the web parallel of the MAUI
+// TournamentSession role).
+
+static string? TournamentUserId(HttpContext http) =>
+    http.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+static bool IsTournamentOrganiser(HttpContext http, TournamentAccessRegistry access, string tournamentId) =>
+    access.IsOrganiser(TournamentUserId(http), tournamentId);
+
+// --- Create a tournament: the creator is auto-granted organiser access ---
+app.MapPost("/tournaments/create", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? name,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? password) =>
+{
+    var meId = TournamentUserId(http);
+    if (string.IsNullOrWhiteSpace(meId)) return Results.Redirect("/login");
+    if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(password))
+        return Results.Redirect($"/tournaments?error={Uri.EscapeDataString("Name and password are required.")}");
+
+    var t = new Tournament
+    {
+        Name = name.Trim(),
+        PasswordPlain = password.Trim(),
+        State = TournamentState.Setup,
+        CreatedAt = DateTime.UtcNow,
+    };
+    await sheets.UpsertTournamentHeaderAsync(t);
+    cache.InvalidateTournaments();
+    access.GrantOrganiser(meId, t.Id);
+    return Results.Redirect($"/tournaments/{t.Id}");
+}).RequireAuthorization().DisableAntiforgery();
+
+// --- Delete a tournament (organiser only) ---
+app.MapPost("/tournaments/delete", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId) =>
+{
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect("/tournaments");
+    await sheets.DeleteTournamentAsync(tournamentId);
+    cache.InvalidateTournaments();
+    return Results.Redirect("/tournaments");
+}).RequireAuthorization().DisableAntiforgery();
+
+// --- Unlock organiser access with the password ---
+app.MapPost("/tournaments/access", async (
+    HttpContext http, IGoogleSheetsService sheets, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? password) =>
+{
+    var meId = TournamentUserId(http);
+    if (string.IsNullOrWhiteSpace(meId)) return Results.Redirect("/login");
+
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null) return Results.Redirect("/tournaments");
+
+    if ((password ?? "").Trim() == (t.PasswordPlain ?? "").Trim() && !string.IsNullOrEmpty(t.PasswordPlain))
+    {
+        access.GrantOrganiser(meId, tournamentId);
+        return Results.Redirect($"/tournaments/{tournamentId}");
+    }
+    return Results.Redirect($"/tournaments/{tournamentId}?error={Uri.EscapeDataString("Incorrect password.")}");
+}).RequireAuthorization().DisableAntiforgery();
+
+// --- Roster: add / remove fencer (Setup state, organiser) ---
+app.MapPost("/tournaments/fencer/add", async (
+    HttpContext http, IGoogleSheetsService sheets, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? name) =>
+{
+    var back = $"/tournaments/{tournamentId}";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null || t.State != TournamentState.Setup) return Results.Redirect(back);
+
+    var n = (name ?? "").Trim();
+    if (n.Length == 0) return Results.Redirect(back);
+    if (t.Fencers.Any(f => string.Equals(f.Name, n, StringComparison.OrdinalIgnoreCase)))
+        return Results.Redirect($"{back}?error={Uri.EscapeDataString($"'{n}' is already on the roster.")}");
+
+    var fencer = new TournamentFencer { Name = n, OrderIndex = t.Fencers.Count };
+    await sheets.UpsertTournamentFencerAsync(tournamentId, fencer);
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+app.MapPost("/tournaments/fencer/remove", async (
+    HttpContext http, IGoogleSheetsService sheets, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string fencerId) =>
+{
+    var back = $"/tournaments/{tournamentId}";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null || t.State != TournamentState.Setup) return Results.Redirect(back);
+
+    await sheets.DeleteTournamentFencerAsync(tournamentId, fencerId);
+    // Drop from any draft pool.
+    foreach (var pool in t.Pools)
+        if (pool.FencerIds.Remove(fencerId))
+            await sheets.UpsertPoolAsync(tournamentId, pool);
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+// --- Edit tournament details: name / organiser password (organiser) ---
+// Mirrors the MAUI editor's auto-saved Name / Password fields.
+app.MapPost("/tournaments/details", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? name,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? password) =>
+{
+    var back = $"/tournaments/{tournamentId}";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null) return Results.Redirect(back);
+
+    var newName = (name ?? "").Trim();
+    var newPassword = (password ?? "").Trim();
+    if (newName.Length == 0)
+        return Results.Redirect($"{back}?error={Uri.EscapeDataString("Name is required.")}");
+
+    t.Name = newName;
+    if (newPassword.Length > 0) t.PasswordPlain = newPassword;
+    await sheets.UpsertTournamentHeaderAsync(t);
+    cache.InvalidateTournaments();
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+// --- Withdraw / reinstate a fencer (mirrors TournamentEditorVm.WithdrawFencerAsync) ---
+// Setup       — just flips the withdrawn flag (fencer can't be picked into pools).
+// Pools/Elim  — flips the flag AND walks over every unfinished match the fencer
+//               is in (opponent wins 0-0), then propagates bracket advancements.
+app.MapPost("/tournaments/fencer/withdraw", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string fencerId) =>
+{
+    var back = $"/tournaments/{tournamentId}";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null) return Results.Redirect(back);
+
+    var fencer = t.Fencers.FirstOrDefault(f => f.Id == fencerId);
+    if (fencer is null) return Results.Redirect(back);
+
+    bool willBeWithdrawn = !fencer.IsWithdrawn;
+    fencer.IsWithdrawn = willBeWithdrawn;
+
+    try
+    {
+        TournamentEngine.WithdrawalCascade? cascade = null;
+        if (willBeWithdrawn && t.State is not TournamentState.Setup and not TournamentState.Finished)
+            cascade = TournamentEngine.ApplyWithdrawalCascade(t, fencerId);
+
+        // Withdrawing during Setup also drops them from any draft pool.
+        if (willBeWithdrawn && t.State == TournamentState.Setup)
+            foreach (var pool in t.Pools)
+                if (pool.FencerIds.Remove(fencerId))
+                    await sheets.UpsertPoolAsync(tournamentId, pool);
+
+        await sheets.UpsertTournamentFencerAsync(tournamentId, fencer);
+
+        if (cascade is not null)
+        {
+            var changed = cascade.ChangedPoolMatches.Concat(cascade.ChangedBracketMatches).ToList();
+            foreach (var m in changed)
+                await sheets.UpsertMatchAsync(tournamentId, m);
+        }
+    }
+    catch (Exception ex)
+    {
+        cache.InvalidateTournaments();
+        return Results.Redirect($"{back}?error={Uri.EscapeDataString($"Update failed: {ex.Message}")}");
+    }
+
+    cache.InvalidateTournaments();
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+// --- Draft pools (Setup state, organiser) ---
+app.MapPost("/tournaments/pool/auto", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId) =>
+{
+    var back = $"/tournaments/{tournamentId}";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null || t.State != TournamentState.Setup) return Results.Redirect(back);
+
+    var active = t.Fencers.Where(f => !f.IsWithdrawn).ToList();
+    if (active.Count < 4)
+        return Results.Redirect($"{back}?error={Uri.EscapeDataString("Need at least 4 active fencers.")}");
+
+    try
+    {
+        var draft = TournamentEngine.BuildDraftPools(active, new Random());
+        // Clear existing visible pools, then persist the new draft set.
+        foreach (var old in t.Pools)
+        {
+            old.FencerIds.Clear();
+            old.Index = int.MaxValue;
+            await sheets.UpsertPoolAsync(tournamentId, old);
+        }
+        for (int i = 0; i < draft.Count; i++)
+        {
+            draft[i].Index = i;
+            await sheets.UpsertPoolAsync(tournamentId, draft[i]);
+        }
+    }
+    catch (Exception ex)
+    {
+        cache.InvalidateTournaments();
+        return Results.Redirect($"{back}?error={Uri.EscapeDataString($"Auto-distribute failed: {ex.Message}")}");
+    }
+
+    cache.InvalidateTournaments();
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+app.MapPost("/tournaments/pool/add", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId) =>
+{
+    var back = $"/tournaments/{tournamentId}";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null || t.State != TournamentState.Setup) return Results.Redirect(back);
+
+    var visible = t.Pools.Where(p => p.Index != int.MaxValue).OrderBy(p => p.Index).ToList();
+    var pool = new Pool { Index = visible.Count };
+    await sheets.UpsertPoolAsync(tournamentId, pool);
+    cache.InvalidateTournaments();
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+// --- Remove a single (empty) draft pool (Setup state, organiser). Its fencers
+//     fall back to the unassigned list; remaining pools are re-indexed. ---
+app.MapPost("/tournaments/pool/remove", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string poolId) =>
+{
+    var back = $"/tournaments/{tournamentId}";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null || t.State != TournamentState.Setup) return Results.Redirect(back);
+
+    var target = t.Pools.FirstOrDefault(p => p.Id == poolId);
+    if (target is null) return Results.Redirect(back);
+
+    try
+    {
+        target.FencerIds.Clear();
+        target.Index = int.MaxValue;
+        await sheets.UpsertPoolAsync(tournamentId, target);
+
+        var visible = t.Pools
+            .Where(p => p.Index != int.MaxValue)
+            .OrderBy(p => p.Index)
+            .ToList();
+        for (int i = 0; i < visible.Count; i++)
+        {
+            if (visible[i].Index != i)
+            {
+                visible[i].Index = i;
+                await sheets.UpsertPoolAsync(tournamentId, visible[i]);
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        cache.InvalidateTournaments();
+        return Results.Redirect($"{back}?error={Uri.EscapeDataString($"Remove pool failed: {ex.Message}")}");
+    }
+
+    cache.InvalidateTournaments();
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+app.MapPost("/tournaments/pool/clear", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId) =>
+{
+    var back = $"/tournaments/{tournamentId}";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null || t.State != TournamentState.Setup) return Results.Redirect(back);
+
+    try
+    {
+        // Only touch pools that still hold fencers or are still visible; setting
+        // Index out of range drops them from the draft view.
+        foreach (var pool in t.Pools.ToList())
+        {
+            if (pool.FencerIds.Count == 0 && pool.Index == int.MaxValue) continue;
+            pool.FencerIds.Clear();
+            pool.Index = int.MaxValue;
+            await sheets.UpsertPoolAsync(tournamentId, pool);
+        }
+    }
+    catch (Exception ex)
+    {
+        cache.InvalidateTournaments();
+        return Results.Redirect($"{back}?error={Uri.EscapeDataString($"Unassign failed: {ex.Message}")}");
+    }
+
+    cache.InvalidateTournaments();
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+app.MapPost("/tournaments/pool/move", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string fencerId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? targetPoolId) =>
+{
+    var back = $"/tournaments/{tournamentId}";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null || t.State != TournamentState.Setup) return Results.Redirect(back);
+
+    var affected = new List<Pool>();
+    foreach (var pool in t.Pools)
+        if (pool.FencerIds.Remove(fencerId)) affected.Add(pool);
+
+    if (!string.IsNullOrEmpty(targetPoolId))
+    {
+        var target = t.Pools.FirstOrDefault(p => p.Id == targetPoolId);
+        if (target is not null && !target.FencerIds.Contains(fencerId))
+        {
+            target.FencerIds.Add(fencerId);
+            if (!affected.Contains(target)) affected.Add(target);
+        }
+    }
+
+    try
+    {
+        foreach (var pool in affected)
+            await sheets.UpsertPoolAsync(tournamentId, pool);
+    }
+    catch (Exception ex)
+    {
+        cache.InvalidateTournaments();
+        return Results.Redirect($"{back}?error={Uri.EscapeDataString($"Move failed: {ex.Message}")}");
+    }
+
+    cache.InvalidateTournaments();
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+// --- Start the tournament: generate pool matches ---
+app.MapPost("/tournaments/start", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId) =>
+{
+    var back = $"/tournaments/{tournamentId}";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null || t.State != TournamentState.Setup) return Results.Redirect(back);
+
+    if (t.Fencers.Count(f => !f.IsWithdrawn) < 4)
+        return Results.Redirect($"{back}?error={Uri.EscapeDataString("Need at least 4 active fencers.")}");
+
+    const int minPoolSize = 4, maxPoolSize = 8;
+    var draftPools = t.Pools
+        .Where(p => p.Index != int.MaxValue && p.FencerIds.Count > 0)
+        .OrderBy(p => p.Index)
+        .ToList();
+
+    List<Pool> pools;
+    if (draftPools.Count > 0)
+    {
+        var bad = draftPools.Where(p => p.FencerIds.Count < minPoolSize || p.FencerIds.Count > maxPoolSize).ToList();
+        if (bad.Count > 0)
+            return Results.Redirect($"{back}?error={Uri.EscapeDataString("Every non-empty pool must have 4-8 fencers.")}");
+
+        var assigned = new HashSet<string>(draftPools.SelectMany(p => p.FencerIds), StringComparer.Ordinal);
+        var unassigned = t.Fencers.Where(f => !f.IsWithdrawn && !assigned.Contains(f.Id)).ToList();
+        if (unassigned.Count > 0)
+            return Results.Redirect($"{back}?error={Uri.EscapeDataString($"{unassigned.Count} fencer(s) are not assigned to a pool.")}");
+
+        for (int i = 0; i < draftPools.Count; i++) draftPools[i].Index = i;
+        TournamentEngine.GeneratePoolMatches(draftPools);
+        pools = draftPools;
+    }
+    else
+    {
+        var active = t.Fencers.Where(f => !f.IsWithdrawn).ToList();
+        pools = TournamentEngine.BuildPools(active, new Random());
+    }
+
+    try
+    {
+        foreach (var pool in pools)
+            await sheets.UpsertPoolAsync(tournamentId, pool);
+        await sheets.AppendMatchesAsync(tournamentId, pools.SelectMany(p => p.Matches).ToList());
+
+        t.Pools = pools;
+        t.State = TournamentState.PoolsInProgress;
+        await sheets.UpsertTournamentHeaderAsync(t);
+    }
+    catch (Exception ex)
+    {
+        cache.InvalidateTournaments();
+        return Results.Redirect($"{back}?error={Uri.EscapeDataString($"Start failed: {ex.Message}")}");
+    }
+
+    cache.InvalidateTournaments();
+    return Results.Redirect($"{back}?tab=pools");
+}).RequireAuthorization().DisableAntiforgery();
+
+// --- Match scoring: points / cards / undo ---
+app.MapPost("/tournaments/match/score", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string matchId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string action,
+    [Microsoft.AspNetCore.Mvc.FromForm] string side,
+    [Microsoft.AspNetCore.Mvc.FromForm] int delta,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? tab) =>
+{
+    var back = $"/tournaments/{tournamentId}/match/{matchId}?tab={tab}";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null || t.State == TournamentState.Finished) return Results.Redirect(back);
+    var match = FindTournamentMatch(t, matchId);
+    if (match is null || match.Status == MatchStatus.Finished) return Results.Redirect(back);
+
+    bool left = side == "left";
+    switch (action)
+    {
+        case "point":
+            if (left) match.LeftScore = Math.Max(0, match.LeftScore + delta);
+            else match.RightScore = Math.Max(0, match.RightScore + delta);
+            break;
+        case "yellow":
+            if (left) { if (match.LeftYellowCards == 0 && match.LeftRedCards == 0) match.LeftYellowCards++; }
+            else { if (match.RightYellowCards == 0 && match.RightRedCards == 0) match.RightYellowCards++; }
+            break;
+        case "red":
+            if (left) { match.LeftRedCards++; match.RightScore++; }
+            else { match.RightRedCards++; match.LeftScore++; }
+            break;
+        case "undo":
+            if (left)
+            {
+                if (match.LeftRedCards > 0) { match.LeftRedCards--; match.RightScore = Math.Max(0, match.RightScore - 1); }
+                else if (match.LeftYellowCards > 0) match.LeftYellowCards--;
+            }
+            else
+            {
+                if (match.RightRedCards > 0) { match.RightRedCards--; match.LeftScore = Math.Max(0, match.LeftScore - 1); }
+                else if (match.RightYellowCards > 0) match.RightYellowCards--;
+            }
+            break;
+    }
+
+    if (match.Status == MatchStatus.Pending) match.Status = MatchStatus.InProgress;
+    match.UpdatedByUserId = TournamentUserId(http);
+    await sheets.UpsertMatchAsync(tournamentId, match);
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+// --- Match clock: +/- minute, reset ---
+app.MapPost("/tournaments/match/clock", async (
+    HttpContext http, IGoogleSheetsService sheets, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string matchId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string action,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? tab) =>
+{
+    var back = $"/tournaments/{tournamentId}/match/{matchId}?tab={tab}";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null || t.State == TournamentState.Finished) return Results.Redirect(back);
+    var match = FindTournamentMatch(t, matchId);
+    if (match is null || match.Status == MatchStatus.Finished) return Results.Redirect(back);
+
+    switch (action)
+    {
+        case "addminute": match.RemainingTimeSeconds += 60; break;
+        case "subminute": if (match.RemainingTimeSeconds - 60 >= 120) match.RemainingTimeSeconds -= 60; break;
+        case "restart": match.RemainingTimeSeconds = TournamentEngine.DefaultMatchSeconds; break;
+    }
+    await sheets.UpsertMatchAsync(tournamentId, match);
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+// --- Finish a match (mirrors MatchViewModel.FinishMatchAsync) ---
+app.MapPost("/tournaments/match/finish", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string matchId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? tab) =>
+{
+    var back = $"/tournaments/{tournamentId}/match/{matchId}?tab={tab}";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null || t.State == TournamentState.Finished) return Results.Redirect(back);
+    var match = FindTournamentMatch(t, matchId);
+    if (match is null || match.Status == MatchStatus.Finished) return Results.Redirect(back);
+
+    bool isElim = match.BracketRound.HasValue;
+    if (isElim && match.LeftScore == match.RightScore)
+        return Results.Redirect($"{back}&error={Uri.EscapeDataString("Elimination matches cannot end in a tie.")}");
+
+    match.Status = MatchStatus.Finished;
+    match.WinnerFencerId = match.LeftScore == match.RightScore
+        ? null
+        : (match.LeftScore > match.RightScore ? match.LeftFencerId : match.RightFencerId);
+    match.FinishedAtUtc = DateTime.UtcNow;
+    match.LockedByUserId = null;
+    match.LockedAtUtc = null;
+    match.UpdatedByUserId = TournamentUserId(http);
+    await sheets.UpsertMatchAsync(tournamentId, match);
+
+    if (isElim && t.Bracket is not null)
+    {
+        TournamentEngine.PatchInBracket(t.Bracket, match);
+        var downstream = TournamentEngine.PropagateAndCollectChanges(t.Bracket);
+        foreach (var m in downstream)
+        {
+            if (m.Id == match.Id) continue;
+            try { await sheets.UpsertMatchAsync(tournamentId, m); } catch { }
+        }
+
+        if (TournamentEngine.IsBracketComplete(t.Bracket) && t.State != TournamentState.Finished)
+        {
+            var order = TournamentEngine.ComputeFinalStandings(t);
+            await sheets.SaveFinalStandingsAsync(tournamentId, order);
+            t.FinalStandingFencerIds = order;
+            t.State = TournamentState.Finished;
+            await sheets.UpsertTournamentHeaderAsync(t);
+        }
+    }
+
+    cache.InvalidateTournaments();
+    return Results.Redirect($"/tournaments/{tournamentId}?tab={tab}");
+}).RequireAuthorization().DisableAntiforgery();
+
+// --- Reopen a finished match ---
+app.MapPost("/tournaments/match/reopen", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string matchId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? tab) =>
+{
+    var back = $"/tournaments/{tournamentId}/match/{matchId}?tab={tab}";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null || t.State == TournamentState.Finished) return Results.Redirect(back);
+    var match = FindTournamentMatch(t, matchId);
+    if (match is null || match.Status != MatchStatus.Finished) return Results.Redirect(back);
+
+    match.Status = MatchStatus.InProgress;
+    match.WinnerFencerId = null;
+    match.FinishedAtUtc = null;
+    match.UpdatedByUserId = TournamentUserId(http);
+    await sheets.UpsertMatchAsync(tournamentId, match);
+    cache.InvalidateTournaments();
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+// --- Elimination: generate bracket by size ---
+app.MapPost("/tournaments/elim/generate", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId,
+    [Microsoft.AspNetCore.Mvc.FromForm] int size) =>
+{
+    var back = $"/tournaments/{tournamentId}?tab=elim";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null || t.Bracket is not null) return Results.Redirect(back);
+    if (t.Pools.SelectMany(p => p.Matches).Any(m => m.Status != MatchStatus.Finished))
+        return Results.Redirect($"{back}?error={Uri.EscapeDataString("Finish every pool match first.")}");
+
+    var bracket = TournamentEngine.BuildBracketFromPoolStandingsBySize(t, size);
+    t.Bracket = bracket;
+
+    var initial = new List<Match>(bracket.Rounds.SelectMany(r => r.Matches));
+    if (bracket.BronzeMatch is not null) initial.Add(bracket.BronzeMatch);
+    await sheets.AppendMatchesAsync(tournamentId, initial);
+
+    var changed = TournamentEngine.PropagateAndCollectChanges(bracket);
+    foreach (var m in changed)
+        await sheets.UpsertMatchAsync(tournamentId, m);
+
+    t.State = TournamentState.EliminationInProgress;
+    await sheets.UpsertTournamentHeaderAsync(t);
+    cache.InvalidateTournaments();
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+// --- Elimination: reset bracket back to PoolsClosed ---
+app.MapPost("/tournaments/elim/reset", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId) =>
+{
+    var back = $"/tournaments/{tournamentId}?tab=elim";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null || t.Bracket is null) return Results.Redirect(back);
+
+    var bracketMatches = t.Bracket.Rounds.SelectMany(r => r.Matches).ToList();
+    if (t.Bracket.BronzeMatch is not null) bracketMatches.Add(t.Bracket.BronzeMatch);
+    foreach (var m in bracketMatches)
+        await sheets.DeleteMatchAsync(tournamentId, m.Id);
+
+    await sheets.SaveFinalStandingsAsync(tournamentId, Array.Empty<string>());
+    t.Bracket = null;
+    t.FinalStandingFencerIds = new List<string>();
+    t.State = TournamentState.PoolsClosed;
+    await sheets.UpsertTournamentHeaderAsync(t);
+    cache.InvalidateTournaments();
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+// --- End tournament (publish final standings) ---
+app.MapPost("/tournaments/end", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId) =>
+{
+    var back = $"/tournaments/{tournamentId}?tab=final";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null || t.Bracket is null || !TournamentEngine.IsBracketComplete(t.Bracket))
+        return Results.Redirect($"/tournaments/{tournamentId}?tab=elim");
+
+    var order = TournamentEngine.ComputeFinalStandings(t);
+    await sheets.SaveFinalStandingsAsync(tournamentId, order);
+    t.FinalStandingFencerIds = order;
+    t.State = TournamentState.Finished;
+    await sheets.UpsertTournamentHeaderAsync(t);
+    cache.InvalidateTournaments();
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+// --- Reopen a finished tournament ---
+app.MapPost("/tournaments/reopen", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId) =>
+{
+    var back = $"/tournaments/{tournamentId}";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null || t.State != TournamentState.Finished) return Results.Redirect(back);
+
+    t.State = t.Bracket is not null ? TournamentState.EliminationInProgress : TournamentState.PoolsClosed;
+    await sheets.UpsertTournamentHeaderAsync(t);
+    cache.InvalidateTournaments();
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
+// --- Restart tournament back to Setup ---
+app.MapPost("/tournaments/restart", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, TournamentAccessRegistry access,
+    [Microsoft.AspNetCore.Mvc.FromForm] string tournamentId) =>
+{
+    var back = $"/tournaments/{tournamentId}";
+    if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
+    var t = await sheets.GetTournamentAsync(tournamentId);
+    if (t is null || t.State == TournamentState.Setup) return Results.Redirect(back);
+
+    var allMatches = t.Pools.SelectMany(p => p.Matches).ToList();
+    if (t.Bracket is not null)
+    {
+        allMatches.AddRange(t.Bracket.Rounds.SelectMany(r => r.Matches));
+        if (t.Bracket.BronzeMatch is not null) allMatches.Add(t.Bracket.BronzeMatch);
+    }
+    foreach (var m in allMatches)
+        await sheets.DeleteMatchAsync(tournamentId, m.Id);
+
+    await sheets.SaveFinalStandingsAsync(tournamentId, Array.Empty<string>());
+
+    foreach (var pool in t.Pools)
+    {
+        pool.FencerIds.Clear();
+        pool.Matches.Clear();
+        pool.IsClosed = false;
+        pool.Index = int.MaxValue;
+        await sheets.UpsertPoolAsync(tournamentId, pool);
+    }
+
+    foreach (var f in t.Fencers.Where(f => f.IsWithdrawn))
+    {
+        f.IsWithdrawn = false;
+        await sheets.UpsertTournamentFencerAsync(tournamentId, f);
+    }
+
+    t.Pools = new List<Pool>();
+    t.Bracket = null;
+    t.FinalStandingFencerIds = new List<string>();
+    t.State = TournamentState.Setup;
+    await sheets.UpsertTournamentHeaderAsync(t);
+    cache.InvalidateTournaments();
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
 
 static bool ParseTime(string? s, out TimeSpan t) => TimeSpan.TryParse(s, out t);
+
+static Match? FindTournamentMatch(Tournament t, string id)
+{
+    foreach (var pool in t.Pools)
+    {
+        var m = pool.Matches.FirstOrDefault(m => m.Id == id);
+        if (m is not null) return m;
+    }
+    if (t.Bracket is not null)
+    {
+        foreach (var round in t.Bracket.Rounds)
+        {
+            var m = round.Matches.FirstOrDefault(m => m.Id == id);
+            if (m is not null) return m;
+        }
+        if (t.Bracket.BronzeMatch?.Id == id) return t.Bracket.BronzeMatch;
+    }
+    return null;
+}

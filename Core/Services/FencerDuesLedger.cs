@@ -63,11 +63,12 @@ public static class FencerDuesLedger
         decimal ThisMonthOutstanding,
         decimal PriorOutstanding,
         decimal FinalCredit,
+        decimal ThisMonthEffectivePaid,
         IReadOnlyList<UnpaidMonth> UnpaidMonths);
 
     /// <summary>A fully-settled summary — used as the fallback when no data exists.</summary>
     public static DuesSummary AllPaidSummary { get; } =
-        new(DuesStatus.AllPaid, 0m, 0m, 0m, 0m, Array.Empty<UnpaidMonth>());
+        new(DuesStatus.AllPaid, 0m, 0m, 0m, 0m, 0m, Array.Empty<UnpaidMonth>());
 
     /// <summary>
     /// Reduces a computed ledger into the cumulative summary shown on the Home
@@ -78,13 +79,16 @@ public static class FencerDuesLedger
     public static DuesSummary Summarize(
         IReadOnlyList<MonthResult> results, int currentYear, int currentMonth)
     {
-        decimal prior = 0m, thisMonth = 0m, finalCredit = 0m;
+        decimal prior = 0m, thisMonth = 0m, finalCredit = 0m, thisMonthEffectivePaid = 0m;
         var unpaid = new List<UnpaidMonth>();
 
         foreach (var r in results)
         {
             var outstanding = r.Contribution.Quote.Outstanding;
             finalCredit = r.Contribution.Quote.Overpayment;
+
+            if (r.Year == currentYear && r.Month == currentMonth)
+                thisMonthEffectivePaid = r.Contribution.Quote.EffectivePaid;
 
             if (outstanding <= 0m) continue;
 
@@ -99,7 +103,7 @@ public static class FencerDuesLedger
             finalCredit > 0m ? DuesStatus.Overpaid       :
                                DuesStatus.AllPaid;
 
-        return new DuesSummary(status, prior + thisMonth, thisMonth, prior, finalCredit, unpaid);
+        return new DuesSummary(status, prior + thisMonth, thisMonth, prior, finalCredit, thisMonthEffectivePaid, unpaid);
     }
 
     /// <summary>

@@ -28,6 +28,10 @@ public partial class FencersViewModel : ObservableObject
     private List<IndividualLesson> _allLessons = new();
     private List<Payment> _allPayments = new();
 
+    // Price rules active for the current month, used to phrase a fencer's
+    // forward credit as "Payed for the month" / "Payed for X more sessions".
+    private List<PriceRule> _currentMonthRules = new();
+
     [ObservableProperty] private Fencer? selectedFencer;
     [ObservableProperty] private FencerDetailsVm? selectedDetails;
 
@@ -93,6 +97,8 @@ public partial class FencersViewModel : ObservableObject
             var allRules = priceRulesTask.Result;
             var allLessons = lessonsTask.Result;
 
+            var currentMonthRules = FencerDuesLedger.RulesForMonth(allRules, today.Year, today.Month);
+
             // Month span for the dues ledger. This MUST match the Finance page:
             // include the current month, every training month (INCLUDING future
             // materialized sessions), and any payment-only months. Capping at the
@@ -146,7 +152,7 @@ public partial class FencersViewModel : ObservableObject
             _statusByFencer = statusByFencer;
             _allTrainings = allTrainings;
             _allLessons = allLessons;
-            _allPayments = paymentsByMonth.Values.SelectMany(p => p).ToList();
+            _currentMonthRules = currentMonthRules;
 
             if (SelectedFencer is null)
             {
@@ -251,11 +257,12 @@ public partial class FencersViewModel : ObservableObject
     }
 
     /// <summary>Maps the cumulative summary to display text + colour flags (green/grey/red).</summary>
-    private static (string Text, bool Green, bool Grey, bool Red) DescribePayment(FencerDuesLedger.DuesSummary s)
+    private static (string Text, bool Green, bool Grey, bool Red) DescribePayment(
+        FencerDuesLedger.DuesSummary s, bool isStudent, IReadOnlyList<PriceRule> currentRules)
         => s.Status switch
         {
             FencerDuesLedger.DuesStatus.Overpaid =>
-                ($"Overpayed by {s.FinalCredit:N0} Ft", true, false, false),
+                (DuesCalculator.DescribeOverpayment(s.ThisMonthEffectivePaid, s.FinalCredit, isStudent, currentRules), true, false, false),
             FencerDuesLedger.DuesStatus.DueThisMonth =>
                 ($"Due {s.ThisMonthOutstanding:N0} Ft by the end of this month", false, true, false),
             FencerDuesLedger.DuesStatus.DueWithArrears =>
@@ -325,7 +332,7 @@ public partial class FencersViewModel : ObservableObject
             l.InstructorId == fencer.Id &&
             l.Status == IndividualLessonStatus.Accepted);
 
-        var (statusText, green, grey, red) = DescribePayment(summary);
+        var (statusText, green, grey, red) = DescribePayment(summary, fencer.IsStudent, _currentMonthRules);
 
         var unpaidRows = (summary.UnpaidMonths ?? Array.Empty<FencerDuesLedger.UnpaidMonth>())
             .OrderBy(u => u.Year).ThenBy(u => u.Month)

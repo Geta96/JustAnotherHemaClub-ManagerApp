@@ -187,9 +187,12 @@ public static class TournamentEngine
         public string FencerId { get; init; } = string.Empty;
         public int MatchesPlayed { get; set; }
         public int MatchesWon { get; set; }
+        public int MatchesDrawn { get; set; }
         public int PointsFor { get; set; }
         public int PointsAgainst { get; set; }
+        public int RedCards { get; set; }
 
+        public int MatchesLost => Math.Max(0, MatchesPlayed - MatchesWon - MatchesDrawn);
         public double Windicator         => MatchesPlayed > 0 ? (double)MatchesWon    / MatchesPlayed : 0;
         public double AvgPointsFor     => MatchesPlayed > 0 ? (double)PointsFor     / MatchesPlayed : 0;
         public double AvgPointsAgainst => MatchesPlayed > 0 ? (double)PointsAgainst / MatchesPlayed : 0;
@@ -208,8 +211,10 @@ public static class TournamentEngine
             left.MatchesPlayed++;  right.MatchesPlayed++;
             left.PointsFor     += m.LeftScore;  left.PointsAgainst  += m.RightScore;
             right.PointsFor    += m.RightScore; right.PointsAgainst += m.LeftScore;
+            left.RedCards      += m.LeftRedCards;  right.RedCards += m.RightRedCards;
             if      (m.WinnerFencerId == m.LeftFencerId)  left.MatchesWon++;
             else if (m.WinnerFencerId == m.RightFencerId) right.MatchesWon++;
+            else { left.MatchesDrawn++; right.MatchesDrawn++; }
         }
         return SortStandings(rows.Values);
     }

@@ -192,7 +192,7 @@ else
                                         <div class="due-status">
                                             @if (d.IsOverpaid)
                                             {
-                                                <span class="pay-ok">&#10003; Overpayed by @d.Overpayment.ToString("N0") Ft</span>
+                                                <span class="pay-ok">&#10003; @d.OverpaymentText</span>
                                             }
                                             else if (d.IsPaid)
                                             {
@@ -364,6 +364,10 @@ else
         public string TierLabel = "—";
         public bool IsPaid;
         public bool IsOverpaid;
+        public IReadOnlyList<PriceRule> ActiveRules = Array.Empty<PriceRule>();
+
+        public string OverpaymentText =>
+            DuesCalculator.DescribeOverpayment(AlreadyPaid + CreditIn, Overpayment, Fencer.IsStudent, ActiveRules);
 
         public string Summary
         {
@@ -372,7 +376,7 @@ else
                 var student = Fencer.IsStudent ? " · student" : "";
                 if (SessionsAttended == 0) return "No sessions";
                 var s = $"{SessionsAttended} session{(SessionsAttended == 1 ? "" : "s")}";
-                if (IsOverpaid) return $"{s} · {TierLabel} · overpayed by {Overpayment:N0} Ft{student}";
+                if (IsOverpaid) return $"{s} · {TierLabel} · {LowerFirst(OverpaymentText)}{student}";
                 if (IsPaid)
                     return AlreadyPaid > 0
                         ? $"{s} · {TierLabel} · paid {AlreadyPaid:N0} Ft \u2713{student}"
@@ -381,6 +385,9 @@ else
                 return $"{s} · {TierLabel} · {AmountDue:N0} Ft{student}";
             }
         }
+
+        private static string LowerFirst(string s) =>
+            string.IsNullOrEmpty(s) ? s : char.ToLowerInvariant(s[0]) + s[1..];
     }
 
     protected override async Task OnInitializedAsync()
@@ -502,6 +509,7 @@ else
                     TierLabel = quote.TierLabel,
                     IsPaid = quote.IsCovered,
                     IsOverpaid = quote.IsOverpaid,
+                    ActiveRules = mv.ActiveRules,
                 });
             }
 

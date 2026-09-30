@@ -400,7 +400,9 @@ public partial class HomeViewModel : ObservableObject
             switch (summary.Status)
             {
                 case FencerDuesLedger.DuesStatus.Overpaid:
-                    PaymentStatusText = $"Overpayed by {summary.FinalCredit:0} Ft";
+                    PaymentStatusText = DuesCalculator.DescribeOverpayment(
+                        summary.ThisMonthEffectivePaid, summary.FinalCredit, me.IsStudent,
+                        FencerDuesLedger.RulesForMonth(allRules, today.Year, today.Month));
                     PaymentStatusColor = PaymentGreen;
                     break;
 

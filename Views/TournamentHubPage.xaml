@@ -286,19 +286,23 @@
                             <Label Text="Overall standings" Style="{StaticResource H2}" />
 
                             <!-- Column headers (mirror the per-pool table) -->
-                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto"
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
                                   ColumnSpacing="8">
                                 <Label Grid.Column="0" Text="#"      Style="{StaticResource Caption}" />
                                 <Label Grid.Column="1" Text="Fencer" Style="{StaticResource Caption}" />
-                                <Label Grid.Column="2" Text="W/M"    Style="{StaticResource Caption}"
+                                <Label Grid.Column="2" Text="W"      Style="{StaticResource Caption}"
                                        HorizontalTextAlignment="End" />
-                                <Label Grid.Column="3" Text="Win%"   Style="{StaticResource Caption}"
+                                <Label Grid.Column="3" Text="L"      Style="{StaticResource Caption}"
                                        HorizontalTextAlignment="End" />
-                                <Label Grid.Column="4" Text="Avg+"   Style="{StaticResource Caption}"
+                                <Label Grid.Column="4" Text="D"      Style="{StaticResource Caption}"
                                        HorizontalTextAlignment="End" />
-                                <Label Grid.Column="5" Text="Avg−"   Style="{StaticResource Caption}"
+                                <Label Grid.Column="5" Text="Win%"   Style="{StaticResource Caption}"
                                        HorizontalTextAlignment="End" />
-                                <Label Grid.Column="6" Text="R"      Style="{StaticResource Caption}"
+                                <Label Grid.Column="6" Text="Avg+"   Style="{StaticResource Caption}"
+                                       HorizontalTextAlignment="End" />
+                                <Label Grid.Column="7" Text="Avg−"   Style="{StaticResource Caption}"
+                                       HorizontalTextAlignment="End" />
+                                <Label Grid.Column="8" Text="R"      Style="{StaticResource Caption}"
                                        HorizontalTextAlignment="End" />
                             </Grid>
 
@@ -307,7 +311,7 @@
                                 <BindableLayout.ItemTemplate>
                                     <DataTemplate x:DataType="vm:PoolStandingRowVm">
                                         <VerticalStackLayout Spacing="2">
-                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto"
+                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
                                                   ColumnSpacing="8" Padding="0,4">
                                                 <Label Grid.Column="0" Text="{Binding RankText}"
                                                        FontAttributes="Bold"
@@ -315,14 +319,18 @@
                                                 <Label Grid.Column="1" Text="{Binding Name}" />
                                                 <Label Grid.Column="2" Text="{Binding WinsText}"
                                                        HorizontalTextAlignment="End" />
-                                                <Label Grid.Column="3" Text="{Binding WinPctText}"
+                                                <Label Grid.Column="3" Text="{Binding LossesText}"
+                                                       HorizontalTextAlignment="End" />
+                                                <Label Grid.Column="4" Text="{Binding DrawsText}"
+                                                       HorizontalTextAlignment="End" />
+                                                <Label Grid.Column="5" Text="{Binding WinPctText}"
                                                        FontAttributes="Bold"
                                                        HorizontalTextAlignment="End" />
-                                                <Label Grid.Column="4" Text="{Binding AvgForText}"
+                                                <Label Grid.Column="6" Text="{Binding AvgForText}"
                                                        HorizontalTextAlignment="End" />
-                                                <Label Grid.Column="5" Text="{Binding AvgAgainstText}"
+                                                <Label Grid.Column="7" Text="{Binding AvgAgainstText}"
                                                        HorizontalTextAlignment="End" />
-                                                <Label Grid.Column="6" Text="{Binding RedCardsText}"
+                                                <Label Grid.Column="8" Text="{Binding RedCardsText}"
                                                        HorizontalTextAlignment="End" />
                                             </Grid>
 
@@ -356,15 +364,19 @@
                                               ColumnSpacing="8">
                                             <Label Grid.Column="0" Text="#"      Style="{StaticResource Caption}" />
                                             <Label Grid.Column="1" Text="Fencer" Style="{StaticResource Caption}" />
-                                            <Label Grid.Column="2" Text="W/M"    Style="{StaticResource Caption}"
+                                            <Label Grid.Column="2" Text="W"      Style="{StaticResource Caption}"
                                                    HorizontalTextAlignment="End" />
-                                            <Label Grid.Column="3" Text="Win%"   Style="{StaticResource Caption}"
+                                            <Label Grid.Column="3" Text="L"      Style="{StaticResource Caption}"
                                                    HorizontalTextAlignment="End" />
-                                            <Label Grid.Column="4" Text="Avg+"   Style="{StaticResource Caption}"
+                                            <Label Grid.Column="4" Text="D"      Style="{StaticResource Caption}"
                                                    HorizontalTextAlignment="End" />
-                                            <Label Grid.Column="5" Text="Avg−"   Style="{StaticResource Caption}"
+                                            <Label Grid.Column="5" Text="Win%"   Style="{StaticResource Caption}"
                                                    HorizontalTextAlignment="End" />
-                                            <Label Grid.Column="6" Text="R"      Style="{StaticResource Caption}"
+                                            <Label Grid.Column="6" Text="Avg+"   Style="{StaticResource Caption}"
+                                                   HorizontalTextAlignment="End" />
+                                            <Label Grid.Column="7" Text="Avg−"   Style="{StaticResource Caption}"
+                                                   HorizontalTextAlignment="End" />
+                                            <Label Grid.Column="8" Text="R"      Style="{StaticResource Caption}"
                                                    HorizontalTextAlignment="End" />
                                         </Grid>
 
@@ -373,7 +385,7 @@
                                             <BindableLayout.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:PoolStandingRowVm">
                                                     <VerticalStackLayout Spacing="2">
-                                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto"
+                                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
                                                               ColumnSpacing="8" Padding="0,4">
                                                             <Label Grid.Column="0" Text="{Binding RankText}"
                                                                    FontAttributes="Bold"
@@ -381,14 +393,18 @@
                                                             <Label Grid.Column="1" Text="{Binding Name}" />
                                                             <Label Grid.Column="2" Text="{Binding WinsText}"
                                                                    HorizontalTextAlignment="End" />
-                                                            <Label Grid.Column="3" Text="{Binding WinPctText}"
+                                                            <Label Grid.Column="3" Text="{Binding LossesText}"
+                                                                   HorizontalTextAlignment="End" />
+                                                            <Label Grid.Column="4" Text="{Binding DrawsText}"
+                                                                   HorizontalTextAlignment="End" />
+                                                            <Label Grid.Column="5" Text="{Binding WinPctText}"
                                                                    FontAttributes="Bold"
                                                                    HorizontalTextAlignment="End" />
-                                                            <Label Grid.Column="4" Text="{Binding AvgForText}"
+                                                            <Label Grid.Column="6" Text="{Binding AvgForText}"
                                                                    HorizontalTextAlignment="End" />
-                                                            <Label Grid.Column="5" Text="{Binding AvgAgainstText}"
+                                                            <Label Grid.Column="7" Text="{Binding AvgAgainstText}"
                                                                    HorizontalTextAlignment="End" />
-                                                            <Label Grid.Column="6" Text="{Binding RedCardsText}"
+                                                            <Label Grid.Column="8" Text="{Binding RedCardsText}"
                                                                    HorizontalTextAlignment="End" />
                                                         </Grid>
 

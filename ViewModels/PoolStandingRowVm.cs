@@ -8,6 +8,8 @@ public sealed class PoolStandingRowVm
     public int Rank { get; }
     public int MatchesDone { get; }
     public int Wins { get; }
+    public int Losses { get; }
+    public int Draws { get; }
     public int PointsFor { get; }
     public int PointsAgainst { get; }
     public int RedCards { get; }
@@ -20,7 +22,7 @@ public sealed class PoolStandingRowVm
 
     public PoolStandingRowVm(
         string fencerId, string name, int rank,
-        int matchesDone, int wins, int pointsFor, int pointsAgainst, int redCards,
+        int matchesDone, int wins, int draws, int pointsFor, int pointsAgainst, int redCards,
         bool showQualificationSeparator)
     {
         FencerId      = fencerId;
@@ -28,6 +30,8 @@ public sealed class PoolStandingRowVm
         Rank          = rank;
         MatchesDone   = matchesDone;
         Wins          = wins;
+        Draws         = draws;
+        Losses        = System.Math.Max(0, matchesDone - wins - draws);
         PointsFor     = pointsFor;
         PointsAgainst = pointsAgainst;
         RedCards      = redCards;
@@ -38,7 +42,9 @@ public sealed class PoolStandingRowVm
     }
 
     public string RankText        => $"#{Rank}";
-    public string WinsText        => $"{Wins}/{MatchesDone}";
+    public string WinsText        => Wins.ToString();
+    public string LossesText      => Losses.ToString();
+    public string DrawsText       => Draws.ToString();
     public string WinPctText      => MatchesDone == 0 ? "—" : $"{WinPercent * 100:0}%";
     public string AvgForText      => MatchesDone == 0 ? "—" : AvgPointsFor.ToString("0.0");
     public string AvgAgainstText  => MatchesDone == 0 ? "—" : AvgPointsAgainst.ToString("0.0");

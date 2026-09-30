@@ -118,7 +118,7 @@
 
                                                                 <!-- Overpaid: replaces "Paid" so the credit going forward is visible. -->
                                                                 <Label Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
-                                                                       Text="{Binding Overpayment, StringFormat='✓ Overpayed by {0:N0} Ft'}"
+                                                                       Text="{Binding OverpaymentText, StringFormat='✓ {0}'}"
                                                                        IsVisible="{Binding IsOverpaid}"
                                                                        TextColor="#1F8A2E" FontAttributes="Bold" FontSize="14"
                                                                        LineBreakMode="WordWrap"

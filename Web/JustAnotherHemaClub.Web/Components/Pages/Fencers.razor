@@ -293,7 +293,8 @@ else
         (_paymentText, _paymentClass) = summary.Status switch
         {
             FencerDuesLedger.DuesStatus.Overpaid =>
-                ($"Overpayed by {summary.FinalCredit:N0} Ft", "ok"),
+                (DuesCalculator.DescribeOverpayment(summary.ThisMonthEffectivePaid, summary.FinalCredit, fencer.IsStudent,
+                    FencerDuesLedger.RulesForMonth(allRules, today.Year, today.Month)), "ok"),
             FencerDuesLedger.DuesStatus.DueThisMonth =>
                 ($"Due {summary.ThisMonthOutstanding:N0} Ft by the end of this month", "grey"),
             FencerDuesLedger.DuesStatus.DueWithArrears =>

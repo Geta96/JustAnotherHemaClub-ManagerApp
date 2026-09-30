@@ -182,6 +182,88 @@ public static class DuesCalculator
             IsOverpaid:       overpayment > 0m);
     }
 
+    /// <summary>
+    /// Turns a fencer's payment position into a human-friendly description of what
+    /// they have effectively pre-paid for, rather than the misleading "Overpayed
+    /// by X" wording.
+    ///
+    /// <paramref name="effectivePaidThisMonth"/> is the total funds committed
+    /// toward the current month (cash paid this month + credit carried in), and
+    /// <paramref name="forwardCredit"/> is the surplus that will carry into future
+    /// months. The distinction matters: a fencer who pays the full monthly fee up
+    /// front but has only attended one session so far is billed the cheaper
+    /// single-session tier, leaving a large "credit" — yet they have simply
+    /// "Payed for the month", not overpaid.
+    ///
+    /// The logic mirrors how a fencer actually buys ahead:
+    ///   • If the money put toward this month covers (at least) the biggest
+    ///     whole-period pass (unlimited monthly / multi-month / custom period),
+    ///     they have "Payed for the month". Any surplus above that pass is a
+    ///     genuine overpay ("… with X Ft overpay").
+    ///   • Otherwise the forward credit is expressed in prepaid sessions at the
+    ///     cheapest per-session rate (so buying a 4-session pass reads as "Payed
+    ///     for 4 more sessions"). Any leftover below one more session is overpay.
+    ///   • When nothing can interpret the position we fall back to the plain
+    ///     "Overpayed by X Ft" wording.
+    /// </summary>
+    public static string DescribeOverpayment(
+        decimal effectivePaidThisMonth,
+        decimal forwardCredit,
+        bool isStudent,
+        IReadOnlyList<PriceRule>? rules = null)
+    {
+        if (effectivePaidThisMonth <= 0m && forwardCredit <= 0m) return "";
+
+        var effective = (rules is null || rules.Count == 0) ? DefaultRules : rules;
+
+        // Biggest whole-period pass (unlimited monthly / multi-month / custom period).
+        decimal monthPrice = 0m;
+        // Cheapest per-session rate across all session-based tiers (single + packs).
+        decimal perSession = 0m;
+
+        foreach (var r in effective)
+        {
+            var price = PriceFor(r, isStudent);
+            if (price <= 0m) continue;
+
+            if (r.SessionCount == 0)
+            {
+                if (price > monthPrice) monthPrice = price;
+            }
+            else
+            {
+                var per = price / r.SessionCount;
+                if (perSession == 0m || per < perSession) perSession = per;
+            }
+        }
+
+        // Paid enough THIS month to cover a whole month/period pass — they are
+        // simply covered for the month, even if the cheaper per-session tier was
+        // billed because only a few sessions have happened so far.
+        if (monthPrice > 0m && effectivePaidThisMonth >= monthPrice)
+        {
+            var overpay = effectivePaidThisMonth - monthPrice;
+            return overpay > 0m
+                ? $"Payed for the month with {overpay:N0} Ft overpay"
+                : "Payed for the month";
+        }
+
+        // Otherwise express the carried credit as prepaid future sessions.
+        if (perSession > 0m && forwardCredit > 0m)
+        {
+            var sessions = (int)Math.Floor(forwardCredit / perSession);
+            if (sessions >= 1)
+            {
+                var overpay = forwardCredit - sessions * perSession;
+                var s = $"Payed for {sessions} more session{(sessions == 1 ? "" : "s")}";
+                return overpay > 0m ? $"{s} with {overpay:N0} Ft overpay" : s;
+            }
+        }
+
+        // Nothing could interpret the position — plain overpay wording.
+        return $"Overpayed by {forwardCredit:N0} Ft";
+    }
+
     private static bool IsApplicable(PriceRule r, int sessionsAttended) =>
         r.SessionCount switch
         {

@@ -405,7 +405,8 @@ public partial class FinanceViewModel : ObservableObject
                 {
                     MarkPaidAction = MarkPaidAsync,
                     BuildOptionsAction = BuildOptionsForRowAsync,
-                    CanMarkPaid = isInstructor
+                    CanMarkPaid = isInstructor,
+                    ActiveRules = monthRules
                 });
             }
 
@@ -423,7 +424,7 @@ public partial class FinanceViewModel : ObservableObject
 
                     var ghost = new Fencer { Id = g.Key, Name = "" }; // DisplayName → "[Deleted User]"
                     var quote = DuesCalculator.Calculate(0, ghost.IsStudent, monthRules, paid);
-                    monthVm.Dues.Add(new FencerDueRow(ghost, quote, paid) { MarkPaidAction = MarkPaidAsync, CanMarkPaid = isInstructor });
+                    monthVm.Dues.Add(new FencerDueRow(ghost, quote, paid) { MarkPaidAction = MarkPaidAsync, CanMarkPaid = isInstructor, ActiveRules = monthRules });
                 }
             }
 

@@ -136,7 +136,7 @@ public partial class FencerDetailsVm : ObservableObject
         IsPaid
             ? "All fees paid."
             : AmountDue > 0
-                ? $"Owes {AmountDue:N0} Ft in total."
+                ? $"Owes {AmountDue:N0} Ft in total ({SessionsThisMonth} session{(SessionsThisMonth == 1 ? "" : "s")} this month)."
                 : "No sessions attended this month.";
 
     // --- New stats surface ---
