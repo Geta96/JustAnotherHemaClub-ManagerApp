@@ -345,6 +345,11 @@ html, body {
     color: var(--wine);
     font-size: 14px;
 }
+.stack-form label.attendee-check {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
 .stack-form input[type="text"],
 .stack-form input[type="time"],
 .stack-form input[type="date"],
@@ -499,3 +504,46 @@ html, body {
 .pay-options .attend-btn { height: 40px; padding: 0 14px; font-size: 14px; }
 
 .active-pill { background: #DFF3E0; color: #1F8A2E; }
+
+/* --- Statistics --- */
+.stat-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 14px;
+}
+.stat-row .slate { color: var(--slate); }
+.stat-row .wine { color: var(--wine); }
+
+.leaderboard {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.leaderboard li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: var(--cream);
+    border: 1px solid rgba(140,90,89,.20);
+    border-radius: 8px;
+}
+.leaderboard .rank {
+    color: var(--wine);
+    font-weight: 700;
+    min-width: 32px;
+}
+.leaderboard .lb-name { flex: 1; }
+.leaderboard .lb-count { color: var(--muted); font-weight: 600; }
+
+.compliance-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.compliance-head .card-title { margin: 0; }

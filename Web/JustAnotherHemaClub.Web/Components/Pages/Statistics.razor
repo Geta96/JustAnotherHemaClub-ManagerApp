@@ -1,61 +1,264 @@
 @page "/statistics"
+@using System.Globalization
 @using Microsoft.AspNetCore.Authorization
-@attribute [Authorize(Roles = "Instructor")]
+@using JustAnotherHemaClub.Services
+@attribute [Authorize]
 @inject IGoogleSheetsService Sheets
+@inject AuthService Auth
+@inject UserSession Session
 
 <PageTitle>Statistics · JAHC Manager</PageTitle>
 
 <h1 class="page-title">Statistics</h1>
 
-<section class="card">
-    <h2 class="card-title">Club overview</h2>
+@if (_loading)
+{
+    <section class="card"><p class="muted">Loading…</p></section>
+}
+else
+{
+    @* ---- Per-month breakdown ---- *@
+    <section class="card">
+        <h2 class="card-title">Monthly breakdown</h2>
+        @if (_months.Count == 0)
+        {
+            <p class="muted">No sessions recorded yet.</p>
+        }
+        else
+        {
+            <ul class="weekly-list">
+                @foreach (var m in _months)
+                {
+                    <li class="weekly-row">
+                        <span class="day wine">@m.Title</span>
+                        <div class="stat-row">
+                            <span>@m.Sessions session@(m.Sessions == 1 ? "" : "s")</span>
+                            <span class="slate">In @m.Income.ToString("N0")</span>
+                            <span class="wine">Out @m.Expenses.ToString("N0")</span>
+                            <span><strong>= @m.Balance.ToString("N0")</strong></span>
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
 
-    @if (_loading)
-    {
-        <p class="muted">Loading…</p>
-    }
-    else
-    {
-        <ul class="weekly-list">
-            <li class="weekly-row">
-                <span class="day">Active members</span>
-                <span class="time">@_activeMembers</span>
-            </li>
-            <li class="weekly-row">
-                <span class="day">Instructors</span>
-                <span class="time">@_instructors</span>
-            </li>
-            <li class="weekly-row">
-                <span class="day">Trainings recorded</span>
-                <span class="time">@_trainingCount</span>
-            </li>
-            <li class="weekly-row">
-                <span class="day">Total attendances</span>
-                <span class="time">@_attendanceCount</span>
-            </li>
+    @* ---- Leaderboards (everyone) ---- *@
+    <section class="card">
+        <h2 class="card-title">Best attendance — last 3 months</h2>
+        <p class="muted">@_recentSubtitle</p>
+        <p class="muted">Top 5 - Instructors excluded</p>
+        @if (_topAttendanceRecent.Count == 0)
+        {
+            <p class="muted">No attendance recorded in this window.</p>
+        }
+        else
+        {
+            <ul class="leaderboard">
+                @foreach (var r in _topAttendanceRecent)
+                {
+                    <li><span class="rank">@r.RankText</span><span class="lb-name">@r.Name</span><span class="lb-count">@r.CountText</span></li>
+                }
+            </ul>
+        }
+    </section>
+
+    <section class="card">
+        <h2 class="card-title">Best attendance — all time</h2>
+        <p class="muted">Top 5 - Instructors excluded</p>
+        <ul class="leaderboard">
+            @foreach (var r in _topAttendanceAllTime)
+            {
+                <li><span class="rank">@r.RankText</span><span class="lb-name">@r.Name</span><span class="lb-count">@r.CountText</span></li>
+            }
         </ul>
+    </section>
+
+    <section class="card">
+        <h2 class="card-title">Most 1 on 1 lessons given</h2>
+        <p class="muted">Accepted lessons - Instructors only</p>
+        <ul class="leaderboard">
+            @foreach (var r in _topGivers)
+            {
+                <li><span class="rank">@r.RankText</span><span class="lb-name">@r.Name</span><span class="lb-count">@r.CountText</span></li>
+            }
+        </ul>
+    </section>
+
+    <section class="card">
+        <h2 class="card-title">Most 1 on 1 lessons received</h2>
+        <p class="muted">Accepted lessons only</p>
+        <ul class="leaderboard">
+            @foreach (var r in _topReceivers)
+            {
+                <li><span class="rank">@r.RankText</span><span class="lb-name">@r.Name</span><span class="lb-count">@r.CountText</span></li>
+            }
+        </ul>
+    </section>
+
+    @* ---- Club-wide compliance (instructor only) ---- *@
+    @if (Auth.IsLoggedInInstructor)
+    {
+        <h1 class="page-title" style="margin-top:24px;">Club-wide compliance</h1>
+        <p class="muted" style="max-width:860px;margin:0 auto 16px;">
+            These cards summarise all active fencers — not just the selected one.
+        </p>
+
+        <section class="card">
+            <div class="compliance-head">
+                <h2 class="card-title">GDPR consent</h2>
+                @if (_missingGdpr.Count == 0)
+                {
+                    <span class="pay-ok">&#10003; OK</span>
+                }
+            </div>
+            <p class="muted">@_gdprSummary</p>
+            @foreach (var f in _missingGdpr)
+            {
+                <div class="pay-due">@f.DisplayName</div>
+            }
+        </section>
+
+        <section class="card">
+            <div class="compliance-head">
+                <h2 class="card-title">Liability statement</h2>
+                @if (_missingLiability.Count == 0)
+                {
+                    <span class="pay-ok">&#10003; OK</span>
+                }
+            </div>
+            <p class="muted">@_liabilitySummary</p>
+            @foreach (var f in _missingLiability)
+            {
+                <div class="pay-due">@f.DisplayName</div>
+            }
+        </section>
     }
-</section>
+}
 
 @code {
     private bool _loading = true;
-    private int _activeMembers;
-    private int _instructors;
-    private int _trainingCount;
-    private int _attendanceCount;
+
+    private sealed record MonthStat(int Year, int Month, int Sessions, decimal Income, decimal Expenses)
+    {
+        public string Title => new DateTime(Year, Month, 1).ToString("yyyy MMMM", CultureInfo.InvariantCulture);
+        public decimal Balance => Income - Expenses;
+    }
+
+    private sealed record Leader(int Rank, string Name, string CountText)
+    {
+        public string RankText => $"#{Rank}";
+    }
+
+    private readonly List<MonthStat> _months = new();
+    private readonly List<Leader> _topAttendanceRecent = new();
+    private readonly List<Leader> _topAttendanceAllTime = new();
+    private readonly List<Leader> _topGivers = new();
+    private readonly List<Leader> _topReceivers = new();
+    private readonly List<Fencer> _missingGdpr = new();
+    private readonly List<Fencer> _missingLiability = new();
+
+    private string _recentSubtitle = "";
+    private string _gdprSummary = "";
+    private string _liabilitySummary = "";
 
     protected override async Task OnInitializedAsync()
     {
+        await Session.EnsureRestoredAsync();
+
         try
         {
-            var fencers = await Sheets.GetFencersAsync();
-            _activeMembers = fencers.Count(f => f.Active);
-            _instructors = fencers.Count(f => f.IsInstructor);
+            var fencersTask = Sheets.GetFencersAsync();
+            var trainingsTask = Sheets.GetTrainingsAsync();
+            var lessonsTask = Sheets.GetIndividualLessonsAsync();
+            var rangeFrom = new DateTime(2000, 1, 1);
+            var rangeTo = new DateTime(DateTime.Today.Year + 5, 12, 31);
+            var expensesTask = Sheets.GetExpensesAsync(rangeFrom, rangeTo);
+            var incomesTask = Sheets.GetIncomesAsync(rangeFrom, rangeTo);
+            await Task.WhenAll(fencersTask, trainingsTask, lessonsTask, expensesTask, incomesTask);
 
-            var trainings = await Sheets.GetTrainingsAsync();
-            _trainingCount = trainings.Count;
-            _attendanceCount = trainings.Sum(t => t.AttendeeFencerIds.Count);
+            var fencers = fencersTask.Result;
+            var trainings = trainingsTask.Result;
+            var lessons = lessonsTask.Result;
+            var expenses = expensesTask.Result;
+            var incomes = incomesTask.Result;
+
+            // ---- Monthly breakdown (payments = income proxy is not available here,
+            // so we use one-off incomes; sessions + expenses per month). ----
+            var monthKeys = new HashSet<(int Y, int M)>();
+            foreach (var t in trainings) monthKeys.Add((t.Date.Year, t.Date.Month));
+            foreach (var e in expenses) monthKeys.Add((e.Date.Year, e.Date.Month));
+            foreach (var i in incomes) monthKeys.Add((i.Date.Year, i.Date.Month));
+
+            foreach (var (y, m) in monthKeys.OrderByDescending(k => k.Y).ThenByDescending(k => k.M))
+            {
+                var from = new DateTime(y, m, 1);
+                var to = from.AddMonths(1).AddDays(-1);
+                var sessions = trainings.Count(t => t.Date.Year == y && t.Date.Month == m);
+                var inc = incomes.Where(i => i.Date >= from && i.Date <= to).Sum(i => i.Amount);
+                var exp = expenses.Where(e => e.Date >= from && e.Date <= to).Sum(e => e.Amount);
+                _months.Add(new MonthStat(y, m, sessions, inc, exp));
+            }
+
+            // ---- Leaderboards ----
+            var nameById = fencers.ToDictionary(f => f.Id, f => f.DisplayName);
+            var instructorIds = fencers.Where(f => f.IsInstructor).Select(f => f.Id).ToHashSet();
+
+            var today = DateTime.Today;
+            var cutoff = new DateTime(today.Year, today.Month, 1).AddMonths(-2);
+            _recentSubtitle = $"From {cutoff:MMM yyyy} to {today:MMM yyyy}";
+
+            BuildBoard(_topAttendanceRecent, trainings
+                .Where(t => t.Date.Date >= cutoff)
+                .SelectMany(t => t.AttendeeFencerIds)
+                .Where(id => !instructorIds.Contains(id) && nameById.ContainsKey(id)),
+                nameById, "session");
+
+            BuildBoard(_topAttendanceAllTime, trainings
+                .SelectMany(t => t.AttendeeFencerIds)
+                .Where(id => !instructorIds.Contains(id) && nameById.ContainsKey(id)),
+                nameById, "session");
+
+            var accepted = lessons.Where(l => l.Status == IndividualLessonStatus.Accepted).ToList();
+
+            BuildBoard(_topGivers, accepted
+                .Where(l => !string.IsNullOrEmpty(l.InstructorId) &&
+                            instructorIds.Contains(l.InstructorId) &&
+                            nameById.ContainsKey(l.InstructorId))
+                .Select(l => l.InstructorId),
+                nameById, "lesson");
+
+            BuildBoard(_topReceivers, accepted
+                .Where(l => !string.IsNullOrEmpty(l.StudentId) && nameById.ContainsKey(l.StudentId))
+                .Select(l => l.StudentId),
+                nameById, "lesson");
+
+            // ---- Compliance ----
+            _missingGdpr.AddRange(fencers.Where(f => f.Active && !f.GdprAccepted));
+            _missingLiability.AddRange(fencers.Where(f => f.Active && !f.LiabilityAccepted));
+
+            _gdprSummary = _missingGdpr.Count == 0
+                ? "All active fencers signed the GDPR statement."
+                : $"{_missingGdpr.Count} fencer(s) missing GDPR consent:";
+            _liabilitySummary = _missingLiability.Count == 0
+                ? "All active fencers signed the liability statement."
+                : $"{_missingLiability.Count} fencer(s) missing liability statement:";
         }
         finally { _loading = false; }
+    }
+
+    private static void BuildBoard(
+        List<Leader> target, IEnumerable<string> ids,
+        Dictionary<string, string> nameById, string unit)
+    {
+        var rows = ids
+            .GroupBy(id => id)
+            .Select(g => new { Id = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(5)
+            .ToList();
+
+        for (int i = 0; i < rows.Count; i++)
+            target.Add(new Leader(i + 1, nameById[rows[i].Id], $"{rows[i].Count} {unit}(s)"));
     }
 }

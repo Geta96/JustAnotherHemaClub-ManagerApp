@@ -435,6 +435,42 @@ app.MapPost("/lessons/delete", async (
     return Results.Redirect(back);
 }).RequireAuthorization().DisableAntiforgery();
 
+// --- Profile: the signed-in fencer edits their own details ---
+// Mirrors ProfileViewModel.SaveAsync: Name/Email/IsStudent/GDPR/Liability are
+// editable; Username, IsInstructor and Active are not touched here.
+app.MapPost("/profile/save", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? name,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? email,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? isStudent,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? gdpr,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? liability) =>
+{
+    var meId = http.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    if (string.IsNullOrWhiteSpace(meId)) return Results.Redirect("/login");
+
+    try
+    {
+        var fencers = await sheets.GetFencersAsync();
+        var me = fencers.FirstOrDefault(f => f.Id == meId);
+        if (me is null) return Results.Redirect("/profile");
+
+        me.Name = (name ?? "").Trim();
+        me.Email = (email ?? "").Trim();
+        me.IsStudent = isStudent == "on";
+        me.GdprAccepted = gdpr == "on";
+        me.LiabilityAccepted = liability == "on";
+
+        await sheets.UpsertFencerAsync(me);
+        cache.InvalidateFencers();
+        return Results.Redirect("/profile?saved=1");
+    }
+    catch (Exception ex)
+    {
+        return Results.Redirect($"/profile?error={Uri.EscapeDataString(ex.Message)}");
+    }
+}).RequireAuthorization().DisableAntiforgery();
+
 // --- Finance: promote a member to instructor (instructor-only) ---
 app.MapPost("/fencers/promote", async (
     HttpContext http, IGoogleSheetsService sheets, AuthService auth,
