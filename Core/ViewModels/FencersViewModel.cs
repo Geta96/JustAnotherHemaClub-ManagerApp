@@ -93,29 +93,42 @@ public partial class FencersViewModel : ObservableObject
             var allRules = priceRulesTask.Result;
             var allLessons = lessonsTask.Result;
 
-            // Full month span from the earliest training through the current month.
-            // Payments for EVERY month are needed so the shared ledger can carry
-            // overpayment credit forward and surface cumulative arrears — exactly
-            // like the Home payment-status card.
-            var earliest = allTrainings.Count == 0
-                ? today
-                : allTrainings.Min(t => t.Date);
+            // Month span for the dues ledger. This MUST match the Finance page:
+            // include the current month, every training month (INCLUDING future
+            // materialized sessions), and any payment-only months. Capping at the
+            // current month or omitting payment-only months makes overpayment
+            // credit that lives in a later month vanish here, so a fencer who is
+            // "Overpaid" on Finance would wrongly show "All payed up" on Fencers.
+            var monthsSet = new HashSet<(int Y, int M)> { (today.Year, today.Month) };
+            foreach (var t in allTrainings) monthsSet.Add((t.Date.Year, t.Date.Month));
 
-            var monthSpan = new List<(int Y, int M)>();
-            for (var d = new DateTime(earliest.Year, earliest.Month, 1);
-                 d <= new DateTime(today.Year, today.Month, 1);
-                 d = d.AddMonths(1))
-            {
-                monthSpan.Add((d.Year, d.Month));
-            }
-
-            var paymentTasks = monthSpan.ToDictionary(
+            var orderedYm = monthsSet.OrderBy(x => x.Y).ThenBy(x => x.M).ToList();
+            var paymentTasks = orderedYm.ToDictionary(
                 ym => ym, ym => _sheets.GetPaymentsAsync(ym.Y, ym.M));
             if (paymentTasks.Count > 0)
                 await Task.WhenAll(paymentTasks.Values);
 
             ct.ThrowIfCancellationRequested();
 
+            // Fold in payment-only months (pre-payments / refunds without a
+            // training), then re-fetch so their payments enter the credit chain.
+            var extraMonths = paymentTasks.Values
+                .SelectMany(t => t.Result)
+                .Select(p => (Y: p.Year, M: p.Month))
+                .Where(ym => !monthsSet.Contains(ym))
+                .Distinct()
+                .ToList();
+            foreach (var ym in extraMonths)
+            {
+                monthsSet.Add(ym);
+                paymentTasks[ym] = _sheets.GetPaymentsAsync(ym.Y, ym.M);
+            }
+            if (extraMonths.Count > 0)
+                await Task.WhenAll(paymentTasks.Values);
+
+            ct.ThrowIfCancellationRequested();
+
+            var monthSpan = monthsSet.OrderBy(x => x.Y).ThenBy(x => x.M).ToList();
             var paymentsByMonth = monthSpan.ToDictionary(
                 ym => ym, ym => paymentTasks[ym].Result);
 

@@ -69,11 +69,11 @@ else
                     <div class="kv"><span class="k">Username</span><span class="v">@sel.Username</span></div>
                     <div class="kv">
                         <span class="k">GDPR</span>
-                        <span class="v">@(sel.GdprAccepted ? "?" : "?")</span>
+                        <span class="v">@((MarkupString)(sel.GdprAccepted ? "&#10003;" : "&#10007;"))</span>
                     </div>
                     <div class="kv">
                         <span class="k">Liability</span>
-                        <span class="v">@(sel.LiabilityAccepted ? "?" : "?")</span>
+                        <span class="v">@((MarkupString)(sel.LiabilityAccepted ? "&#10003;" : "&#10007;"))</span>
                     </div>
                     <div class="kv">
                         <span class="k">Payment</span>
@@ -228,16 +228,36 @@ else
             _selected = _fencers.FirstOrDefault(f => f.Id == _selectedId);
             if (_selected is null) return;
 
-            // ----- Payments across the whole month span (for credit-carry) -----
-            var earliest = _allTrainings.Count == 0 ? today : _allTrainings.Min(t => t.Date);
-            var monthSpan = new List<(int Y, int M)>();
-            for (var d = new DateTime(earliest.Year, earliest.Month, 1);
-                 d <= new DateTime(today.Year, today.Month, 1);
-                 d = d.AddMonths(1))
-                monthSpan.Add((d.Year, d.Month));
+            // ----- Month span for the dues ledger -----
+            // Must match the Finance page exactly, otherwise the two screens can
+            // disagree: include the current month, every training month (INCLUDING
+            // future materialized sessions), and any payment-only months. Capping
+            // at the current month or omitting payment-only months makes overpayment
+            // credit that lives in a later month vanish here, so a fencer who is
+            // "Overpaid" on Finance wrongly shows "All payed up" on Fencers.
+            var monthsSet = new HashSet<(int Y, int M)> { (today.Year, today.Month) };
+            foreach (var t in _allTrainings) monthsSet.Add((t.Date.Year, t.Date.Month));
 
-            var paymentTasks = monthSpan.ToDictionary(ym => ym, ym => Sheets.GetPaymentsAsync(ym.Y, ym.M));
-            if (paymentTasks.Count > 0) await Task.WhenAll(paymentTasks.Values);
+            var ordered = monthsSet.OrderBy(x => x.Y).ThenBy(x => x.M).ToList();
+            var paymentTasks = ordered.ToDictionary(ym => ym, ym => Sheets.GetPaymentsAsync(ym.Y, ym.M));
+            await Task.WhenAll(paymentTasks.Values);
+
+            // Fold in payment-only months (pre-payments / refunds with no training),
+            // then re-fetch so their payments enter the credit-carry chain.
+            var extra = paymentTasks.Values
+                .SelectMany(t => t.Result)
+                .Select(p => (Y: p.Year, M: p.Month))
+                .Where(ym => !monthsSet.Contains(ym))
+                .Distinct()
+                .ToList();
+            foreach (var ym in extra)
+            {
+                monthsSet.Add(ym);
+                paymentTasks[ym] = Sheets.GetPaymentsAsync(ym.Y, ym.M);
+            }
+            await Task.WhenAll(paymentTasks.Values);
+
+            var monthSpan = monthsSet.OrderBy(x => x.Y).ThenBy(x => x.M).ToList();
             var paymentsByMonth = monthSpan.ToDictionary(ym => ym, ym => paymentTasks[ym].Result);
             _allPayments = paymentsByMonth.Values.SelectMany(p => p).ToList();
 
