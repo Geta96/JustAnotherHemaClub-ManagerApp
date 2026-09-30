@@ -198,7 +198,7 @@ app.MapPost("/trainings/attendees", async (
     ICacheControl cache,
     AuthService auth) =>
 {
-    if (!auth.IsLoggedInInstructor)
+    if (!http.User.IsInRole("Instructor"))
         return Results.Redirect("/trainings?tab=trainings");
 
     var form = await http.Request.ReadFormAsync();
@@ -234,7 +234,7 @@ app.MapPost("/weekly/save", async (
     HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, AuthService auth) =>
 {
     const string back = "/trainings?tab=weekly";
-    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
 
     var form = await http.Request.ReadFormAsync();
     var rules = await sheets.GetRecurringTrainingsAsync();
@@ -257,7 +257,7 @@ app.MapPost("/weekly/add", async (
     HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, AuthService auth) =>
 {
     const string back = "/trainings?tab=weekly";
-    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
 
     var form = await http.Request.ReadFormAsync();
     if (!Enum.TryParse<DayOfWeek>(form["dayOfWeek"], out var dow)) dow = DayOfWeek.Tuesday;
@@ -287,7 +287,7 @@ app.MapPost("/weekly/delete", async (
     HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, AuthService auth) =>
 {
     const string back = "/trainings?tab=weekly";
-    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
 
     var form = await http.Request.ReadFormAsync();
     var ruleId = form["ruleId"].ToString();
@@ -317,7 +317,7 @@ app.MapPost("/lessons/create", async (
     var mode = form["mode"].ToString(); // "direct" | "request"
 
     IndividualLesson lesson;
-    if (auth.IsLoggedInInstructor && mode == "direct")
+    if (http.User.IsInRole("Instructor") && mode == "direct")
     {
         var studentId = form["studentId"].ToString();
         if (string.IsNullOrWhiteSpace(studentId)) return Results.Redirect(back);
@@ -357,7 +357,7 @@ app.MapPost("/lessons/accept", async (
     HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, AuthService auth) =>
 {
     const string back = "/trainings?tab=lessons";
-    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
     var meId = http.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
 
     var form = await http.Request.ReadFormAsync();
@@ -378,7 +378,7 @@ app.MapPost("/lessons/reject", async (
     HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, AuthService auth) =>
 {
     const string back = "/trainings?tab=lessons";
-    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
     var meId = http.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
 
     var form = await http.Request.ReadFormAsync();
@@ -399,7 +399,7 @@ app.MapPost("/lessons/save", async (
     HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, AuthService auth) =>
 {
     const string back = "/trainings?tab=lessons";
-    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
 
     var form = await http.Request.ReadFormAsync();
     var lessons = await sheets.GetIndividualLessonsAsync();
@@ -419,7 +419,7 @@ app.MapPost("/lessons/delete", async (
     HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, AuthService auth) =>
 {
     const string back = "/trainings?tab=lessons";
-    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
 
     var form = await http.Request.ReadFormAsync();
     var lessons = await sheets.GetIndividualLessonsAsync();
@@ -441,7 +441,7 @@ app.MapPost("/fencers/promote", async (
     [Microsoft.AspNetCore.Mvc.FromForm] string fencerId) =>
 {
     var back = $"/fencers?fencer={Uri.EscapeDataString(fencerId ?? "")}";
-    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
     if (string.IsNullOrWhiteSpace(fencerId)) return Results.Redirect("/fencers");
 
     var fencers = await sheets.GetFencersAsync();
@@ -465,7 +465,7 @@ app.MapPost("/finance/markpaid", async (
     [Microsoft.AspNetCore.Mvc.FromForm] string amount) =>
 {
     const string back = "/finance?tab=monthly";
-    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
     if (string.IsNullOrWhiteSpace(fencerId)) return Results.Redirect(back);
 
     if (!decimal.TryParse(amount, System.Globalization.NumberStyles.Number,
@@ -492,7 +492,7 @@ app.MapPost("/finance/expense/add", async (
     [Microsoft.AspNetCore.Mvc.FromForm] string? amount) =>
 {
     const string back = "/finance?tab=monthly";
-    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
     decimal.TryParse(amount, System.Globalization.NumberStyles.Number,
         System.Globalization.CultureInfo.InvariantCulture, out var value);
     if (string.IsNullOrWhiteSpace(description) && value <= 0m) return Results.Redirect(back);
@@ -517,7 +517,7 @@ app.MapPost("/finance/income/add", async (
     [Microsoft.AspNetCore.Mvc.FromForm] string? amount) =>
 {
     const string back = "/finance?tab=monthly";
-    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
     decimal.TryParse(amount, System.Globalization.NumberStyles.Number,
         System.Globalization.CultureInfo.InvariantCulture, out var value);
     if (string.IsNullOrWhiteSpace(description) && value <= 0m) return Results.Redirect(back);
@@ -537,7 +537,7 @@ app.MapPost("/finance/price/add", async (
     HttpContext http, IGoogleSheetsService sheets, AuthService auth) =>
 {
     const string back = "/finance?tab=prices";
-    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
 
     var form = await http.Request.ReadFormAsync();
     decimal.TryParse(form["fullPrice"], System.Globalization.NumberStyles.Number,
@@ -577,7 +577,7 @@ app.MapPost("/finance/price/save", async (
     HttpContext http, IGoogleSheetsService sheets, AuthService auth) =>
 {
     const string back = "/finance?tab=prices";
-    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
 
     var form = await http.Request.ReadFormAsync();
     var rules = await sheets.GetPriceRulesAsync();
@@ -603,7 +603,7 @@ app.MapPost("/finance/price/delete", async (
     [Microsoft.AspNetCore.Mvc.FromForm] string ruleId) =>
 {
     const string back = "/finance?tab=prices";
-    if (!auth.IsLoggedInInstructor) return Results.Redirect(back);
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
     if (!string.IsNullOrWhiteSpace(ruleId))
         await sheets.DeletePriceRuleAsync(ruleId);
     return Results.Redirect(back);

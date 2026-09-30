@@ -288,12 +288,13 @@ html, body {
 
 /* --- Training rows with attend --- */
 .training-row {
+    display: flex;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
 }
-.training-main { display: flex; flex-direction: column; gap: 2px; }
+.training-main { display: flex; flex-direction: column; gap: 2px; flex: 1; }
 
 /* --- Pills --- */
 .pill {
