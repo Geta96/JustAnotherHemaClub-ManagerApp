@@ -53,6 +53,26 @@ public partial class TrainingsViewModel : ObservableObject
     public bool IsLoggedInInstructor => _auth.IsLoggedInInstructor;
     public bool IsLoggedInRegularFencer => _auth.IsLoggedInFencer && !_auth.IsLoggedInInstructor;
 
+    /// <summary>
+    /// Fencers an instructor can filter the trainings list by. The first entry is
+    /// a null-id "All fencers" sentinel. Members never see the picker.
+    /// </summary>
+    public ObservableCollection<FencerFilterOption> FencerFilterOptions { get; } = new();
+
+    public bool ShowFencerFilter => _auth.IsLoggedInInstructor && FencerFilterOptions.Count > 1;
+
+    [ObservableProperty] private FencerFilterOption? selectedFencerFilter;
+
+    partial void OnSelectedFencerFilterChanged(FencerFilterOption? value)
+        => ApplyFencerFilter(value?.Id);
+
+    /// <summary>Applies the current fencer filter to every month's trainings list.</summary>
+    private void ApplyFencerFilter(string? fencerId)
+    {
+        foreach (var month in Months)
+            month.ApplyFencerFilter(fencerId);
+    }
+
     public TrainingsViewModel(IGoogleSheetsService sheets, AuthService auth, IDialogService dialogs)
     {
         _sheets = sheets;
@@ -126,7 +146,7 @@ public partial class TrainingsViewModel : ObservableObject
                             SaveAction   = SaveTrainingEditAsync,
                             DeleteAction = DeleteTrainingAsync
                         };
-                        mvm.Trainings.Add(etr);
+                        mvm.AddTraining(etr);
                     }
                     list.Add(mvm);
                 }
@@ -139,6 +159,46 @@ public partial class TrainingsViewModel : ObservableObject
             // ----- UI-thread publish -----
             Months.Clear();
             foreach (var mv in built) Months.Add(mv);
+
+            // Instructor-only: rebuild the fencer-filter picker from the fencers
+            // that actually attended any session in the loaded months (so empty
+            // names/ghosts don't clutter it), keeping the current selection if
+            // still valid. Members never see it.
+            if (_auth.IsLoggedInInstructor)
+            {
+                var previousId = SelectedFencerFilter?.Id;
+
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                var options = new List<FencerFilterOption>();
+                foreach (var mv in built)
+                    foreach (var row in mv.AllTrainings)
+                        foreach (var id in row.Training.AttendeeFencerIds)
+                            if (!string.IsNullOrWhiteSpace(id) && seen.Add(id))
+                            {
+                                var f = AllFencers.FirstOrDefault(x => x.Id == id);
+                                options.Add(new FencerFilterOption(id, f?.DisplayName ?? Fencer.DeletedPlaceholder));
+                            }
+
+                var orderedOptions = options
+                    .OrderBy(o => o.Name, StringComparer.CurrentCultureIgnoreCase)
+                    .Prepend(FencerFilterOption.All)
+                    .ToList();
+
+                FencerFilterOptions.Clear();
+                foreach (var o in orderedOptions) FencerFilterOptions.Add(o);
+
+                SelectedFencerFilter = FencerFilterOptions
+                    .FirstOrDefault(o => o.Id == previousId) ?? FencerFilterOption.All;
+
+                ApplyFencerFilter(SelectedFencerFilter.Id);
+                OnPropertyChanged(nameof(ShowFencerFilter));
+            }
+            else
+            {
+                FencerFilterOptions.Clear();
+                SelectedFencerFilter = null;
+                OnPropertyChanged(nameof(ShowFencerFilter));
+            }
         }
         catch (OperationCanceledException)
         {
@@ -334,7 +394,7 @@ public partial class TrainingsViewModel : ObservableObject
         // Remove from the in-memory month groups so the UI updates without a full reload.
         foreach (var month in Months)
         {
-            if (month.Trainings.Remove(row)) break;
+            if (month.RemoveTraining(row)) break;
         }
     }
 }

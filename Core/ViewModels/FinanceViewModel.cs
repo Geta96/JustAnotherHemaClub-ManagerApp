@@ -34,6 +34,26 @@ public partial class FinanceViewModel : ObservableObject
 
     public IReadOnlyList<FinanceTab> Tabs { get; }
 
+    /// <summary>
+    /// Fencers an instructor can filter the Monthly tab by. The first entry is a
+    /// null-id "All fencers" sentinel. Members never see the picker.
+    /// </summary>
+    public ObservableCollection<FencerFilterOption> FencerFilterOptions { get; } = new();
+
+    public bool ShowFencerFilter => _auth.IsLoggedInInstructor && FencerFilterOptions.Count > 1;
+
+    [ObservableProperty] private FencerFilterOption? selectedFencerFilter;
+
+    partial void OnSelectedFencerFilterChanged(FencerFilterOption? value)
+        => ApplyFencerFilter(value?.Id);
+
+    /// <summary>Applies the current fencer filter to every month's dues list.</summary>
+    private void ApplyFencerFilter(string? fencerId)
+    {
+        foreach (var month in Months)
+            month.ApplyFencerFilter(fencerId);
+    }
+
     [ObservableProperty] private decimal personalTotalDue;
     [ObservableProperty] private bool personalAllPaid;
     [ObservableProperty] private string personalSummary = "";
@@ -220,6 +240,42 @@ public partial class FinanceViewModel : ObservableObject
             Months.Clear();
             foreach (var mv in built) Months.Add(mv);
 
+            // Build the instructor's fencer-filter list from the fencers that
+            // actually appear in any month's dues (so empty names/ghosts don't
+            // clutter it), keeping the current selection if still valid.
+            if (isInstructor)
+            {
+                var previousId = SelectedFencerFilter?.Id;
+
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                var options = new List<FencerFilterOption> { FencerFilterOption.All };
+                foreach (var mv in built)
+                    foreach (var row in mv.AllDues)
+                        if (!string.IsNullOrWhiteSpace(row.Fencer.Id) && seen.Add(row.Fencer.Id))
+                            options.Add(new FencerFilterOption(row.Fencer.Id, row.Fencer.DisplayName));
+
+                var orderedOptions = options
+                    .Skip(1)
+                    .OrderBy(o => o.Name, StringComparer.CurrentCultureIgnoreCase)
+                    .Prepend(FencerFilterOption.All)
+                    .ToList();
+
+                FencerFilterOptions.Clear();
+                foreach (var o in orderedOptions) FencerFilterOptions.Add(o);
+
+                SelectedFencerFilter = FencerFilterOptions
+                    .FirstOrDefault(o => o.Id == previousId) ?? FencerFilterOption.All;
+
+                ApplyFencerFilter(SelectedFencerFilter.Id);
+                OnPropertyChanged(nameof(ShowFencerFilter));
+            }
+            else
+            {
+                FencerFilterOptions.Clear();
+                SelectedFencerFilter = null;
+                OnPropertyChanged(nameof(ShowFencerFilter));
+            }
+
             AllTimeIncome = computed.TotalIncome;
             AllTimeExpenses = computed.TotalExpenses;
             AllTimeBalance = computed.TotalIncome - computed.TotalExpenses;
@@ -401,7 +457,7 @@ public partial class FinanceViewModel : ObservableObject
                 if (count == 0 && cashPaid == 0m && creditIn == 0m && !isMineThisMonth)
                     continue;
 
-                monthVm.Dues.Add(new FencerDueRow(f, quote, cashPaid, creditIn)
+                monthVm.AddDue(new FencerDueRow(f, quote, cashPaid, creditIn)
                 {
                     MarkPaidAction = MarkPaidAsync,
                     BuildOptionsAction = BuildOptionsForRowAsync,
@@ -424,7 +480,7 @@ public partial class FinanceViewModel : ObservableObject
 
                     var ghost = new Fencer { Id = g.Key, Name = "" }; // DisplayName → "[Deleted User]"
                     var quote = DuesCalculator.Calculate(0, ghost.IsStudent, monthRules, paid);
-                    monthVm.Dues.Add(new FencerDueRow(ghost, quote, paid) { MarkPaidAction = MarkPaidAsync, CanMarkPaid = isInstructor, ActiveRules = monthRules });
+                    monthVm.AddDue(new FencerDueRow(ghost, quote, paid) { MarkPaidAction = MarkPaidAsync, CanMarkPaid = isInstructor, ActiveRules = monthRules });
                 }
             }
 

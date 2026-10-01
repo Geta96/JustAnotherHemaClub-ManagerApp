@@ -164,6 +164,26 @@ else
             </section>
         }
 
+        @* Instructor-only: filter the monthly breakdown to a single fencer *@
+        @if (Auth.IsLoggedInInstructor && _fencerFilterOptions.Count > 1)
+        {
+            <section class="card">
+                <h2 class="card-title">Show fencer</h2>
+                <form method="get" action="/finance" class="stack-form">
+                    <input type="hidden" name="tab" value="monthly" />
+                    <label>Pick a fencer
+                        <select name="fencer" onchange="this.form.submit()">
+                            @foreach (var opt in _fencerFilterOptions)
+                            {
+                                <option value="@opt.Id" selected="@(opt.Id == (FencerFilter ?? ""))">@opt.Name</option>
+                            }
+                        </select>
+                    </label>
+                    <noscript><button class="attend-btn" type="submit">Filter</button></noscript>
+                </form>
+            </section>
+        }
+
         @if (_months.Count == 0)
         {
             <section class="card"><p class="muted">No months to show yet.</p></section>
@@ -177,11 +197,16 @@ else
                     <p class="muted">@m.Summary</p>
 
                     @* --- Dues --- *@
-                    @if (m.Dues.Count > 0)
+                    @{
+                        var visibleDues = string.IsNullOrWhiteSpace(FencerFilter)
+                            ? m.Dues
+                            : m.Dues.Where(d => d.Fencer.Id == FencerFilter).ToList();
+                    }
+                    @if (visibleDues.Count > 0)
                     {
                         <div class="sub-title wine">Dues</div>
                         <ul class="weekly-list">
-                            @foreach (var d in m.Dues)
+                            @foreach (var d in visibleDues)
                             {
                                 <li class="weekly-row training-row-outer">
                                     <div class="training-row">
@@ -239,7 +264,7 @@ else
                     }
 
                     @* --- Expenses / Income (instructor only) --- *@
-                    @if (Auth.IsLoggedInInstructor)
+                    @if (Auth.IsLoggedInInstructor && string.IsNullOrWhiteSpace(FencerFilter))
                     {
                         <div class="sub-title wine">Expenses</div>
                         @if (m.Expenses.Count > 0)
@@ -302,6 +327,13 @@ else
 @code {
     [SupplyParameterFromQuery(Name = "tab")]
     private string? TabParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "fencer")]
+    private string? FencerFilter { get; set; }
+
+    private sealed record FencerFilterOption(string Id, string Name);
+
+    private readonly List<FencerFilterOption> _fencerFilterOptions = new();
 
     private string Tab => TabParam switch
     {
@@ -529,6 +561,23 @@ else
                 .Where(d => d.Fencer.Id == myId && !d.IsPaid)
                 .Sum(d => d.AmountDue);
             _personalAllPaid = _personalTotalDue <= 0;
+        }
+
+        // Instructor-only: the fencer-filter picker options, built from fencers
+        // that actually appear in any month's dues (so empty/ghost names don't
+        // clutter it). The first entry is the "All fencers" sentinel.
+        if (isInstructor)
+        {
+            _fencerFilterOptions.Add(new FencerFilterOption("", "All fencers"));
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var d in _months
+                .SelectMany(mv => mv.Dues)
+                .Where(d => !string.IsNullOrWhiteSpace(d.Fencer.Id))
+                .OrderBy(d => d.Fencer.DisplayName, StringComparer.CurrentCultureIgnoreCase))
+            {
+                if (seen.Add(d.Fencer.Id))
+                    _fencerFilterOptions.Add(new FencerFilterOption(d.Fencer.Id, d.Fencer.DisplayName));
+            }
         }
 
         // Aggregates for Yearly / All Time.

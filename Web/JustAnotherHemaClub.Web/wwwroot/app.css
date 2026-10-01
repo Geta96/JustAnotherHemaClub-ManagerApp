@@ -1,5 +1,5 @@
-:root {
-    /* Brand palette � ported from Resources/Styles/Colors.xaml */
+﻿:root {
+    /* Brand palette — ported from Resources/Styles/Colors.xaml */
     --wine: #5D1312;
     --wine-dark: #3F0B0A;
     --cream: #EEE7D5;
@@ -56,8 +56,17 @@ html, body {
     background: var(--wine);
     padding: 48px 16px 16px;
     text-align: center;
+    overflow: hidden;
 }
-.crest { max-height: 220px; width: auto; }
+.crest {
+    max-height: 220px;
+    max-width: 100%;
+    width: auto;
+    display: block;
+    margin: 0 auto;
+    -webkit-mask-image: radial-gradient(ellipse 62% 70% at center, #000 55%, transparent 100%);
+    mask-image: radial-gradient(ellipse 95% 95% at center, #000 55%, transparent 100%);
+}
 .user-line { color: var(--cream); opacity: .8; font-size: 13px; margin-top: 4px; }
 
 .flyout-items { display: flex; flex-direction: column; padding: 8px 0; }
@@ -95,8 +104,13 @@ html, body {
     background: rgba(0,0,0,.4);
     z-index: 35;
     display: none;
+    border: none;
+    cursor: pointer;   /* iOS/mobile: labels only forward taps when clickable */
 }
 
+/* Hidden checkbox that drives the mobile drawer (works without JS/interactivity). */
+.flyout-toggle { display: none; }
+.nav-item-wrap { display: block; }
 /* --- Content --- */
 .content {
     margin-left: var(--flyout-width);
@@ -180,7 +194,11 @@ html, body {
 .login-page { min-height: 100vh; }
 .login-shell {
     min-height: 100vh;
-    display: flex; align-items: center; justify-content: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
     background: var(--wine);
     padding: 24px;
 }
@@ -193,8 +211,15 @@ html, body {
     box-shadow: 0 10px 30px rgba(0,0,0,.3);
     text-align: center;
 }
-.login-crest { max-height: 140px; width: auto; }
-.login-title { color: var(--wine); font-size: 22px; margin: 8px 0 20px; }
+.login-crest {
+    max-width: 480px;
+    width: 100%;
+    height: auto;
+    border-radius: 0;
+    box-shadow: none;
+    -webkit-mask-image: radial-gradient(ellipse 70% 70% at center, #000 40%, transparent 92%);
+    mask-image: radial-gradient(ellipse 90% 90% at center, #000 40%, transparent 92%);
+}
 .login-form { display: flex; flex-direction: column; text-align: left; }
 .login-label { color: var(--wine); font-weight: 700; font-size: 14px; margin: 10px 0 4px; }
 .login-input {
@@ -217,6 +242,47 @@ html, body {
 }
 .auth-loading { padding: 24px; color: var(--muted); }
 
+.login-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    color: var(--wine);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.login-check input { width: 16px; height: 16px; accent-color: var(--wine); }
+.login-intro { color: var(--muted); font-size: 14px; margin: 0 0 4px; text-align: left; }
+.login-note {
+    background: #DFF3E0; color: #1F8A2E;
+    border-radius: 8px; padding: 10px 12px;
+    font-size: 14px; margin-bottom: 8px;
+}
+.login-links {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+}
+.login-link {
+    color: var(--wine);
+    font-weight: 700;
+    font-size: 14px;
+    text-decoration: none;
+}
+.login-link:hover { text-decoration: underline; }
+
+/* Register call-to-action: blue, sized to match .login-button */
+.login-button.register {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    margin-top: 0;
+    background: #476FB5;
+}
+.login-button.register:hover { background: #3C5E99; }
 /* --- Next lesson card --- */
 .next-lesson.attending {
     border-color: #7FBF3F;
@@ -494,19 +560,13 @@ html, body {
 
 .pay-ok { color: #1F8A2E; font-weight: 700; }
 .pay-due { color: var(--danger); font-weight: 700; }
-.due-status { text-align: right; white-space: nowrap; }
+
+/* Home payment-status card (mirrors the MAUI Home payment-status label) */
+.payment-status { font-size: 18px; font-weight: 700; margin: 0; overflow-wrap: anywhere; }
+.payment-status.ok { color: #1F8A2E; }
+.payment-status.grey { color: #6B6B6B; }
+.payment-status.danger { color: var(--danger); }
 
-.pay-options {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin: 10px 0;
-}
-.pay-options .attend-btn { height: 40px; padding: 0 14px; font-size: 14px; }
-
-.active-pill { background: #DFF3E0; color: #1F8A2E; }
-
-/* --- Statistics --- */
 .stat-row {
     display: flex;
     flex-wrap: wrap;
@@ -1134,3 +1194,113 @@ html, body {
     opacity: .8;
 }
 .weekly-row .day.withdrawn .pill { text-decoration: none; }
+
+/* --- Home hero banner (mirrors the MAUI HomePage hero) --- */
+.home-hero {
+    position: relative;
+    max-width: 860px;
+    margin: 0 auto 16px;
+    aspect-ratio: 16 / 9;          /* constant shape at every width → no re-cropping */
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(63,11,10,.06);
+}
+.home-hero-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;              /* always fill the box, cropping overflow */
+    object-position: center;        /* keep the crop centered */
+}
+.home-hero-tint {
+    position: absolute;
+    inset: 0;
+    background: var(--wine);
+    opacity: .10;                  /* matches the MAUI BoxView wine tint */
+}
+.home-hero-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 28px 20px 24px;
+    width: 100%;
+}
+.home-hero-logo {
+    height: 180px;                 /* matches the MAUI logo HeightRequest="180" */
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+}
+.home-hero-title {
+    color: var(--cream);
+    font-size: 22px;
+    font-weight: 700;
+    margin-top: 6px;
+    text-shadow: 0 0 5px var(--wine), 0 0 5px var(--wine);
+}
+.home-hero-divider {
+    height: 2px;
+    width: 60px;
+    background: var(--slate);
+    margin: 6px 0;
+}
+.home-hero-subtitle {
+    color: var(--cream);
+    font-size: 15px;
+    text-shadow: 0 0 4px var(--wine), 0 0 4px var(--wine);
+}
+
+.flyout-close {
+    display: none;
+    position: absolute;
+    top: 8px; right: 10px;
+    z-index: 2;
+    color: var(--cream);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+@media (max-width: 768px) {
+    .flyout-close { display: block; }
+    .topbar { display: flex; }
+
+    .flyout {
+        transform: translateX(-100%);
+        transition: transform .25s ease;
+        box-shadow: 2px 0 16px rgba(0,0,0,.25);
+        width: min(var(--flyout-width), 86vw);
+    }
+
+    .content {
+        margin-left: 0;
+        padding: 16px;
+    }
+
+    .flyout-toggle:checked ~ .flyout { transform: translateX(0); }
+    .flyout-toggle:checked ~ .scrim { display: block; }
+}
+
+/* Router focuses the h1 on navigation for a11y; hide the visible box but keep
+   it for keyboard users who Tab to it. */
+.page-title:focus:not(:focus-visible) {
+    outline: none;
+}
+
+/* --- Policy pages (GDPR / Liability) --- */
+.policy-card {
+    max-width: 680px;
+    text-align: left;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+.policy-text { color: var(--ink); font-size: 14px; line-height: 1.5; }
+.policy-text p { margin: 0 0 12px; }
+.policy-text ul { margin: 0 0 12px; padding-left: 20px; }
+.policy-text li { margin-bottom: 6px; }

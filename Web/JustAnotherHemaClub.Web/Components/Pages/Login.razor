@@ -3,16 +3,23 @@
 @using Microsoft.AspNetCore.Authorization
 @attribute [AllowAnonymous]
 
-<PageTitle>Sign in · JAHC Manager</PageTitle>
+<PageTitle>Sign in — JAHC Manager</PageTitle>
 
 <div class="login-shell">
-    <div class="login-card">
-        <img src="images/monochrome_logo.jpg" alt="Just Another HEMA Club" class="login-crest" />
-        <h1 class="login-title">JAHC Manager</h1>
+    <img src="images/monochrome_logo.jpg" alt="Just Another HEMA Club" class="login-crest" />
 
+    <div class="login-card">
         @if (HasError)
         {
             <div class="login-error">Invalid username or password.</div>
+        }
+        @if (Registered)
+        {
+            <div class="login-note">Account created — you can sign in now.</div>
+        }
+        @if (Reset)
+        {
+            <div class="login-note">Password updated — sign in with your new password.</div>
         }
 
         <form method="post" action="/auth/login" class="login-form">
@@ -25,8 +32,18 @@
             <input class="login-input" id="password" name="password" type="password"
                    autocomplete="current-password" required />
 
+            <label class="login-check">
+                <input type="checkbox" name="keepLoggedIn" value="true" />
+                <span>Keep me logged in</span>
+            </label>
+
             <button class="login-button" type="submit">Sign in</button>
         </form>
+
+        <div class="login-links">
+            <a class="login-button register" href="/register">Register as new fencer</a>
+            <a class="login-link" href="/forgot-password">Forgot my password</a>
+        </div>
     </div>
 </div>
 
@@ -37,5 +54,13 @@
     [SupplyParameterFromQuery(Name = "error")]
     private string? Error { get; set; }
 
+    [SupplyParameterFromQuery(Name = "registered")]
+    private string? RegisteredFlag { get; set; }
+
+    [SupplyParameterFromQuery(Name = "reset")]
+    private string? ResetFlag { get; set; }
+
     private bool HasError => !string.IsNullOrEmpty(Error);
+    private bool Registered => RegisteredFlag == "1";
+    private bool Reset => ResetFlag == "1";
 }

@@ -276,70 +276,97 @@ else
     }
     else
     {
-        @foreach (var month in _trainingsByMonth)
+        @* Instructor-only: filter the trainings list to a single fencer *@
+        @if (Auth.IsLoggedInInstructor && _fencerFilterOptions.Count > 1)
         {
             <section class="card">
-                <h2 class="card-title">@month.Title</h2>
-                <ul class="weekly-list">
-                    @foreach (var t in month.Trainings)
-                    {
-                        var attending = _meId is not null && t.AttendeeFencerIds.Contains(_meId);
-                        <li class="weekly-row training-row-outer">
-                            <div class="training-row">
-                                <div class="training-main">
-                                    <div class="weekly-when">
-                                        <span class="day">@Capitalize(t.Date.ToString("dddd dd MMM"))</span>
-                                        <span class="time">@t.Date.ToString(@"HH\:mm") – @t.EndDate.ToString(@"HH\:mm")</span>
+                <h2 class="card-title">Show fencer</h2>
+                <form method="get" action="/trainings" class="stack-form">
+                    <input type="hidden" name="tab" value="trainings" />
+                    <label>Pick a fencer
+                        <select name="fencer" onchange="this.form.submit()">
+                            @foreach (var opt in _fencerFilterOptions)
+                            {
+                                <option value="@opt.Id" selected="@(opt.Id == (FencerFilter ?? ""))">@opt.Name</option>
+                            }
+                        </select>
+                    </label>
+                    <noscript><button class="attend-btn" type="submit">Filter</button></noscript>
+                </form>
+            </section>
+        }
+
+        @foreach (var month in _trainingsByMonth)
+        {
+            var visibleTrainings = string.IsNullOrWhiteSpace(FencerFilter)
+                ? month.Trainings
+                : month.Trainings.Where(t => t.AttendeeFencerIds.Contains(FencerFilter)).ToList();
+
+            if (visibleTrainings.Count > 0)
+            {
+                <section class="card">
+                    <h2 class="card-title">@month.Title</h2>
+                    <ul class="weekly-list">
+                        @foreach (var t in visibleTrainings)
+                        {
+                            var attending = _meId is not null && t.AttendeeFencerIds.Contains(_meId);
+                            <li class="weekly-row training-row-outer">
+                                <div class="training-row">
+                                    <div class="training-main">
+                                        <div class="weekly-when">
+                                            <span class="day">@Capitalize(t.Date.ToString("dddd dd MMM"))</span>
+                                            <span class="time">@t.Date.ToString(@"HH\:mm") – @t.EndDate.ToString(@"HH\:mm")</span>
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(t.Topic))
+                                        {
+                                            <span class="topic">@t.Topic</span>
+                                        }
                                     </div>
-                                    @if (!string.IsNullOrWhiteSpace(t.Topic))
+
+                                    @if (!Auth.IsGuest && _meId is not null)
                                     {
-                                        <span class="topic">@t.Topic</span>
+                                        <form method="post" action="/home/attend" class="attend-form">
+                                            <input type="hidden" name="trainingId" value="@t.Id" />
+                                            <input type="hidden" name="attending" value="@(attending ? "1" : "0")" />
+                                            <input type="hidden" name="returnUrl" value="/trainings?tab=trainings" />
+                                            @if (attending)
+                                            {
+                                                <button class="undo-attend" type="submit">&#10003; Attending</button>
+                                            }
+                                            else
+                                            {
+                                                <button class="attend-btn" type="submit">Attend</button>
+                                            }
+                                        </form>
                                     }
                                 </div>
 
-                                @if (!Auth.IsGuest && _meId is not null)
+                                @if (Auth.IsLoggedInInstructor)
                                 {
-                                    <form method="post" action="/home/attend" class="attend-form">
-                                        <input type="hidden" name="trainingId" value="@t.Id" />
-                                        <input type="hidden" name="attending" value="@(attending ? "1" : "0")" />
-                                        <input type="hidden" name="returnUrl" value="/trainings?tab=trainings" />
-                                        @if (attending)
-                                        {
-                                            <button class="undo-attend" type="submit">&#10003; Attending</button>
-                                        }
-                                        else
-                                        {
-                                            <button class="attend-btn" type="submit">Attend</button>
-                                        }
-                                    </form>
+                                    <details class="attendee-editor">
+                                        <summary>Attendees (@t.AttendeeFencerIds.Count)</summary>
+                                        <form method="post" action="/trainings/attendees" class="attendee-form">
+                                            <input type="hidden" name="trainingId" value="@t.Id" />
+                                            <input type="hidden" name="returnUrl" value="/trainings?tab=trainings" />
+                                            <div class="attendee-grid">
+                                                @foreach (var f in _activeFencers)
+                                                {
+                                                    <label class="attendee-check">
+                                                        <input type="checkbox" name="attendee" value="@f.Id"
+                                                               checked="@(t.AttendeeFencerIds.Contains(f.Id))" />
+                                                        <span>@f.DisplayName</span>
+                                                    </label>
+                                                }
+                                            </div>
+                                            <button class="attend-btn" type="submit">Save attendees</button>
+                                        </form>
+                                    </details>
                                 }
-                            </div>
-
-                            @if (Auth.IsLoggedInInstructor)
-                            {
-                                <details class="attendee-editor">
-                                    <summary>Attendees (@t.AttendeeFencerIds.Count)</summary>
-                                    <form method="post" action="/trainings/attendees" class="attendee-form">
-                                        <input type="hidden" name="trainingId" value="@t.Id" />
-                                        <input type="hidden" name="returnUrl" value="/trainings?tab=trainings" />
-                                        <div class="attendee-grid">
-                                            @foreach (var f in _activeFencers)
-                                            {
-                                                <label class="attendee-check">
-                                                    <input type="checkbox" name="attendee" value="@f.Id"
-                                                           checked="@(t.AttendeeFencerIds.Contains(f.Id))" />
-                                                    <span>@f.DisplayName</span>
-                                                </label>
-                                            }
-                                        </div>
-                                        <button class="attend-btn" type="submit">Save attendees</button>
-                                    </form>
-                                </details>
-                            }
-                        </li>
-                    }
-                </ul>
-            </section>
+                            </li>
+                        }
+                    </ul>
+                </section>
+            }
         }
     }
 }
@@ -347,6 +374,13 @@ else
 @code {
     [SupplyParameterFromQuery(Name = "tab")]
     private string? TabParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "fencer")]
+    private string? FencerFilter { get; set; }
+
+    private sealed record FencerFilterOption(string Id, string Name);
+
+    private readonly List<FencerFilterOption> _fencerFilterOptions = new();
 
     private string Tab => TabParam switch
     {
@@ -401,6 +435,24 @@ else
                 _names[f.Id] = f.DisplayName;
             _activeFencers.AddRange(fencers.Where(f => f.Active).OrderBy(f => f.DisplayName));
             _instructors.AddRange(fencers.Where(f => f.Active && f.IsInstructor).OrderBy(f => f.DisplayName));
+
+            // Instructor-only: build the fencer-filter picker from fencers that
+            // actually attended any session (so empty names/ghosts don't clutter
+            // it). The first entry is the "All fencers" sentinel.
+            if (Auth.IsLoggedInInstructor)
+            {
+                _fencerFilterOptions.Add(new FencerFilterOption("", "All fencers"));
+                var attendedIds = trainings
+                    .SelectMany(t => t.AttendeeFencerIds)
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .ToHashSet(StringComparer.Ordinal);
+                foreach (var f in fencers
+                    .Where(f => attendedIds.Contains(f.Id))
+                    .OrderBy(f => f.DisplayName, StringComparer.CurrentCultureIgnoreCase))
+                {
+                    _fencerFilterOptions.Add(new FencerFilterOption(f.Id, f.DisplayName));
+                }
+            }
 
             var lessons = await Sheets.GetIndividualLessonsAsync();
 

@@ -4,14 +4,17 @@
 @attribute [Authorize]
 @inject UserSession Session
 
-<div class="jahc-shell @(_flyoutOpen ? "flyout-open" : "")">
+<div class="jahc-shell">
+
+    <input type="checkbox" id="flyout-toggle" class="flyout-toggle" />
 
     <header class="topbar">
-        <button class="hamburger" @onclick="ToggleFlyout" aria-label="Menu">☰</button>
+        <label class="hamburger" for="flyout-toggle" aria-label="Menu">☰</label>
         <span class="topbar-title">JAHC Manager</span>
     </header>
 
     <nav class="flyout">
+        <label class="flyout-close" for="flyout-toggle" aria-label="Close menu">✕</label>
         <div class="flyout-header">
             <img src="images/monochrome_logo.jpg" alt="Just Another HEMA Club" class="crest" />
             @if (Session.CurrentFencer is not null)
@@ -21,16 +24,16 @@
         </div>
 
         <div class="flyout-items">
-            <NavItem Href="" Icon="⌂" Label="Home" OnNavigate="CloseFlyout" />
-            <NavItem Href="trainings" Icon="⚔" Label="Trainings" OnNavigate="CloseFlyout" />
-            <NavItem Href="tournaments" Icon="⚑" Label="Tournaments" OnNavigate="CloseFlyout" />
-            <NavItem Href="fencers" Icon="☰" Label="Fencers" OnNavigate="CloseFlyout" />
-            <NavItem Href="finance" Icon="₣" Label="Finance" OnNavigate="CloseFlyout" />
+            <NavItem Href="" Icon="⌂" Label="Home" />
+            <NavItem Href="trainings" Icon="⚔" Label="Trainings" />
+            <NavItem Href="tournaments" Icon="⚑" Label="Tournaments" />
+            <NavItem Href="fencers" Icon="☰" Label="Fencers" />
+            <NavItem Href="finance" Icon="₣" Label="Finance" />
             @if (Session.IsInstructor)
             {
-                <NavItem Href="statistics" Icon="▦" Label="Statistics" OnNavigate="CloseFlyout" />
+                <NavItem Href="statistics" Icon="▦" Label="Statistics" />
             }
-            <NavItem Href="profile" Icon="◉" Label="My Profile" OnNavigate="CloseFlyout" />
+            <NavItem Href="profile" Icon="◉" Label="My Profile" />
         </div>
 
         <form method="post" action="/auth/logout" class="logout-form">
@@ -38,10 +41,7 @@
         </form>
     </nav>
 
-    @if (_flyoutOpen)
-    {
-        <div class="scrim" @onclick="CloseFlyout"></div>
-    }
+    <label class="scrim" for="flyout-toggle" aria-hidden="true"></label>
 
     <main class="content">
         @Body
@@ -49,8 +49,6 @@
 </div>
 
 @code {
-    private bool _flyoutOpen;
-
     protected override async Task OnInitializedAsync()
     {
         Session.Changed += StateHasChanged;
@@ -58,7 +56,4 @@
     }
 
     public void Dispose() => Session.Changed -= StateHasChanged;
-
-    private void ToggleFlyout() => _flyoutOpen = !_flyoutOpen;
-    private void CloseFlyout() => _flyoutOpen = false;
 }

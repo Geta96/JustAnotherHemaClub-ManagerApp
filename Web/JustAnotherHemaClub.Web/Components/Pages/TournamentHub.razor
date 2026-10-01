@@ -1,0 +1,668 @@
+@page "/tournaments/{TournamentId}"
+@using System.Globalization
+@using Microsoft.AspNetCore.Authorization
+@using JustAnotherHemaClub.Services
+@using JustAnotherHemaClub.Web.Services
+@attribute [Authorize]
+@inject IGoogleSheetsService Sheets
+@inject AuthService Auth
+@inject UserSession Session
+@inject TournamentAccessRegistry Access
+
+<PageTitle>@(_t?.Name ?? "Tournament") · JAHC Manager</PageTitle>
+
+@* ---------- render fragments (declared before first use) ---------- *@
+@{
+    RenderFragment<Match> MatchCard = match =>
+    @<li class="weekly-row match-card @(match.Status == MatchStatus.Finished ? "match-done" : "")">
+        <div class="match-line">
+            <span class="match-fencer @(match.WinnerFencerId == match.LeftFencerId ? "winner" : "")">@NameOf(match.LeftFencerId)</span>
+            <span class="match-score">@match.LeftScore : @match.RightScore</span>
+            <span class="match-fencer @(match.WinnerFencerId == match.RightFencerId ? "winner" : "")">@NameOf(match.RightFencerId)</span>
+        </div>
+        <div class="match-foot">
+            <span class="pill @(match.Status == MatchStatus.Finished ? "active-pill" : "pending")">@StatusLabel(match.Status)</span>
+            @{
+                var canOpen = _isOrganiser && _t!.State != TournamentState.Finished &&
+                              !string.IsNullOrEmpty(match.LeftFencerId) && !string.IsNullOrEmpty(match.RightFencerId);
+            }
+            @if (canOpen)
+            {
+                <a class="mini-btn open-match-btn" href="/tournaments/@_t!.Id/match/@match.Id?tab=@Tab">Open</a>
+            }
+            else
+            {
+                <span class="mini-btn open-match-btn disabled">Open</span>
+            }
+        </div>
+    </li>;
+
+    RenderFragment<Match> BracketMatch = match =>
+    @<div class="bracket-match @(match.Status == MatchStatus.Finished ? "match-done" : "")">
+        <div class="bm-row @(match.WinnerFencerId == match.LeftFencerId ? "winner" : "")">
+            <span class="bm-name">@NameOf(match.LeftFencerId)</span>
+            <span class="bm-score">@match.LeftScore</span>
+        </div>
+        <div class="bm-row @(match.WinnerFencerId == match.RightFencerId ? "winner" : "")">
+            <span class="bm-name">@NameOf(match.RightFencerId)</span>
+            <span class="bm-score">@match.RightScore</span>
+        </div>
+        <div class="bm-foot">
+            <span class="pill @(match.Status == MatchStatus.Finished ? "active-pill" : "pending")">@StatusLabel(match.Status)</span>
+            @{
+                var canOpen = _isOrganiser && _t!.State != TournamentState.Finished &&
+                              !string.IsNullOrEmpty(match.LeftFencerId) && !string.IsNullOrEmpty(match.RightFencerId);
+            }
+            @if (canOpen)
+            {
+                <a class="mini-btn open-match-btn" href="/tournaments/@_t!.Id/match/@match.Id?tab=@Tab">Open</a>
+            }
+            else
+            {
+                <span class="mini-btn open-match-btn disabled">Open</span>
+            }
+        </div>
+    </div>;
+
+    RenderFragment<List<TournamentEngine.PoolStandingRow>> StandingsTable = rows =>
+    @<table class="standings">
+        <thead>
+            <tr><th>#</th><th>Fencer</th><th>W</th><th>L</th><th>D</th><th>Win%</th><th>Avg+</th><th>Avg?</th><th>R</th></tr>
+        </thead>
+        <tbody>
+            @{ int rank = 1; }
+            @foreach (var r in rows)
+            {
+                <tr>
+                    <td>@rank</td>
+                    <td>@NameOf(r.FencerId)</td>
+                    <td>@r.MatchesWon</td>
+                    <td>@r.MatchesLost</td>
+                    <td>@r.MatchesDrawn</td>
+                    <td>@((r.Windicator * 100).ToString("0"))%</td>
+                    <td>@r.AvgPointsFor.ToString("0.0")</td>
+                    <td>@r.AvgPointsAgainst.ToString("0.0")</td>
+                    <td>@r.RedCards</td>
+                </tr>
+                rank++;
+            }
+        </tbody>
+    </table>;
+}
+
+@if (_loading)
+{
+    <section class="card"><p class="muted">Loading…</p></section>
+}
+else if (_t is null)
+{
+    <h1 class="page-title">Tournament</h1>
+    <section class="card"><p class="muted">Tournament not found.</p>
+        <a class="attend-btn" href="/tournaments">Back to list</a></section>
+}
+else
+{
+    <div class="hub-header">
+        <a class="tab" href="/tournaments">&larr; All tournaments</a>
+    </div>
+
+    <h1 class="page-title">@_t.Name</h1>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <section class="card"><p class="pay-due">@_error</p></section>
+    }
+
+    <section class="card">
+        <div class="chip-row" style="padding-left:0;">
+            <span class="chip chip-wine">@StateLabel(_t.State)</span>
+            <span class="chip chip-slate">@_t.Fencers.Count fencers</span>
+            @if (_isOrganiser)
+            {
+                <span class="chip chip-green">Organiser</span>
+            }
+        </div>
+
+        @if (!_isOrganiser)
+        {
+            <p class="muted">You are viewing as a spectator. Enter the organiser password to score matches.</p>
+            <details class="attendee-editor" open>
+                <summary>Enter as organiser</summary>
+                <form method="post" action="/tournaments/access" class="organiser-form">
+                    <input type="hidden" name="tournamentId" value="@_t.Id" />
+                    <label class="organiser-label">
+                        Organiser password
+                        <div class="organiser-input-row">
+                            <input type="password" name="password" placeholder="Enter password" />
+                            <button class="attend-btn" type="submit">Unlock</button>
+                        </div>
+                    </label>
+                </form>
+            </details>
+        }
+    </section>
+
+    @* ================= SETUP: roster + pool allocation ================= *@
+    @if (_t.State == TournamentState.Setup)
+    {
+        @if (_isOrganiser)
+        {
+            <section class="card">
+                <h2 class="card-title">Tournament details</h2>
+                <form method="post" action="/tournaments/details" class="stack-form">
+                    <input type="hidden" name="tournamentId" value="@_t.Id" />
+                    <label>Name
+                        <input type="text" name="name" value="@_t.Name" />
+                    </label>
+                    <label>Organiser password
+                        <input type="password" name="password" placeholder="Leave blank to keep current" />
+                    </label>
+                    <button class="attend-btn" type="submit">Save details</button>
+                </form>
+            </section>
+        }
+
+        <section class="card">
+            <h2 class="card-title">Roster (@_t.Fencers.Count)</h2>
+            @if (_t.Fencers.Count == 0)
+            {
+                <p class="muted">No fencers yet.</p>
+            }
+            else
+            {
+                <ul class="weekly-list">
+                    @foreach (var f in _t.Fencers.OrderBy(f => f.OrderIndex))
+                    {
+                        <li class="weekly-row">
+                            <div class="training-row">
+                                <span class="day @(f.IsWithdrawn ? "withdrawn" : "")">
+                                    @f.Name
+                                    @if (f.IsWithdrawn)
+                                    {
+                                        <span class="pill pending">Withdrawn</span>
+                                    }
+                                </span>
+                                @if (_isOrganiser)
+                                {
+                                    <div class="inline-actions">
+                                        <form method="post" action="/tournaments/fencer/withdraw" class="inline-form">
+                                            <input type="hidden" name="tournamentId" value="@_t.Id" />
+                                            <input type="hidden" name="fencerId" value="@f.Id" />
+                                            <button class="mini-btn" type="submit">@(f.IsWithdrawn ? "Reinstate" : "Withdraw")</button>
+                                        </form>
+                                        <form method="post" action="/tournaments/fencer/remove" class="inline-form">
+                                            <input type="hidden" name="tournamentId" value="@_t.Id" />
+                                            <input type="hidden" name="fencerId" value="@f.Id" />
+                                            <button class="danger-btn" type="submit">Remove</button>
+                                        </form>
+                                    </div>
+                                }
+                            </div>
+                        </li>
+                    }
+                </ul>
+            }
+
+            @if (_isOrganiser)
+            {
+                <form method="post" action="/tournaments/fencer/add" class="stack-form">
+                    <input type="hidden" name="tournamentId" value="@_t.Id" />
+                    <label>Add fencer <input type="text" name="name" /></label>
+                    <button class="attend-btn" type="submit">Add fencer</button>
+                </form>
+            }
+        </section>
+
+        @if (_isOrganiser)
+        {
+            <section class="card">
+                <h2 class="card-title">Pools</h2>
+                <p class="muted">Auto-distribute active fencers into pools of 4-6, then start. Each non-empty pool must have 4-8 fencers.</p>
+
+                <div class="pool-grid">
+                    @foreach (var pool in _t.Pools.Where(p => p.Index != int.MaxValue).OrderBy(p => p.Index))
+                    {
+                        <div class="pool-card">
+                            <div class="pool-title">@pool.Name (@pool.FencerIds.Count)</div>
+                            @foreach (var id in pool.FencerIds)
+                            {
+                                <div class="pool-member">
+                                    <span>@NameOf(id)</span>
+                                    <form method="post" action="/tournaments/pool/move" class="inline-form">
+                                        <input type="hidden" name="tournamentId" value="@_t.Id" />
+                                        <input type="hidden" name="fencerId" value="@id" />
+                                        <input type="hidden" name="targetPoolId" value="" />
+                                        <button class="mini-btn" type="submit">&times;</button>
+                                    </form>
+                                </div>
+                            }
+                            @if (pool.FencerIds.Count == 0)
+                            {
+                                <form method="post" action="/tournaments/pool/remove" class="inline-form">
+                                    <input type="hidden" name="tournamentId" value="@_t.Id" />
+                                    <input type="hidden" name="poolId" value="@pool.Id" />
+                                    <button class="danger-btn" type="submit">Remove pool</button>
+                                </form>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @if (_unassigned.Count > 0)
+                {
+                    <div class="sub-title wine">Unassigned</div>
+                    <div class="pool-grid">
+                        @foreach (var id in _unassigned)
+                        {
+                            <div class="pool-member">
+                                <span>@NameOf(id)</span>
+                                @if (_visiblePools.Count > 0)
+                                {
+                                    <form method="post" action="/tournaments/pool/move" class="inline-form">
+                                        <input type="hidden" name="tournamentId" value="@_t.Id" />
+                                        <input type="hidden" name="fencerId" value="@id" />
+                                        <select name="targetPoolId" onchange="this.form.submit()">
+                                            <option value="">Move to…</option>
+                                            @foreach (var p in _visiblePools)
+                                            {
+                                                <option value="@p.Id">@p.Name</option>
+                                            }
+                                        </select>
+                                    </form>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="btn-row">
+                    <form method="post" action="/tournaments/pool/auto" class="inline-form">
+                        <input type="hidden" name="tournamentId" value="@_t.Id" />
+                        <button class="attend-btn" type="submit">Auto-distribute</button>
+                    </form>
+                    <form method="post" action="/tournaments/pool/add" class="inline-form">
+                        <input type="hidden" name="tournamentId" value="@_t.Id" />
+                        <button class="attend-btn" type="submit">Add pool</button>
+                    </form>
+                    <form method="post" action="/tournaments/pool/clear" class="inline-form">
+                        <input type="hidden" name="tournamentId" value="@_t.Id" />
+                        <button class="danger-btn" type="submit">Unassign all</button>
+                    </form>
+                    <form method="post" action="/tournaments/start" class="inline-form">
+                        <input type="hidden" name="tournamentId" value="@_t.Id" />
+                        <button class="accept-btn" type="submit">Start tournament</button>
+                    </form>
+                </div>
+            </section>
+        }
+    }
+    else
+    {
+        @* ================= RUNNING: tabbed hub ================= *@
+        <div class="tab-bar">
+            <a class="tab @(Tab == "pools" ? "active" : "")" href="/tournaments/@_t.Id?tab=pools">Pools</a>
+            <a class="tab @(Tab == "standings" ? "active" : "")" href="/tournaments/@_t.Id?tab=standings">Standings</a>
+            <a class="tab @(Tab == "elim" ? "active" : "")" href="/tournaments/@_t.Id?tab=elim">Elimination</a>
+            <a class="tab @(Tab == "final" ? "active" : "")" href="/tournaments/@_t.Id?tab=final">Final</a>
+        </div>
+
+        @if (Tab == "standings")
+        {
+            <section class="card">
+                <h2 class="card-title">Overall</h2>
+                @StandingsTable(TournamentEngine.ComputeGlobalStandings(_t))
+            </section>
+            @foreach (var pool in _t.Pools.Where(p => p.FencerIds.Count > 0).OrderBy(p => p.Index))
+            {
+                <section class="card">
+                    <h2 class="card-title">@pool.Name &mdash; standings</h2>
+                    @StandingsTable(TournamentEngine.ComputePoolStandings(pool))
+                </section>
+            }
+        }
+        else if (Tab == "elim")
+        {
+            @if (_t.Bracket is null)
+            {
+                <section class="card">
+                    <h2 class="card-title">Elimination</h2>
+                    @if (!_allPoolsFinished)
+                    {
+                        <p class="muted">Finish every pool match first to generate the bracket.</p>
+                    }
+                    else if (_isOrganiser)
+                    {
+                        <p class="muted">Choose a bracket size to generate the elimination.</p>
+                        <div class="elim-options">
+                            @foreach (var opt in TournamentEngine.ComputeEliminationOptions(_t))
+                            {
+                                @if (opt.IsAvailable)
+                                {
+                                    <form method="post" action="/tournaments/elim/generate" class="inline-form elim-option-form">
+                                        <input type="hidden" name="tournamentId" value="@_t.Id" />
+                                        <input type="hidden" name="size" value="@opt.BracketSize" />
+                                        <button class="attend-btn elim-option-btn" type="submit">@opt.Label</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <span class="attend-btn elim-option-btn disabled">@opt.Label</span>
+                                }
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="muted">The bracket has not been generated yet.</p>
+                    }
+                </section>
+            }
+            else
+            {
+                <section class="card">
+                    <h2 class="card-title">Elimination bracket</h2>
+                    @if (_isOrganiser && _canRegenerate)
+                    {
+                        <form method="post" action="/tournaments/elim/reset" class="inline-form"
+                              onsubmit="return confirm('Reset the elimination bracket?');">
+                            <input type="hidden" name="tournamentId" value="@_t.Id" />
+                            <button class="danger-btn" type="submit">Reset bracket</button>
+                        </form>
+                    }
+                    <div class="bracket-scroll">
+                        <div class="bracket">
+                            @for (int ri = 0; ri < _t.Bracket.Rounds.Count; ri++)
+                            {
+                                var round = _t.Bracket.Rounds[ri];
+                                var isLast = ri == _t.Bracket.Rounds.Count - 1;
+                                <div class="bracket-col @(isLast ? "is-final" : "")">
+                                    <div class="bracket-round">@round.Name</div>
+                                    <div class="bracket-matches">
+                                        @foreach (var m in round.Matches)
+                                        {
+                                            <div class="bracket-match-wrap @(isLast ? "no-connector" : "")">
+                                                @BracketMatch(m)
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            @if (_t.Bracket.BronzeMatch is not null)
+                            {
+                                <div class="bracket-col bronze-col">
+                                    <div class="bracket-round">Bronze</div>
+                                    <div class="bracket-matches">
+                                        <div class="bracket-match-wrap no-connector">
+                                            @BracketMatch(_t.Bracket.BronzeMatch)
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </section>
+            }
+
+            @if (_isOrganiser && _t.Bracket is not null && TournamentEngine.IsBracketComplete(_t.Bracket) && _t.State != TournamentState.Finished)
+            {
+                <section class="card">
+                    <form method="post" action="/tournaments/end" class="inline-form">
+                        <input type="hidden" name="tournamentId" value="@_t.Id" />
+                        <button class="accept-btn" type="submit">End tournament &amp; publish standings</button>
+                    </form>
+                </section>
+            }
+        }
+        else if (Tab == "final")
+        {
+            <section class="card">
+                <h2 class="card-title">Final standings</h2>
+                @{
+                    var finalRows = BuildFinalRows();
+                }
+                @if (finalRows.Count == 0)
+                {
+                    <p class="muted">Standings appear once the elimination bracket is generated.</p>
+                }
+                else
+                {
+                    <ul class="final-standings">
+                        @foreach (var row in finalRows)
+                        {
+                            <li class="final-row place-@(row.Place <= 3 ? row.Place.ToString() : "n")">
+                                <span class="fs-place">@row.Place</span>
+                                <span class="fs-name">@row.Name</span>
+                                <span class="fs-note">@row.Note</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
+        }
+        else
+        {
+            @* Pools tab (default) *@
+            @foreach (var pool in _t.Pools.Where(p => p.FencerIds.Count > 0).OrderBy(p => p.Index))
+            {
+                <section class="card">
+                    <h2 class="card-title">@pool.Name</h2>
+                    <ul class="weekly-list">
+                        @foreach (var m in pool.Matches.OrderBy(m => m.OrderInPool))
+                        {
+                            @MatchCard(m)
+                        }
+                    </ul>
+                </section>
+            }
+        }
+
+        @if (_isOrganiser)
+        {
+            <section class="card">
+                <details class="attendee-editor">
+                    <summary>Tournament actions</summary>
+                    @if (_t.State == TournamentState.Finished)
+                    {
+                        <form method="post" action="/tournaments/reopen" class="stack-form">
+                            <input type="hidden" name="tournamentId" value="@_t.Id" />
+                            <button class="attend-btn" type="submit">Reopen tournament</button>
+                        </form>
+                    }
+                    @if (_t.State != TournamentState.Finished)
+                    {
+                        <div class="sub-title wine">Withdraw a fencer</div>
+                        <p class="muted">Withdrawing turns the fencer's remaining matches into walkovers for their opponents.</p>
+                        <ul class="weekly-list">
+                            @foreach (var f in _t.Fencers.OrderBy(f => f.Name))
+                            {
+                                <li class="weekly-row">
+                                    <div class="training-row">
+                                        <span class="day @(f.IsWithdrawn ? "withdrawn" : "")">
+                                            @f.Name
+                                            @if (f.IsWithdrawn)
+                                            {
+                                                <span class="pill pending">Withdrawn</span>
+                                            }
+                                        </span>
+                                        <form method="post" action="/tournaments/fencer/withdraw" class="inline-form">
+                                            <input type="hidden" name="tournamentId" value="@_t.Id" />
+                                            <input type="hidden" name="fencerId" value="@f.Id" />
+                                            <button class="mini-btn" type="submit">@(f.IsWithdrawn ? "Reinstate" : "Withdraw")</button>
+                                        </form>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    <form method="post" action="/tournaments/restart" class="stack-form"
+                          onsubmit="return confirm('Restart wipes all matches and returns to Setup. Continue?');">
+                        <input type="hidden" name="tournamentId" value="@_t.Id" />
+                        <button class="danger-btn" type="submit">Restart (back to Setup)</button>
+                    </form>
+                </details>
+            </section>
+        }
+    }
+}
+
+@code {
+    [Parameter] public string TournamentId { get; set; } = "";
+
+    [SupplyParameterFromQuery(Name = "tab")]
+    private string? TabParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? ErrorParam { get; set; }
+
+    private string Tab => TabParam switch
+    {
+        "standings" => "standings",
+        "elim" => "elim",
+        "final" => "final",
+        _ => "pools"
+    };
+
+    private Tournament? _t;
+    private bool _loading = true;
+    private bool _isOrganiser;
+    private string? _error;
+
+    private readonly Dictionary<string, string> _names = new();
+    private readonly List<string> _unassigned = new();
+    private List<Pool> _visiblePools = new();
+    private bool _allPoolsFinished;
+    private bool _canRegenerate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureRestoredAsync();
+        var meId = Auth.CurrentFencer?.Id;
+        if (!string.IsNullOrWhiteSpace(ErrorParam)) _error = ErrorParam;
+
+        try
+        {
+            _t = await Sheets.GetTournamentAsync(TournamentId);
+            if (_t is null) return;
+
+            _isOrganiser = Access.IsOrganiser(meId, _t.Id);
+
+            foreach (var f in _t.Fencers) _names[f.Id] = f.Name;
+
+            // Draft-pool helpers (Setup state).
+            _visiblePools = _t.Pools
+                .Where(p => p.Index != int.MaxValue)
+                .OrderBy(p => p.Index)
+                .ToList();
+            var assigned = new HashSet<string>(_visiblePools.SelectMany(p => p.FencerIds), StringComparer.Ordinal);
+            _unassigned.AddRange(_t.Fencers
+                .Where(f => !f.IsWithdrawn && !assigned.Contains(f.Id))
+                .OrderBy(f => f.OrderIndex)
+                .Select(f => f.Id));
+
+            _allPoolsFinished = _t.Pools.Count > 0 &&
+                _t.Pools.SelectMany(p => p.Matches).All(m => m.Status == MatchStatus.Finished);
+
+            _canRegenerate = ComputeCanRegenerate(_t);
+        }
+        finally { _loading = false; }
+    }
+
+    private static bool ComputeCanRegenerate(Tournament t)
+    {
+        var bracket = t.Bracket;
+        if (bracket is null) return false;
+        foreach (var round in bracket.Rounds)
+            foreach (var m in round.Matches)
+            {
+                if (m.Status == MatchStatus.Finished &&
+                    !string.IsNullOrEmpty(m.LeftFencerId) &&
+                    !string.IsNullOrEmpty(m.RightFencerId)) return false;
+                if (m.Status == MatchStatus.InProgress) return false;
+            }
+        if (bracket.BronzeMatch is not null && bracket.BronzeMatch.Status != MatchStatus.Pending) return false;
+        return true;
+    }
+
+    private string NameOf(string? id) =>
+        !string.IsNullOrEmpty(id) && _names.TryGetValue(id, out var n) ? n : "-";
+
+    private static string StateLabel(TournamentState s) => s switch
+    {
+        TournamentState.Setup => "Setup",
+        TournamentState.PoolsInProgress => "Pools in progress",
+        TournamentState.PoolsClosed => "Pools closed",
+        TournamentState.EliminationInProgress => "Elimination in progress",
+        TournamentState.Finished => "Finished",
+        _ => "-"
+    };
+
+    private static string StatusLabel(MatchStatus s) => s switch
+    {
+        MatchStatus.Pending => "Pending",
+        MatchStatus.InProgress => "In progress",
+        MatchStatus.Finished => "Finished",
+        _ => ""
+    };
+
+    private sealed record FinalRow(int Place, string Name, string Note)
+    {
+        public string PlaceText => Place switch
+        {
+            1 => "??",
+            2 => "??",
+            3 => "??",
+            _ => $"#{Place}"
+        };
+    }
+
+    // Mirrors the MAUI FinalStandingsTabViewModel: medal + "Lost to X" / round label.
+    private List<FinalRow> BuildFinalRows()
+    {
+        var rows = new List<FinalRow>();
+        if (_t?.Bracket is null) return rows;
+
+        var order = _t.FinalStandingFencerIds.Count > 0
+            ? _t.FinalStandingFencerIds
+            : TournamentEngine.ComputeFinalStandings(_t);
+        if (order.Count == 0) return rows;
+
+        var loss = BuildLossInfo(_t.Bracket);
+
+        for (int i = 0; i < order.Count; i++)
+        {
+            var id = order[i];
+            var name = NameOf(id);
+            loss.TryGetValue(id, out var info);
+
+            string note =
+                info.DefeatedBy is not null ? $"Lost to {info.DefeatedBy} · {info.RoundLabel}"
+                : i == 0 ? "Champion"
+                : "Pools";
+
+            rows.Add(new FinalRow(i + 1, name, note));
+        }
+        return rows;
+    }
+
+    private Dictionary<string, (string? DefeatedBy, string? RoundLabel)> BuildLossInfo(EliminationBracket bracket)
+    {
+        var map = new Dictionary<string, (string?, string?)>(StringComparer.Ordinal);
+
+        void Note(Match m, string label)
+        {
+            if (m.Status != MatchStatus.Finished || string.IsNullOrEmpty(m.WinnerFencerId)) return;
+            var loserId = m.WinnerFencerId == m.LeftFencerId ? m.RightFencerId : m.LeftFencerId;
+            if (string.IsNullOrEmpty(loserId) || map.ContainsKey(loserId)) return;
+            map[loserId] = (NameOf(m.WinnerFencerId), label);
+        }
+
+        foreach (var round in bracket.Rounds)
+        {
+            var label = TournamentEngine.RoundName(round.Matches.Count * 2);
+            foreach (var m in round.Matches) Note(m, label);
+        }
+        if (bracket.BronzeMatch is not null) Note(bracket.BronzeMatch, "Bronze");
+        return map;
+    }
+}

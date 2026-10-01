@@ -115,6 +115,73 @@ app.MapPost("/auth/logout", async (HttpContext http, AuthService auth) =>
     return Results.Redirect("/login");
 }).DisableAntiforgery();
 
+// --- Register: self-service signup for new accounts (fencers only) ---
+// Redirects to /login on success, or back to /register?error=... inline.
+app.MapPost("/auth/register", async (
+    IGoogleSheetsService sheets,
+    ICacheControl cache,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? name,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? email,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? confirmEmail,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? username,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? password,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? confirmPassword,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? isStudent,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? gdpr,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? liability) =>
+{
+    IResult Fail(string message) =>
+        Results.Redirect(
+            $"/register?error={Uri.EscapeDataString(message)}" +
+            $"&name={Uri.EscapeDataString(name ?? "")}" +
+            $"&email={Uri.EscapeDataString(email ?? "")}" +
+            $"&confirmEmail={Uri.EscapeDataString(confirmEmail ?? "")}" +
+            $"&username={Uri.EscapeDataString(username ?? "")}" +
+            $"&isStudent={(isStudent == "true" ? "true" : "false")}" +
+            $"&gdpr={(gdpr == "true" ? "true" : "false")}" +
+            $"&liability={(liability == "true" ? "true" : "false")}");
+
+    var student = isStudent == "true";
+    var gdprOk = gdpr == "true";
+    var liabilityOk = liability == "true";
+
+    var validation = RegistrationValidator.Validate(
+        name, email, confirmEmail, username,
+        password, confirmPassword, gdprOk, liabilityOk);
+    if (validation is not null)
+        return Fail(validation);
+
+    var trimmedEmail = (email ?? "").Trim();
+    var desiredUser = (username ?? "").Trim();
+
+    try
+    {
+        var existing = await sheets.GetFencersAsync();
+
+        if (RegistrationValidator.IsDuplicateUsername(desiredUser, existing))
+            return Fail("That username is already taken. Please choose another.");
+
+        if (RegistrationValidator.IsDuplicateEmail(trimmedEmail, existing))
+            return Fail("That email is already registered. Please use a different email or log in.");
+
+        await sheets.AddFencerAsync(RegistrationValidator.BuildRegistrationFencer(
+            name: name ?? "",
+            email: trimmedEmail,
+            username: desiredUser,
+            password: password ?? "",
+            isStudent: student,
+            gdprAccepted: gdprOk,
+            liabilityAccepted: liabilityOk));
+
+        cache.InvalidateFencers();
+        return Results.Redirect("/login?registered=1");
+    }
+    catch (Exception ex)
+    {
+        return Fail(ex.Message);
+    }
+}).DisableAntiforgery();
+
 // --- Attend / un-attend the "Next lesson" shown on the Home card ---
 // Mirrors HomeViewModel.ToggleAttendNextLessonAsync: toggles the signed-in
 // fencer's id on the target training, materializing the recurring occurrence

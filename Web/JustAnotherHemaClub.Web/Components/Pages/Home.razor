@@ -1,5 +1,6 @@
 @page "/"
 @using Microsoft.AspNetCore.Authorization
+@using JustAnotherHemaClub.Services
 @attribute [Authorize]
 @inject IGoogleSheetsService Sheets
 @inject ICacheControl Cache
@@ -9,6 +10,11 @@
 <PageTitle>Home · JAHC Manager</PageTitle>
 
 <h1 class="page-title">Home</h1>
+
+<section class="home-hero">
+    <img class="home-hero-bg" src="images/home_bg_web.jpg" alt="" aria-hidden="true" />
+    <div class="home-hero-tint"></div>
+</section>
 
 <section class="card">
     <h2 class="card-title">About us</h2>
@@ -81,6 +87,14 @@
     }
 </section>
 
+@if (_hasPaymentStatus)
+{
+    <section class="card">
+        <h2 class="card-title">Payment status</h2>
+        <p class="payment-status @_paymentStatusClass">@_paymentStatusText</p>
+    </section>
+}
+
 <section class="card">
     <h2 class="card-title">Follow or Contact us</h2>
     <div class="social-grid">
@@ -89,6 +103,7 @@
         <a class="social-btn discord" href="@DiscordUrl" target="_blank" rel="noopener">Discord</a>
     </div>
 </section>
+
 
 @code {
     private const string InstagramUrl =
@@ -114,6 +129,11 @@
     private bool _isAttending;
     private string _nextLessonWhen = "";
     private string _nextLessonTopic = "";
+
+    // --- Payment status state (logged-in fencer only) ---
+    private bool _hasPaymentStatus;
+    private string _paymentStatusText = "";
+    private string _paymentStatusClass = "ok";
 
     protected override async Task OnInitializedAsync()
     {
@@ -142,6 +162,7 @@
         finally { _loading = false; }
 
         await LoadNextLessonAsync();
+        await LoadPaymentStatusAsync();
     }
 
     /// <summary>
@@ -246,6 +267,106 @@
             _nextLessonRule = null;
             _hasNextLesson = false;
             _canAttend = false;
+        }
+    }
+
+    /// <summary>
+    /// Computes the logged-in fencer's cumulative payment status (mirrors the
+    /// MAUI HomeViewModel.LoadPaymentStatusAsync and the Finance/Fencer pages) and
+    /// populates the payment-status card. Guests / not-logged-in users don't see it.
+    /// </summary>
+    private async Task LoadPaymentStatusAsync()
+    {
+        try
+        {
+            var me = Auth.CurrentFencer;
+            if (me is null || Auth.IsGuest)
+            {
+                _hasPaymentStatus = false;
+                return;
+            }
+
+            var today = DateTime.Today;
+
+            var trainingsTask = Sheets.GetTrainingsAsync();
+            var rulesTask = Sheets.GetPriceRulesAsync();
+            await Task.WhenAll(trainingsTask, rulesTask);
+
+            var trainings = trainingsTask.Result;
+            var allRules = rulesTask.Result;
+
+            // Months (up to the current one) in which this fencer attended anything.
+            var attendedMonths = trainings
+                .Where(t => t.Date.Date <= today &&
+                            t.AttendeeFencerIds.Contains(me.Id))
+                .Select(t => (Year: t.Date.Year, Month: t.Date.Month))
+                .Distinct()
+                .OrderBy(t => t.Year).ThenBy(t => t.Month)
+                .ToList();
+
+            if (attendedMonths.Count == 0)
+            {
+                _paymentStatusText = "All payed up";
+                _paymentStatusClass = "ok";
+                _hasPaymentStatus = true;
+                return;
+            }
+
+            // Walk a contiguous range from the first attended month through the
+            // current month so payment-only months stay in the credit-carry chain
+            // (keeps Home in agreement with Finance / Fencers).
+            var firstYm = attendedMonths[0];
+            var allMonths = new List<(int Year, int Month)>();
+            for (var d = new DateTime(firstYm.Year, firstYm.Month, 1);
+                 d <= new DateTime(today.Year, today.Month, 1);
+                 d = d.AddMonths(1))
+            {
+                allMonths.Add((d.Year, d.Month));
+            }
+
+            var paymentTasks = allMonths
+                .Select(ym => Sheets.GetPaymentsAsync(ym.Year, ym.Month))
+                .ToArray();
+            await Task.WhenAll(paymentTasks);
+
+            var monthInputs = new List<FencerDuesLedger.MonthInput>(allMonths.Count);
+            for (int i = 0; i < allMonths.Count; i++)
+            {
+                var ym = allMonths[i];
+
+                var attendedCount = trainings
+                    .Count(t => t.Date.Year == ym.Year && t.Date.Month == ym.Month &&
+                                t.AttendeeFencerIds.Contains(me.Id));
+
+                var cashPaid = paymentTasks[i].Result
+                    .Where(p => p.FencerId == me.Id)
+                    .Sum(p => p.Amount);
+
+                monthInputs.Add(new FencerDuesLedger.MonthInput(
+                    ym.Year, ym.Month, attendedCount, cashPaid));
+            }
+
+            var results = FencerDuesLedger.Compute(me.IsStudent, monthInputs, allRules);
+            var summary = FencerDuesLedger.Summarize(results, today.Year, today.Month);
+
+            (_paymentStatusText, _paymentStatusClass) = summary.Status switch
+            {
+                FencerDuesLedger.DuesStatus.Overpaid =>
+                    (DuesCalculator.DescribeOverpayment(
+                        summary.ThisMonthEffectivePaid, summary.FinalCredit, me.IsStudent,
+                        FencerDuesLedger.RulesForMonth(allRules, today.Year, today.Month)), "ok"),
+                FencerDuesLedger.DuesStatus.DueThisMonth =>
+                    ($"Due {summary.ThisMonthOutstanding:N0} Ft by the end of this month", "grey"),
+                FencerDuesLedger.DuesStatus.DueWithArrears =>
+                    ($"Due {summary.TotalOutstanding:N0} Ft", "danger"),
+                _ => ("All payed up", "ok"),
+            };
+
+            _hasPaymentStatus = true;
+        }
+        catch
+        {
+            _hasPaymentStatus = false;
         }
     }
 
