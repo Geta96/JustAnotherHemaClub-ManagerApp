@@ -559,8 +559,10 @@ html, body {
 .stat-val.danger { color: var(--danger); }
 
 .pay-ok { color: #1F8A2E; font-weight: 700; }
+.pay-ok-split { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
 .pay-due { color: var(--danger); font-weight: 700; }
-
+.due-status { flex: 0 0 auto; max-width: 180px; text-align: right; }
+
 /* Home payment-status card (mirrors the MAUI Home payment-status label) */
 .payment-status { font-size: 18px; font-weight: 700; margin: 0; overflow-wrap: anywhere; }
 .payment-status.ok { color: #1F8A2E; }

@@ -129,14 +129,25 @@
                                                                        TextColor="#1F8A2E" FontAttributes="Bold" FontSize="18"
                                                                        VerticalOptions="Center" />
 
-                                                                <!-- Overpaid: replaces "Paid" so the credit going forward is visible. -->
-                                                                <Label Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
-                                                                       Text="{Binding OverpaymentText, StringFormat='✓ {0}'}"
-                                                                       IsVisible="{Binding IsOverpaid}"
-                                                                       TextColor="#1F8A2E" FontAttributes="Bold" FontSize="14"
-                                                                       LineBreakMode="WordWrap"
-                                                                       HorizontalTextAlignment="End"
-                                                                       VerticalOptions="Center" />
+                                                                <!-- Overpaid: replaces "Paid" so the credit going forward is visible.
+                                                                     Split onto two lines so long wording wraps instead of
+                                                                     squeezing the fencer name/summary in column 0. -->
+                                                                <VerticalStackLayout Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                                                                                     IsVisible="{Binding IsOverpaid}"
+                                                                                     Spacing="0"
+                                                                                     MaximumWidthRequest="150"
+                                                                                     HorizontalOptions="End"
+                                                                                     VerticalOptions="Center">
+                                                                    <Label Text="{Binding OverpaymentPrimary, StringFormat='✓ {0}'}"
+                                                                           TextColor="#1F8A2E" FontAttributes="Bold" FontSize="14"
+                                                                           LineBreakMode="WordWrap"
+                                                                           HorizontalTextAlignment="End" />
+                                                                    <Label Text="{Binding OverpaymentOverpay}"
+                                                                           IsVisible="{Binding HasOverpaymentOverpay}"
+                                                                           TextColor="#1F8A2E" FontAttributes="Bold" FontSize="14"
+                                                                           LineBreakMode="WordWrap"
+                                                                           HorizontalTextAlignment="End" />
+                                                                </VerticalStackLayout>
                                                             </Grid>
 
                                                             <!-- Expanded: inline payment options (instructor only) -->

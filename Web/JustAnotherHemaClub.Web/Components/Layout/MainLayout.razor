@@ -26,13 +26,13 @@
         <div class="flyout-items">
             <NavItem Href="" Icon="⌂" Label="Home" />
             <NavItem Href="trainings" Icon="⚔" Label="Trainings" />
-            <NavItem Href="tournaments" Icon="⚑" Label="Tournaments" />
-            <NavItem Href="fencers" Icon="☰" Label="Fencers" />
             <NavItem Href="finance" Icon="₣" Label="Finance" />
+            <NavItem Href="fencers" Icon="☰" Label="Fencers" />
             @if (Session.IsInstructor)
             {
                 <NavItem Href="statistics" Icon="▦" Label="Statistics" />
             }
+            <NavItem Href="tournaments" Icon="⚑" Label="Tournaments" />
             <NavItem Href="profile" Icon="◉" Label="My Profile" />
         </div>
 

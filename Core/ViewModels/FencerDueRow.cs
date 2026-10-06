@@ -148,6 +148,23 @@ public partial class FencerDueRow : ObservableObject
         DuesCalculator.DescribeOverpayment(
             AlreadyPaid + CreditIn, Overpayment, Fencer.IsStudent, ActiveRules);
 
+    /// <summary>
+    /// First line of the green payment badge ("Payed for the month" / "Payed for
+    /// X more sessions"). Split from <see cref="OverpaymentOverpay"/> so long
+    /// wording wraps onto a second line and never crowds out the fencer name.
+    /// </summary>
+    public string OverpaymentPrimary =>
+        DuesCalculator.DescribeOverpaymentParts(
+            AlreadyPaid + CreditIn, Overpayment, Fencer.IsStudent, ActiveRules).Primary;
+
+    /// <summary>Optional second line of the green badge ("with X Ft overpay"); empty when none.</summary>
+    public string OverpaymentOverpay =>
+        DuesCalculator.DescribeOverpaymentParts(
+            AlreadyPaid + CreditIn, Overpayment, Fencer.IsStudent, ActiveRules).Overpay;
+
+    /// <summary>True when the second overpay line should be shown.</summary>
+    public bool HasOverpaymentOverpay => !string.IsNullOrEmpty(OverpaymentOverpay);
+
     public string Summary
     {
         get
@@ -220,7 +237,14 @@ public partial class FencerDueRow : ObservableObject
 
     // Summary depends on most fields; cheapest correct approach is to re-raise
     // it from each setter rather than try to be clever about dependency tracking.
-    private void RaiseSummary() => OnPropertyChanged(nameof(Summary));
+    private void RaiseSummary()
+    {
+        OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(OverpaymentText));
+        OnPropertyChanged(nameof(OverpaymentPrimary));
+        OnPropertyChanged(nameof(OverpaymentOverpay));
+        OnPropertyChanged(nameof(HasOverpaymentOverpay));
+    }
 
     partial void OnSessionsAttendedChanged(int value)  => RaiseSummary();
     partial void OnTotalCostChanged(decimal value)     => RaiseSummary();

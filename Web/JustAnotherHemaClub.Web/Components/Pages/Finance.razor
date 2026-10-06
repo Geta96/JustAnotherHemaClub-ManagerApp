@@ -217,7 +217,13 @@ else
                                         <div class="due-status">
                                             @if (d.IsOverpaid)
                                             {
-                                                <span class="pay-ok">&#10003; @d.OverpaymentText</span>
+                                                <span class="pay-ok pay-ok-split">
+                                                    <span>&#10003; @d.OverpaymentPrimary</span>
+                                                    @if (!string.IsNullOrEmpty(d.OverpaymentOverpay))
+                                                    {
+                                                        <span>@d.OverpaymentOverpay</span>
+                                                    }
+                                                </span>
                                             }
                                             else if (d.IsPaid)
                                             {
@@ -398,8 +404,17 @@ else
         public bool IsOverpaid;
         public IReadOnlyList<PriceRule> ActiveRules = Array.Empty<PriceRule>();
 
+        public string OverpaymentPrimary =>
+            DuesCalculator.DescribeOverpaymentParts(
+                AlreadyPaid + CreditIn, Overpayment, Fencer.IsStudent, ActiveRules).Primary;
+
+        public string OverpaymentOverpay =>
+            DuesCalculator.DescribeOverpaymentParts(
+                AlreadyPaid + CreditIn, Overpayment, Fencer.IsStudent, ActiveRules).Overpay;
+
         public string OverpaymentText =>
-            DuesCalculator.DescribeOverpayment(AlreadyPaid + CreditIn, Overpayment, Fencer.IsStudent, ActiveRules);
+            DuesCalculator.DescribeOverpayment(
+                AlreadyPaid + CreditIn, Overpayment, Fencer.IsStudent, ActiveRules);
 
         public string Summary
         {
