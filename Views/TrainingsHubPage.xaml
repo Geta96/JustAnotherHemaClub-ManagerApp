@@ -31,7 +31,7 @@
                     <VerticalStackLayout Spacing="4">
                         <Label Text="Show fencer" Style="{StaticResource Caption}" />
                         <Picker ItemsSource="{Binding FencerFilterOptions}"
-                                ItemDisplayBinding="{Binding Name}"
+                                ItemDisplayBinding="{Binding Name, x:DataType=vm:FencerFilterOption}"
                                 SelectedItem="{Binding SelectedFencerFilter, Mode=TwoWay}" />
                     </VerticalStackLayout>
                 </Border>
