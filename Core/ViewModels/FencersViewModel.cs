@@ -343,6 +343,12 @@ public partial class FencersViewModel : ObservableObject
         bool showPaymentHistory =
             _auth.IsLoggedInInstructor || fencer.Id == _auth.CurrentFencer?.Id;
 
+        // Months that still owe something (after cash + carried credit). A month
+        // group gets the green "paid up" tick when it is NOT in this set.
+        var unpaidMonthSet = (summary.UnpaidMonths ?? Array.Empty<FencerDuesLedger.UnpaidMonth>())
+            .Select(u => (u.Year, u.Month))
+            .ToHashSet();
+
         var paymentHistory = showPaymentHistory
             ? _allPayments
                 .Where(p => p.FencerId == fencer.Id)
@@ -355,7 +361,8 @@ public partial class FencersViewModel : ObservableObject
                                              t.Date.Month == g.Key.Month &&
                                              t.AttendeeFencerIds.Contains(fencer.Id)),
                     g.OrderBy(p => p.PaidOn)
-                     .Select(p => new FencerPaymentRow(p.PaidOn, p.Amount))))
+                     .Select(p => new FencerPaymentRow(p.PaidOn, p.Amount)),
+                    isPaidUp: !unpaidMonthSet.Contains((g.Key.Year, g.Key.Month))))
                 .ToList()
             : new List<FencerPaymentMonthGroup>();
 

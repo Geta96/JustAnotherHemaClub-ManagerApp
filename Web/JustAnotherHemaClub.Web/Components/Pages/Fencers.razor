@@ -142,7 +142,17 @@ else
                         @foreach (var g in _paymentHistory)
                         {
                             <div class="subsection">
-                                <div class="sub-title wine">@g.Header</div>
+                                <div class="sub-title wine">
+                                    @g.Header
+                                    @if (g.IsPaidUp)
+                                    {
+                                        <span class="paid-tick" title="Paid up">&#10003;</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="unpaid-cross" title="Not fully paid">&#10007;</span>
+                                    }
+                                </div>
                                 @foreach (var p in g.Payments)
                                 {
                                     <div class="kv">
@@ -193,7 +203,7 @@ else
 
     private sealed record SessionRow(string Topic, DateTime Date);
     private sealed record PaymentRow(DateTime Date, decimal Amount);
-    private sealed record PaymentGroup(string Header, List<PaymentRow> Payments);
+    private sealed record PaymentGroup(string Header, bool IsPaidUp, List<PaymentRow> Payments);
 
     private List<TrainingSession> _allTrainings = new();
     private List<IndividualLesson> _allLessons = new();
@@ -345,6 +355,12 @@ else
         _paymentHistory.Clear();
         if (_showPaymentHistory)
         {
+            // Months that still owe something; a month gets the green tick when
+            // it is NOT in this set (mirrors the MAUI Fencers page).
+            var unpaidMonthSet = summary.UnpaidMonths
+                .Select(u => (u.Year, u.Month))
+                .ToHashSet();
+
             foreach (var g in _allPayments
                 .Where(p => p.FencerId == fencer.Id)
                 .GroupBy(p => (p.Year, p.Month))
@@ -356,6 +372,7 @@ else
                 var header = $"{MonthFullLabel(g.Key.Year, g.Key.Month)}: {sessions} session{(sessions == 1 ? "" : "s")}";
                 _paymentHistory.Add(new PaymentGroup(
                     header,
+                    !unpaidMonthSet.Contains((g.Key.Year, g.Key.Month)),
                     g.OrderBy(p => p.PaidOn).Select(p => new PaymentRow(p.PaidOn, p.Amount)).ToList()));
             }
         }

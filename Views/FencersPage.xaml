@@ -335,9 +335,24 @@
                                         <BindableLayout.ItemTemplate>
                                             <DataTemplate x:DataType="vm:FencerPaymentMonthGroup">
                                                 <VerticalStackLayout Spacing="4">
-                                                    <Label Text="{Binding HeaderText}"
-                                                           FontAttributes="Bold"
-                                                           TextColor="{StaticResource Wine}" />
+                                                    <HorizontalStackLayout Spacing="6">
+                                                        <Label Text="{Binding HeaderText}"
+                                                               FontAttributes="Bold"
+                                                               TextColor="{StaticResource Wine}"
+                                                               VerticalOptions="Center" />
+                                                        <Label Text="✓"
+                                                               FontSize="16"
+                                                               FontAttributes="Bold"
+                                                               TextColor="#1F8A2E"
+                                                               VerticalOptions="Center"
+                                                               IsVisible="{Binding IsPaidUp}" />
+                                                        <Label Text="✗"
+                                                               FontSize="16"
+                                                               FontAttributes="Bold"
+                                                               TextColor="{StaticResource DangerRed}"
+                                                               VerticalOptions="Center"
+                                                               IsVisible="{Binding IsPaidUp, Converter={StaticResource InverseBoolConverter}}" />
+                                                    </HorizontalStackLayout>
 
                                                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding Payments}"
                                                                          Spacing="2">

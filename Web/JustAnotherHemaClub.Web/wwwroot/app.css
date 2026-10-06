@@ -561,7 +561,16 @@ html, body {
 .pay-ok { color: #1F8A2E; font-weight: 700; }
 .pay-ok-split { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
 .pay-due { color: var(--danger); font-weight: 700; }
-.due-status { flex: 0 0 auto; max-width: 180px; text-align: right; }
+.due-status { flex: 0 0 auto; max-width: 200px; text-align: right; }
+/* Keep multi-word payment phrases from breaking mid-sentence: balance the
+   lines and never split a word across lines. */
+.pay-ok-split > span {
+    display: block;
+    text-wrap: balance;      /* evens out ragged lines (modern browsers) */
+    overflow-wrap: normal;   /* don't break inside a word */
+    word-break: keep-all;
+    line-height: 1.25;
+}
 
 /* Home payment-status card (mirrors the MAUI Home payment-status label) */
 .payment-status { font-size: 18px; font-weight: 700; margin: 0; overflow-wrap: anywhere; }
@@ -1306,3 +1315,15 @@ html, body {
 .policy-text p { margin: 0 0 12px; }
 .policy-text ul { margin: 0 0 12px; padding-left: 20px; }
 .policy-text li { margin-bottom: 6px; }
+
+.paid-tick {
+    color: #1F8A2E;
+    font-weight: 700;
+    margin-left: .35rem;
+}
+
+.unpaid-cross {
+    color: var(--danger);
+    font-weight: 700;
+    margin-left: .35rem;
+}
