@@ -64,7 +64,20 @@
                                LineHeight="1.3" />
                     </VerticalStackLayout>
                 </Border>
-                
+
+                <!-- Pending password resets (instructors only) -->
+                <Border Style="{StaticResource Card}" IsVisible="{Binding HasPendingResets}">
+                    <VerticalStackLayout Spacing="8">
+                        <Label Text="Pending password resets" Style="{StaticResource H2}" FontSize="16"/>
+                        <Label Text="{Binding PendingResetsText}" LineBreakMode="WordWrap" />
+                        <Button Text="Review requests"
+                                BackgroundColor="{StaticResource Wine}"
+                                TextColor="{StaticResource Cream}"
+                                HeightRequest="48"
+                                Command="{Binding OpenPendingResetsCommand}" />
+                    </VerticalStackLayout>
+                </Border>
+
                 <!-- Next lesson -->
                 <Border Style="{StaticResource Card}" IsVisible="{Binding HasNextLesson}"
                         Stroke="{Binding NextLessonStroke}"

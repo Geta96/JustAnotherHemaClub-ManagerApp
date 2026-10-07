@@ -11,6 +11,7 @@ public partial class FencersViewModel : ObservableObject
 {
     private readonly IGoogleSheetsService _sheets;
     private readonly AuthService _auth;
+    private readonly ICacheControl? _cache;
 
     // Cancels any in-flight LoadAsync when the user navigates away mid-refresh.
     private CancellationTokenSource? _loadCts;
@@ -21,12 +22,21 @@ public partial class FencersViewModel : ObservableObject
 
     public ObservableCollection<Fencer> Fencers { get; } = new();
 
+    // Instructor-only: fencers whose password reset awaits approval.
+    public ObservableCollection<PendingResetRow> PendingResets { get; } = new();
+    public bool HasPendingResets => _auth.IsLoggedInInstructor && PendingResets.Count > 0;
+    [ObservableProperty] private string? resetMessage;
+
     private Dictionary<string, (int Sessions, FencerDuesLedger.DuesSummary Summary)> _statusByFencer = new();
 
     // Inputs cached for the details view's stat calculations.
     private List<TrainingSession> _allTrainings = new();
     private List<IndividualLesson> _allLessons = new();
     private List<Payment> _allPayments = new();
+
+    // Price rules active for the current month, used to phrase a fencer's
+    // forward credit as "Payed for the month" / "Payed for X more sessions".
+    private List<PriceRule> _currentMonthRules = new();
 
     [ObservableProperty] private Fencer? selectedFencer;
     [ObservableProperty] private FencerDetailsVm? selectedDetails;
@@ -45,10 +55,11 @@ public partial class FencersViewModel : ObservableObject
 
     public bool IsLoggedInInstructor => _auth.IsLoggedInInstructor;
 
-    public FencersViewModel(IGoogleSheetsService sheets, AuthService auth)
+    public FencersViewModel(IGoogleSheetsService sheets, AuthService auth, ICacheControl? cache = null)
     {
         _sheets = sheets;
         _auth = auth;
+        _cache = cache;
     }
 
     /// <summary>
@@ -76,6 +87,11 @@ public partial class FencersViewModel : ObservableObject
         BackendError = null;
         BackendStatus = "Loading fencers from Google Sheets...";
 
+        // Reset requests can be filed (from either app) after the cache was warmed
+        // at login, so instructors always re-read the Fencers tab.
+        if (_auth.IsLoggedInInstructor)
+            _cache?.InvalidateFencers();
+
         try
         {
             var today = DateTime.Today;
@@ -93,31 +109,51 @@ public partial class FencersViewModel : ObservableObject
             var allRules = priceRulesTask.Result;
             var allLessons = lessonsTask.Result;
 
-            // Full month span from the earliest training through the current month.
-            // Payments for EVERY month are needed so the shared ledger can carry
-            // overpayment credit forward and surface cumulative arrears — exactly
-            // like the Home payment-status card.
-            var earliest = allTrainings.Count == 0
-                ? today
-                : allTrainings.Min(t => t.Date);
+            var currentMonthRules = FencerDuesLedger.RulesForMonth(allRules, today.Year, today.Month);
 
-            var monthSpan = new List<(int Y, int M)>();
-            for (var d = new DateTime(earliest.Year, earliest.Month, 1);
-                 d <= new DateTime(today.Year, today.Month, 1);
-                 d = d.AddMonths(1))
-            {
-                monthSpan.Add((d.Year, d.Month));
-            }
+            // Month span for the dues ledger. This MUST match the Finance page:
+            // include the current month, every training month (INCLUDING future
+            // materialized sessions), and any payment-only months. Capping at the
+            // current month or omitting payment-only months makes overpayment
+            // credit that lives in a later month vanish here, so a fencer who is
+            // "Overpaid" on Finance would wrongly show "All payed up" on Fencers.
+            var monthsSet = new HashSet<(int Y, int M)> { (today.Year, today.Month) };
+            foreach (var t in allTrainings) monthsSet.Add((t.Date.Year, t.Date.Month));
 
-            var paymentTasks = monthSpan.ToDictionary(
+            var orderedYm = monthsSet.OrderBy(x => x.Y).ThenBy(x => x.M).ToList();
+            var paymentTasks = orderedYm.ToDictionary(
                 ym => ym, ym => _sheets.GetPaymentsAsync(ym.Y, ym.M));
             if (paymentTasks.Count > 0)
                 await Task.WhenAll(paymentTasks.Values);
 
             ct.ThrowIfCancellationRequested();
 
+            // Fold in payment-only months (pre-payments / refunds without a
+            // training), then re-fetch so their payments enter the credit chain.
+            var extraMonths = paymentTasks.Values
+                .SelectMany(t => t.Result)
+                .Select(p => (Y: p.Year, M: p.Month))
+                .Where(ym => !monthsSet.Contains(ym))
+                .Distinct()
+                .ToList();
+            foreach (var ym in extraMonths)
+            {
+                monthsSet.Add(ym);
+                paymentTasks[ym] = _sheets.GetPaymentsAsync(ym.Y, ym.M);
+            }
+            if (extraMonths.Count > 0)
+                await Task.WhenAll(paymentTasks.Values);
+
+            ct.ThrowIfCancellationRequested();
+
+            var monthSpan = monthsSet.OrderBy(x => x.Y).ThenBy(x => x.M).ToList();
             var paymentsByMonth = monthSpan.ToDictionary(
                 ym => ym, ym => paymentTasks[ym].Result);
+
+            // Flatten every month's payments so the details view's Payment History
+            // card has data to group (previously left empty, so the card showed
+            // nothing on mobile even though Finance/web had the payments).
+            var allPayments = paymentsByMonth.Values.SelectMany(p => p).ToList();
 
             // ===== Heavy CPU aggregation OFF the UI thread =====
             var statusByFencer = await Task.Run(() => ComputeStatuses(
@@ -130,10 +166,13 @@ public partial class FencersViewModel : ObservableObject
             Fencers.Clear();
             foreach (var f in all) Fencers.Add(f);
 
+            RebuildPendingResets(all);
+
             _statusByFencer = statusByFencer;
             _allTrainings = allTrainings;
             _allLessons = allLessons;
-            _allPayments = paymentsByMonth.Values.SelectMany(p => p).ToList();
+            _allPayments = allPayments;
+            _currentMonthRules = currentMonthRules;
 
             if (SelectedFencer is null)
             {
@@ -162,6 +201,69 @@ public partial class FencersViewModel : ObservableObject
             OnPropertyChanged(nameof(HasSelection));
         }
         finally { if (showSpinner) IsLoading = false; }
+    }
+
+    private void RebuildPendingResets(IEnumerable<Fencer> all)
+    {
+        PendingResets.Clear();
+        if (_auth.IsLoggedInInstructor)
+        {
+            foreach (var f in all.Where(f => f.HasPendingPasswordReset)
+                                 .OrderBy(f => f.PasswordResetRequestedAtUtc ?? DateTime.MaxValue))
+            {
+                PendingResets.Add(new PendingResetRow(f)
+                {
+                    ApproveAction = r => ReviewResetAsync(r, approve: true),
+                    RejectAction  = r => ReviewResetAsync(r, approve: false)
+                });
+            }
+        }
+        OnPropertyChanged(nameof(HasPendingResets));
+    }
+
+    /// <summary>
+    /// Approve promotes the parked hash to the live password; reject just clears
+    /// the pending fields. Re-reads the row first so a stale cache can't
+    /// overwrite a newer request or another instructor's decision.
+    /// </summary>
+    private async Task ReviewResetAsync(PendingResetRow row, bool approve)
+    {
+        if (row is null || !_auth.IsLoggedInInstructor) return;
+        ResetMessage = null;
+
+        try
+        {
+            _cache?.InvalidateFencers();
+            var fresh = (await _sheets.GetFencersAsync()).FirstOrDefault(f => f.Id == row.Fencer.Id);
+
+            if (fresh is not null && fresh.HasPendingPasswordReset)
+            {
+                if (approve)
+                    fresh.PasswordHash = fresh.PendingPasswordHash;
+
+                fresh.PendingPasswordHash = null;
+                fresh.PasswordResetRequestedAtUtc = null;
+                await _sheets.UpsertFencerAsync(fresh);
+
+                var idx = Fencers.IndexOf(Fencers.FirstOrDefault(f => f.Id == fresh.Id)!);
+                if (idx >= 0) Fencers[idx] = fresh;
+
+                ResetMessage = approve
+                    ? $"Password reset approved for {fresh.DisplayName}."
+                    : $"Password reset rejected for {fresh.DisplayName}.";
+            }
+            else
+            {
+                ResetMessage = "This request was already handled.";
+            }
+
+            PendingResets.Remove(row);
+            OnPropertyChanged(nameof(HasPendingResets));
+        }
+        catch (Exception ex)
+        {
+            ResetMessage = $"Couldn't update the request: {ex.Message}";
+        }
     }
 
     /// <summary>
@@ -238,11 +340,12 @@ public partial class FencersViewModel : ObservableObject
     }
 
     /// <summary>Maps the cumulative summary to display text + colour flags (green/grey/red).</summary>
-    private static (string Text, bool Green, bool Grey, bool Red) DescribePayment(FencerDuesLedger.DuesSummary s)
+    private static (string Text, bool Green, bool Grey, bool Red) DescribePayment(
+        FencerDuesLedger.DuesSummary s, bool isStudent, IReadOnlyList<PriceRule> currentRules)
         => s.Status switch
         {
             FencerDuesLedger.DuesStatus.Overpaid =>
-                ($"Overpayed by {s.FinalCredit:N0} Ft", true, false, false),
+                (DuesCalculator.DescribeOverpayment(s.ThisMonthEffectivePaid, s.FinalCredit, isStudent, currentRules), true, false, false),
             FencerDuesLedger.DuesStatus.DueThisMonth =>
                 ($"Due {s.ThisMonthOutstanding:N0} Ft by the end of this month", false, true, false),
             FencerDuesLedger.DuesStatus.DueWithArrears =>
@@ -312,7 +415,7 @@ public partial class FencersViewModel : ObservableObject
             l.InstructorId == fencer.Id &&
             l.Status == IndividualLessonStatus.Accepted);
 
-        var (statusText, green, grey, red) = DescribePayment(summary);
+        var (statusText, green, grey, red) = DescribePayment(summary, fencer.IsStudent, _currentMonthRules);
 
         var unpaidRows = (summary.UnpaidMonths ?? Array.Empty<FencerDuesLedger.UnpaidMonth>())
             .OrderBy(u => u.Year).ThenBy(u => u.Month)
@@ -322,6 +425,12 @@ public partial class FencersViewModel : ObservableObject
         // Payment History: regular fencers only see their own; instructors see all.
         bool showPaymentHistory =
             _auth.IsLoggedInInstructor || fencer.Id == _auth.CurrentFencer?.Id;
+
+        // Months that still owe something (after cash + carried credit). A month
+        // group gets the green "paid up" tick when it is NOT in this set.
+        var unpaidMonthSet = (summary.UnpaidMonths ?? Array.Empty<FencerDuesLedger.UnpaidMonth>())
+            .Select(u => (u.Year, u.Month))
+            .ToHashSet();
 
         var paymentHistory = showPaymentHistory
             ? _allPayments
@@ -335,7 +444,8 @@ public partial class FencersViewModel : ObservableObject
                                              t.Date.Month == g.Key.Month &&
                                              t.AttendeeFencerIds.Contains(fencer.Id)),
                     g.OrderBy(p => p.PaidOn)
-                     .Select(p => new FencerPaymentRow(p.PaidOn, p.Amount))))
+                     .Select(p => new FencerPaymentRow(p.PaidOn, p.Amount)),
+                    isPaidUp: !unpaidMonthSet.Contains((g.Key.Year, g.Key.Month))))
                 .ToList()
             : new List<FencerPaymentMonthGroup>();
 

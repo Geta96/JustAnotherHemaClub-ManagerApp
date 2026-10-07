@@ -29,6 +29,23 @@ public class Fencer
     public bool LiabilityAccepted { get; set; }
     public bool IsInstructor { get; set; }
 
+    /// <summary>
+    /// Instructor-mediated password reset: when a fencer requests a reset they
+    /// supply the NEW password up front; its PBKDF2 hash is parked here (the live
+    /// <see cref="PasswordHash"/> is left untouched) until an instructor approves.
+    /// On approval this value is copied into <see cref="PasswordHash"/> and cleared;
+    /// on rejection it is simply cleared. Stored on the shared sheet so a request
+    /// filed in either the MAUI or web app is visible to instructors in both.
+    /// </summary>
+    [StringLength(255)]
+    public string? PendingPasswordHash { get; set; }
+
+    /// <summary>UTC time the pending reset was requested (null when none is pending).</summary>
+    public DateTime? PasswordResetRequestedAtUtc { get; set; }
+
+    /// <summary>True when this fencer has a reset awaiting instructor review.</summary>
+    public bool HasPendingPasswordReset => !string.IsNullOrEmpty(PendingPasswordHash);
+
     public string DisplayName =>
         string.IsNullOrWhiteSpace(Name) ? DeletedPlaceholder : Name;
 }

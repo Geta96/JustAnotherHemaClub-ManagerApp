@@ -1,0 +1,59 @@
+﻿@inherits LayoutComponentBase
+@implements IDisposable
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject UserSession Session
+
+<div class="jahc-shell">
+
+    <input type="checkbox" id="flyout-toggle" class="flyout-toggle" />
+
+    <header class="topbar">
+        <label class="hamburger" for="flyout-toggle" aria-label="Menu">☰</label>
+        <span class="topbar-title">JAHC Manager</span>
+    </header>
+
+    <nav class="flyout">
+        <label class="flyout-close" for="flyout-toggle" aria-label="Close menu">✕</label>
+        <div class="flyout-header">
+            <img src="images/monochrome_logo.jpg" alt="Just Another HEMA Club" class="crest" />
+            @if (Session.CurrentFencer is not null)
+            {
+                <div class="user-line">@Session.CurrentFencer.Name</div>
+            }
+        </div>
+
+        <div class="flyout-items">
+            <NavItem Href="" Icon="⌂" Label="Home" />
+            <NavItem Href="trainings" Icon="⚔" Label="Trainings" />
+            <NavItem Href="finance" Icon="₣" Label="Finance" />
+            <NavItem Href="fencers" Icon="☰" Label="Fencers" />
+            @if (Session.IsInstructor)
+            {
+                <NavItem Href="statistics" Icon="▦" Label="Statistics" />
+            }
+            <NavItem Href="tournaments" Icon="⚑" Label="Tournaments" />
+            <NavItem Href="profile" Icon="◉" Label="My Profile" />
+        </div>
+
+        <form method="post" action="/auth/logout" class="logout-form">
+            <button class="logout" type="submit">⎋ Logout</button>
+        </form>
+    </nav>
+
+    <label class="scrim" for="flyout-toggle" aria-hidden="true"></label>
+
+    <main class="content">
+        @Body
+    </main>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        Session.Changed += StateHasChanged;
+        await Session.EnsureRestoredAsync();
+    }
+
+    public void Dispose() => Session.Changed -= StateHasChanged;
+}

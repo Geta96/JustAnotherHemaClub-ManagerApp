@@ -1,0 +1,276 @@
+@page "/tournaments/{TournamentId}/match/{MatchId}"
+@using Microsoft.AspNetCore.Authorization
+@using JustAnotherHemaClub.Services
+@using JustAnotherHemaClub.Web.Services
+@attribute [Authorize]
+@inject IGoogleSheetsService Sheets
+@inject AuthService Auth
+@inject UserSession Session
+@inject TournamentAccessRegistry Access
+
+<PageTitle>Match · JAHC Manager</PageTitle>
+
+@if (_loading)
+{
+    <section class="card"><p class="muted">Loading…</p></section>
+}
+else if (_t is null || _match is null)
+{
+    <h1 class="page-title">Match</h1>
+    <section class="card"><p class="muted">Match not found.</p></section>
+}
+else
+{
+    <div class="hub-header">
+        <a class="tab" href="/tournaments/@_t.Id?tab=@BackTab">&larr; Back to tournament</a>
+    </div>
+
+    <h1 class="page-title">@_poolName</h1>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <section class="card"><p class="pay-due">@_error</p></section>
+    }
+
+    @* ---------- Clock ---------- *@
+    <section class="card match-clock-card">
+        <div class="match-clock-row">
+            @if (_canEdit)
+            {
+                <button type="button" id="timerToggle" class="timer-toggle" onclick="jahcToggleTimer()">Start</button>
+            }
+            else
+            {
+                <span></span>
+            }
+
+            <div class="match-clock" id="matchClock">@FormatClock(_match.RemainingTimeSeconds)</div>
+
+            @if (_canEdit)
+            {
+                <div class="clock-adjust">
+                    @ClockForm("addminute", "+1")
+                    @ClockForm("subminute", "-1")
+                    @ClockForm("restart", "&#8635;")
+                </div>
+            }
+            else
+            {
+                <span></span>
+            }
+        </div>
+        <div class="match-status-line">
+            <span class="pill @(_match.Status == MatchStatus.Finished ? "active-pill" : "pending")">@StatusLabel(_match.Status)</span>
+        </div>
+    </section>
+
+    @* ---------- Mirrored score panels ---------- *@
+    <div class="score-panels">
+        @ScorePanel("left", _leftName, _match.LeftScore, _match.LeftYellowCards, _match.LeftRedCards,
+                    _match.WinnerFencerId == _match.LeftFencerId)
+        @ScorePanel("right", _rightName, _match.RightScore, _match.RightYellowCards, _match.RightRedCards,
+                    _match.WinnerFencerId == _match.RightFencerId)
+    </div>
+
+    @* ---------- Reopen / Finish ---------- *@
+    @if (_canReopen)
+    {
+        <form method="post" action="/tournaments/match/reopen" class="stack-form">
+            <input type="hidden" name="tournamentId" value="@_t.Id" />
+            <input type="hidden" name="matchId" value="@_match.Id" />
+            <input type="hidden" name="tab" value="@BackTab" />
+            <button class="update-btn" type="submit">Update Match</button>
+        </form>
+    }
+    @if (_canEdit)
+    {
+        <form method="post" action="/tournaments/match/finish" class="stack-form">
+            <input type="hidden" name="tournamentId" value="@_t.Id" />
+            <input type="hidden" name="matchId" value="@_match.Id" />
+            <input type="hidden" name="tab" value="@BackTab" />
+            <button class="accept-btn finish-btn" type="submit">Finish Match</button>
+        </form>
+    }
+    else if (!_isOrganiser)
+    {
+        <section class="card"><p class="muted">Spectator view — only the organiser can score.</p></section>
+    }
+
+    @* Client-side countdown so the clock visibly ticks (SSR has no live timer).
+       Start/Stop only affects the local display; use +1/-1/Reset to persist. *@
+    <script>
+        (function () {
+            window.jahcClockSeconds = @_match.RemainingTimeSeconds;
+            window.jahcTimerHandle = null;
+            window.jahcRender = function () {
+                var s = window.jahcClockSeconds;
+                var mm = String(Math.floor(s / 60)).padStart(2, '0');
+                var ss = String(s % 60).padStart(2, '0');
+                var el = document.getElementById('matchClock');
+                if (el) el.textContent = mm + ':' + ss;
+            };
+            window.jahcToggleTimer = function () {
+                var btn = document.getElementById('timerToggle');
+                if (window.jahcTimerHandle) {
+                    clearInterval(window.jahcTimerHandle);
+                    window.jahcTimerHandle = null;
+                    if (btn) { btn.textContent = 'Start'; btn.classList.remove('running'); }
+                } else {
+                    if (btn) { btn.textContent = 'Stop'; btn.classList.add('running'); }
+                    window.jahcTimerHandle = setInterval(function () {
+                        if (window.jahcClockSeconds <= 0) {
+                            clearInterval(window.jahcTimerHandle);
+                            window.jahcTimerHandle = null;
+                            if (btn) { btn.textContent = 'Start'; btn.classList.remove('running'); }
+                            return;
+                        }
+                        window.jahcClockSeconds--;
+                        window.jahcRender();
+                    }, 1000);
+                }
+            };
+        })();
+    </script>
+}
+
+@code {
+    [Parameter] public string TournamentId { get; set; } = "";
+    [Parameter] public string MatchId { get; set; } = "";
+
+    [SupplyParameterFromQuery(Name = "tab")]
+    private string? TabParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? ErrorParam { get; set; }
+
+    private string BackTab => TabParam switch
+    {
+        "standings" => "standings",
+        "elim" => "elim",
+        "final" => "final",
+        _ => "pools"
+    };
+
+    private Tournament? _t;
+    private Match? _match;
+    private bool _loading = true;
+    private bool _isOrganiser;
+    private bool _canEdit;
+    private bool _canReopen;
+    private string _leftName = "-";
+    private string _rightName = "-";
+    private string _poolName = "";
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureRestoredAsync();
+        var meId = Auth.CurrentFencer?.Id;
+        if (!string.IsNullOrWhiteSpace(ErrorParam)) _error = ErrorParam;
+
+        try
+        {
+            _t = await Sheets.GetTournamentAsync(TournamentId);
+            if (_t is null) return;
+
+            _isOrganiser = Access.IsOrganiser(meId, _t.Id);
+            _match = FindMatch(_t, MatchId);
+            if (_match is null) return;
+
+            var byId = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var f in _t.Fencers) byId[f.Id] = f.Name;
+            _leftName = byId.TryGetValue(_match.LeftFencerId, out var l) ? l : "-";
+            _rightName = byId.TryGetValue(_match.RightFencerId, out var r) ? r : "-";
+            _poolName = _t.Pools.FirstOrDefault(p => p.Id == _match.PoolId)?.Name ?? "Elimination";
+
+            _canEdit = _isOrganiser && _t.State != TournamentState.Finished &&
+                       _match.Status != MatchStatus.Finished;
+            _canReopen = _isOrganiser && _t.State != TournamentState.Finished &&
+                         _match.Status == MatchStatus.Finished;
+        }
+        finally { _loading = false; }
+    }
+
+    private static Match? FindMatch(Tournament t, string id)
+    {
+        foreach (var pool in t.Pools)
+        {
+            var m = pool.Matches.FirstOrDefault(m => m.Id == id);
+            if (m is not null) return m;
+        }
+        if (t.Bracket is not null)
+        {
+            foreach (var round in t.Bracket.Rounds)
+            {
+                var m = round.Matches.FirstOrDefault(m => m.Id == id);
+                if (m is not null) return m;
+            }
+            if (t.Bracket.BronzeMatch?.Id == id) return t.Bracket.BronzeMatch;
+        }
+        return null;
+    }
+
+    private RenderFragment ScorePanel(string side, string name, int score, int yellow, int red, bool isWinner) =>
+        @<div class="score-panel @(isWinner ? "winner" : "")">
+            <div class="score-name">@name</div>
+
+            <div class="card-indicators">
+                @if (yellow > 0 && red == 0)
+                {
+                    <span class="card-chip yellow"></span>
+                }
+                @if (red > 0)
+                {
+                    <span class="card-chip red">@(red > 1 ? red.ToString() : "")</span>
+                }
+            </div>
+
+            @if (_canEdit)
+            {
+                <div class="card-btn-row">
+                    @ScoreForm("yellow", side, 1, "Yellow", "card-yellow")
+                    @ScoreForm("red", side, 1, "Red", "card-red")
+                    @ScoreForm("undo", side, 1, "&#8635;", "card-undo")
+                </div>
+            }
+
+            <div class="score-cap">Score</div>
+            <div class="score-big">@score</div>
+
+            @if (_canEdit)
+            {
+                @ScoreForm("point", side, 1, "+1", "big-plus")
+                @ScoreForm("point", side, -1, "-1", "small-minus")
+            }
+        </div>;
+
+    private RenderFragment ScoreForm(string action, string side, int delta, string label, string cssClass) =>
+        @<form method="post" action="/tournaments/match/score" class="inline-form score-form">
+            <input type="hidden" name="tournamentId" value="@_t!.Id" />
+            <input type="hidden" name="matchId" value="@_match!.Id" />
+            <input type="hidden" name="action" value="@action" />
+            <input type="hidden" name="side" value="@side" />
+            <input type="hidden" name="delta" value="@delta" />
+            <input type="hidden" name="tab" value="@BackTab" />
+            <button class="@cssClass" type="submit">@((MarkupString)label)</button>
+        </form>;
+
+    private RenderFragment ClockForm(string action, string label) =>
+        @<form method="post" action="/tournaments/match/clock" class="inline-form">
+            <input type="hidden" name="tournamentId" value="@_t!.Id" />
+            <input type="hidden" name="matchId" value="@_match!.Id" />
+            <input type="hidden" name="action" value="@action" />
+            <input type="hidden" name="tab" value="@BackTab" />
+            <button class="clock-btn" type="submit">@((MarkupString)label)</button>
+        </form>;
+
+    private static string FormatClock(int seconds) => $"{seconds / 60:00}:{seconds % 60:00}";
+
+    private static string StatusLabel(MatchStatus s) => s switch
+    {
+        MatchStatus.Pending => "Pending",
+        MatchStatus.InProgress => "In progress",
+        MatchStatus.Finished => "Finished",
+        _ => ""
+    };
+}

@@ -1,4 +1,4 @@
-using JustAnotherHemaClub.Models;
+ï»¿using JustAnotherHemaClub.Models;
 
 namespace JustAnotherHemaClub.Services;
 
@@ -7,7 +7,7 @@ namespace JustAnotherHemaClub.Services;
 ///
 /// <see cref="TotalDue"/> is the cost of the cheapest applicable membership
 /// for the given attendance; <see cref="EffectivePaid"/> is whatever funds
-/// the caller said were available for that month — i.e. the sum of cash
+/// the caller said were available for that month â€” i.e. the sum of cash
 /// payments recorded for this fencer/month plus any credit carried in from
 /// prior overpayments. <see cref="Outstanding"/> is what's still owed,
 /// and <see cref="Overpayment"/> is the amount paid above the tier cost
@@ -30,7 +30,7 @@ public readonly record struct DuesQuote(
 ///   1. Drop rules that can't cover this much attendance (a 4-pack cannot
 ///      bill 5 sessions).
 ///   2. When two or more rules share the same (SessionCount, MonthCount) tier,
-///      keep only the newest one — latest StartDate, then highest FullPrice
+///      keep only the newest one â€” latest StartDate, then highest FullPrice
 ///      as a deterministic secondary tie-break.
 ///   3. Across tiers the cheapest per-month cost wins.
 ///   4. The caller passes <c>alreadyPaid</c> as the total funds
@@ -43,8 +43,8 @@ public readonly record struct DuesQuote(
 /// SessionCount mapping:
 ///   0   ? unlimited pass (always applicable when attendance ? 1).
 ///             MonthCount = 1 ? standard monthly pass (cost = price).
-///             MonthCount = 2 ? two-month pass (cost = price ÷ 2 per month).
-///   1   ? single-session ticket (cost = price × attendance).
+///             MonthCount = 2 ? two-month pass (cost = price Ã· 2 per month).
+///   1   ? single-session ticket (cost = price Ã— attendance).
 ///   N>1 ? N-session pack (applicable iff attendance ? N; cost = flat price).
 ///
 /// If the Prices sheet is empty we fall back to the historical defaults so
@@ -52,7 +52,7 @@ public readonly record struct DuesQuote(
 /// </summary>
 public static class DuesCalculator
 {
-    // Fallback defaults — only used when no PriceRules have been configured yet.
+    // Fallback defaults â€” only used when no PriceRules have been configured yet.
     public const decimal SinglePrice    = 3500m;
     public const decimal HalfPassPrice  = 9000m;
     public const decimal FullPassPrice  = 12000m;
@@ -83,7 +83,7 @@ public static class DuesCalculator
                 EffectivePaid:    alreadyPaid,
                 Outstanding:      0m,
                 Overpayment:      Math.Max(0m, alreadyPaid),
-                TierLabel:        "—",
+                TierLabel:        "â€”",
                 IsCovered:        true,
                 IsOverpaid:       alreadyPaid > 0m);
 
@@ -101,7 +101,7 @@ public static class DuesCalculator
             .ToList();
 
         decimal bestCost  = decimal.MaxValue;
-        string  bestLabel = "—";
+        string  bestLabel = "â€”";
 
         foreach (var r in perTier)
         {
@@ -182,6 +182,108 @@ public static class DuesCalculator
             IsOverpaid:       overpayment > 0m);
     }
 
+    /// <summary>
+    /// Turns a fencer's payment position into a human-friendly description of what
+    /// they have effectively pre-paid for, rather than the misleading "Overpayed
+    /// by X" wording.
+    ///
+    /// <paramref name="effectivePaidThisMonth"/> is the total funds committed
+    /// toward the current month (cash paid this month + credit carried in), and
+    /// <paramref name="forwardCredit"/> is the surplus that will carry into future
+    /// months. The distinction matters: a fencer who pays the full monthly fee up
+    /// front but has only attended one session so far is billed the cheaper
+    /// single-session tier, leaving a large "credit" ï¿½ yet they have simply
+    /// "Payed for the month", not overpaid.
+    ///
+    /// The logic mirrors how a fencer actually buys ahead:
+    ///   ï¿½ If the money put toward this month covers (at least) the biggest
+    ///     whole-period pass (unlimited monthly / multi-month / custom period),
+    ///     they have "Payed for the month". Any surplus above that pass is a
+    ///     genuine overpay ("ï¿½ with X Ft overpay").
+    ///   ï¿½ Otherwise the forward credit is expressed in prepaid sessions at the
+    ///     cheapest per-session rate (so buying a 4-session pass reads as "Payed
+    ///     for 4 more sessions"). Any leftover below one more session is overpay.
+    ///   ï¿½ When nothing can interpret the position we fall back to the plain
+    ///     "Overpayed by X Ft" wording.
+    /// </summary>
+    public static string DescribeOverpayment(
+        decimal effectivePaidThisMonth,
+        decimal forwardCredit,
+        bool isStudent,
+        IReadOnlyList<PriceRule>? rules = null)
+    {
+        var (primary, overpay) = DescribeOverpaymentParts(
+            effectivePaidThisMonth, forwardCredit, isStudent, rules);
+        return string.IsNullOrEmpty(overpay) ? primary : $"{primary} {overpay}";
+    }
+
+    /// <summary>
+    /// Same interpretation as <see cref="DescribeOverpayment"/>, but returns the
+    /// wording split into two parts so the UI can show them on separate lines:
+    ///   ï¿½ <c>Primary</c> ï¿½ "Payed for the month" / "Payed for X more sessions"
+    ///     (or the "Overpayed by X Ft" fallback).
+    ///   ï¿½ <c>Overpay</c> ï¿½ the optional "with X Ft overpay" suffix, or an empty
+    ///     string when there is no leftover overpay.
+    /// Keeping the two-line split here means the web and MAUI UIs share a single
+    /// source of truth for the green payment wording.
+    /// </summary>
+    public static (string Primary, string Overpay) DescribeOverpaymentParts(
+        decimal effectivePaidThisMonth,
+        decimal forwardCredit,
+        bool isStudent,
+        IReadOnlyList<PriceRule>? rules = null)
+    {
+        if (effectivePaidThisMonth <= 0m && forwardCredit <= 0m) return ("", "");
+
+        var effective = (rules is null || rules.Count == 0) ? DefaultRules : rules;
+
+        // Biggest whole-period pass (unlimited monthly / multi-month / custom period).
+        decimal monthPrice = 0m;
+        // Cheapest per-session rate across all session-based tiers (single + packs).
+        decimal perSession = 0m;
+
+        foreach (var r in effective)
+        {
+            var price = PriceFor(r, isStudent);
+            if (price <= 0m) continue;
+
+            if (r.SessionCount == 0)
+            {
+                if (price > monthPrice) monthPrice = price;
+            }
+            else
+            {
+                var per = price / r.SessionCount;
+                if (perSession == 0m || per < perSession) perSession = per;
+            }
+        }
+
+        // Paid enough THIS month to cover a whole month/period pass ï¿½ they are
+        // simply covered for the month, even if the cheaper per-session tier was
+        // billed because only a few sessions have happened so far.
+        if (monthPrice > 0m && effectivePaidThisMonth >= monthPrice)
+        {
+            var overpay = effectivePaidThisMonth - monthPrice;
+            return ("Payed for the month",
+                    overpay > 0m ? $"with {overpay:N0} Ft overpay" : "");
+        }
+
+        // Otherwise express the carried credit as prepaid future sessions.
+        if (perSession > 0m && forwardCredit > 0m)
+        {
+            var sessions = (int)Math.Floor(forwardCredit / perSession);
+            if (sessions >= 1)
+            {
+                var overpay = forwardCredit - sessions * perSession;
+                var s = $"Payed for {sessions} more session{(sessions == 1 ? "" : "s")}";
+                return (s, overpay > 0m ? $"with {overpay:N0} Ft overpay" : "");
+            }
+        }
+
+        // Nothing could interpret the position ï¿½ plain overpay wording.
+        return ($"Overpayed by {forwardCredit:N0} Ft", "");
+    }
+
     private static bool IsApplicable(PriceRule r, int sessionsAttended) =>
         r.SessionCount switch
         {
@@ -190,7 +292,7 @@ public static class DuesCalculator
             _ => sessionsAttended <= r.SessionCount,    // pack must cover attendance
         };
 
-    /// <summary>Suggested starting point for a student price — roughly 60% of the
+    /// <summary>Suggested starting point for a student price â€” roughly 60% of the
     /// full price, rounded to the nearest 500 Ft. Instructors can override it with
     /// any custom amount when creating or editing a price rule.</summary>
     public static decimal SuggestStudentPrice(decimal fullPrice)

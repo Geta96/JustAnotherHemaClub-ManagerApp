@@ -93,7 +93,7 @@ public partial class GoogleSheetsService
                 .OrderBy(m => m.OrderInPool)
                 .ToList();
 
-        var elimMatches = matches.Where(m => m.BracketRound.HasValue).ToList();
+        var elimMatches = matches.Where(m => m.BracketRound.HasValue || m.BracketTag == "Bronze").ToList();
         if (elimMatches.Count > 0)
         {
             var bronze = elimMatches.FirstOrDefault(m => m.BracketTag == "Bronze");

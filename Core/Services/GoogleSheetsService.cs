@@ -93,10 +93,11 @@ public partial class GoogleSheetsService : IGoogleSheetsService
 
     // --- Fencers ---
     // Columns: A=Id, B=Username, C=PasswordHash, D=Name, E=Email,
-    //          F=Active, G=IsStudent, H=GdprAccepted, I=LiabilityAccepted, J=IsInstructor
+    //          F=Active, G=IsStudent, H=GdprAccepted, I=LiabilityAccepted, J=IsInstructor,
+    //          K=PendingPasswordHash, L=PasswordResetRequestedAtUtc (ISO-8601 UTC)
     public async Task<List<Fencer>> GetFencersAsync()
     {
-        var rows = await ReadAsync("Fencers!A2:J");
+        var rows = await ReadAsync("Fencers!A2:L");
         return rows.Select(r => new Fencer
         {
             Id = S(r, 0),
@@ -108,7 +109,12 @@ public partial class GoogleSheetsService : IGoogleSheetsService
             IsStudent = ParseBool(S(r, 6)),
             GdprAccepted = ParseBool(S(r, 7)),
             LiabilityAccepted = ParseBool(S(r, 8)),
-            IsInstructor = ParseBool(S(r, 9))
+            IsInstructor = ParseBool(S(r, 9)),
+            PendingPasswordHash = string.IsNullOrWhiteSpace(S(r, 10)) ? null : S(r, 10),
+            PasswordResetRequestedAtUtc =
+                DateTime.TryParse(S(r, 11), CultureInfo.InvariantCulture,
+                    DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var reqAt)
+                    ? reqAt : null
         }).ToList();
     }
 
@@ -117,12 +123,14 @@ public partial class GoogleSheetsService : IGoogleSheetsService
         {
             f.Id, f.Username ?? "", f.PasswordHash ?? "",
             f.Name, f.Email ?? "",
-            B(f.Active), B(f.IsStudent), B(f.GdprAccepted), B(f.LiabilityAccepted), B(f.IsInstructor)
+            B(f.Active), B(f.IsStudent), B(f.GdprAccepted), B(f.LiabilityAccepted), B(f.IsInstructor),
+            f.PendingPasswordHash ?? "",
+            f.PasswordResetRequestedAtUtc?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) ?? ""
         });
 
     public async Task UpsertFencerAsync(Fencer f)
     {
-        var rows = await ReadAsync("Fencers!A2:J");
+        var rows = await ReadAsync("Fencers!A2:L");
         int rowIndex = -1;
         for (int i = 0; i < rows.Count; i++)
             if (S(rows[i], 0) == f.Id) { rowIndex = i; break; }
@@ -131,11 +139,13 @@ public partial class GoogleSheetsService : IGoogleSheetsService
         {
             f.Id, f.Username ?? "", f.PasswordHash ?? "",
             f.Name, f.Email ?? "",
-            B(f.Active), B(f.IsStudent), B(f.GdprAccepted), B(f.LiabilityAccepted), B(f.IsInstructor)
+            B(f.Active), B(f.IsStudent), B(f.GdprAccepted), B(f.LiabilityAccepted), B(f.IsInstructor),
+            f.PendingPasswordHash ?? "",
+            f.PasswordResetRequestedAtUtc?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) ?? ""
         };
 
         if (rowIndex >= 0)
-            await UpdateAsync($"Fencers!A{rowIndex + 2}:J{rowIndex + 2}", values);
+            await UpdateAsync($"Fencers!A{rowIndex + 2}:L{rowIndex + 2}", values);
         else
             await AppendAsync("Fencers!A1", values);
     }
@@ -420,6 +430,31 @@ public partial class GoogleSheetsService : IGoogleSheetsService
 
         var blanks = new List<object> { "", "", "", "", "", "", "", "" };
         await UpdateAsync($"RecurringTrainings!A{rowIndex + 2}:H{rowIndex + 2}", blanks);
+    }
+
+    // --- Config ---
+    // "Config" sheet: column A = key, column B = value. We look up the
+    // MinSupportedAppVersion row so the app can force-update stale clients.
+    public async Task<int?> GetMinSupportedAppVersionAsync()
+    {
+        try
+        {
+            var rows = await ReadAsync("Config!A1:B");
+            foreach (var r in rows)
+            {
+                if (string.Equals(S(r, 0).Trim(), "MinSupportedAppVersion",
+                        StringComparison.OrdinalIgnoreCase)
+                    && int.TryParse(S(r, 1).Trim(), NumberStyles.Integer,
+                        CultureInfo.InvariantCulture, out var v))
+                    return v;
+            }
+        }
+        catch
+        {
+            // Missing sheet / bad read: treat the gate as disabled rather than
+            // blocking everyone out of the app on a transient error.
+        }
+        return null;
     }
 
     private static string S(IList<object> row, int i) =>

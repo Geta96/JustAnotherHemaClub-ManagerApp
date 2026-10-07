@@ -1,0 +1,12 @@
+<label class="nav-item-wrap" for="flyout-toggle">
+    <NavLink class="nav-item" href="@Href" Match="@(Href == "" ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+        <span class="nav-icon">@Icon</span>
+        <span class="nav-label">@Label</span>
+    </NavLink>
+</label>
+
+@code {
+    [Parameter] public string Href { get; set; } = "";
+    [Parameter] public string Icon { get; set; } = "";
+    [Parameter] public string Label { get; set; } = "";
+}

@@ -23,6 +23,59 @@
 
                 <VerticalStackLayout Spacing="14"
                                      IsVisible="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}">
+
+                    <!-- Pending password resets (instructors only) -->
+                    <Border Style="{StaticResource Card}"
+                            IsVisible="{Binding HasPendingResets}">
+                        <VerticalStackLayout Spacing="10">
+                            <Label Text="Pending password resets" Style="{StaticResource H2}" />
+                            <Label Text="Approving makes the fencer's requested new password active immediately."
+                                   Style="{StaticResource Caption}" />
+
+                            <Label Text="{Binding ResetMessage}"
+                                   FontAttributes="Bold"
+                                   TextColor="{StaticResource Wine}"
+                                   IsVisible="{Binding ResetMessage, Converter={StaticResource StringNotEmptyConverter}}" />
+
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding PendingResets}" Spacing="10">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:PendingResetRow">
+                                        <Border BackgroundColor="{StaticResource CreamSoft}"
+                                                StrokeThickness="0" StrokeShape="RoundRectangle 10"
+                                                Padding="12">
+                                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8"
+                                                  RowDefinitions="Auto,Auto">
+                                                <Label Grid.Row="0" Grid.Column="0"
+                                                       Text="{Binding Name}"
+                                                       FontAttributes="Bold"
+                                                       VerticalOptions="Center" />
+                                                <Label Grid.Row="1" Grid.Column="0"
+                                                       Text="{Binding UsernameText}"
+                                                       Style="{StaticResource Caption}"
+                                                       VerticalOptions="Center" />
+
+                                                <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                                                        Text="Approve"
+                                                        HeightRequest="40" Padding="14,0"
+                                                        BackgroundColor="#1F8A2E"
+                                                        TextColor="{StaticResource Cream}"
+                                                        VerticalOptions="Center"
+                                                        Command="{Binding ApproveCommand}" />
+                                                <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="2"
+                                                        Text="Reject"
+                                                        HeightRequest="40" Padding="14,0"
+                                                        BackgroundColor="{StaticResource DangerRed}"
+                                                        TextColor="{StaticResource Cream}"
+                                                        VerticalOptions="Center"
+                                                        Command="{Binding RejectCommand}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
                     <!-- Picker -->
                     <Border Style="{StaticResource Card}">
                         <VerticalStackLayout Spacing="8">
@@ -335,9 +388,24 @@
                                         <BindableLayout.ItemTemplate>
                                             <DataTemplate x:DataType="vm:FencerPaymentMonthGroup">
                                                 <VerticalStackLayout Spacing="4">
-                                                    <Label Text="{Binding HeaderText}"
-                                                           FontAttributes="Bold"
-                                                           TextColor="{StaticResource Wine}" />
+                                                    <HorizontalStackLayout Spacing="6">
+                                                        <Label Text="{Binding HeaderText}"
+                                                               FontAttributes="Bold"
+                                                               TextColor="{StaticResource Wine}"
+                                                               VerticalOptions="Center" />
+                                                        <Label Text="✓"
+                                                               FontSize="16"
+                                                               FontAttributes="Bold"
+                                                               TextColor="#1F8A2E"
+                                                               VerticalOptions="Center"
+                                                               IsVisible="{Binding IsPaidUp}" />
+                                                        <Label Text="✗"
+                                                               FontSize="16"
+                                                               FontAttributes="Bold"
+                                                               TextColor="{StaticResource DangerRed}"
+                                                               VerticalOptions="Center"
+                                                               IsVisible="{Binding IsPaidUp, Converter={StaticResource InverseBoolConverter}}" />
+                                                    </HorizontalStackLayout>
 
                                                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding Payments}"
                                                                          Spacing="2">

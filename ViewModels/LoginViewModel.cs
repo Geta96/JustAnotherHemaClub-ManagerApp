@@ -60,6 +60,12 @@ public partial class LoginViewModel : ObservableObject
     /// <summary>Call from the page's OnAppearing.</summary>
     public async Task InitializeAsync()
     {
+        // Hard version gate: if the installed app is older than the minimum
+        // supported version published on the Config sheet, replace the root page
+        // with the update prompt and stop here (no login, no silent sign-in).
+        if (await IsUpdateRequiredAsync())
+            return;
+
         CanUseBiometric = await _biometrics.IsAvailableAsync();
         CanTryBiometricLogin = CanUseBiometric && _auth.HasPersistedCredentials;
 
@@ -67,6 +73,34 @@ public partial class LoginViewModel : ObservableObject
         // Biometric prompt is only shown if the user opted into it earlier.
         if (_auth.HasPersistedCredentials)
             await TryBiometricLoginAsync();
+    }
+
+    /// <summary>
+    /// Returns true (and shows the update gate) when the installed build is older
+    /// than <c>MinSupportedAppVersion</c> on the Config sheet. Best-effort: any
+    /// failure to read/parse the version leaves the app usable.
+    /// </summary>
+    private async Task<bool> IsUpdateRequiredAsync()
+    {
+        try
+        {
+            var min = await _sheets.GetMinSupportedAppVersionAsync();
+            if (min is null) return false;
+
+            if (!int.TryParse(AppInfo.Current.BuildString, out var installed))
+                return false;
+
+            if (installed >= min.Value) return false;
+
+            Services.AppNavigationHelper.SetRootPage(
+                new Views.UpdateRequiredPage(installed, min.Value));
+            return true;
+        }
+        catch
+        {
+            // Never lock users out on a transient read/parse error.
+            return false;
+        }
     }
 
     [RelayCommand]
@@ -245,6 +279,13 @@ public partial class LoginViewModel : ObservableObject
                 return;
             }
 
+            if (!RegistrationValidator.IsStrongPassword(newPassword))
+            {
+                await page.DisplayAlert("Weak password",
+                    "Please choose at least 8 characters, including a letter and a number.", "OK");
+                return;
+            }
+
             var confirm = await page.DisplayPromptAsync(
                 "Reset password",
                 "Re-enter the new password to confirm:",
@@ -256,11 +297,13 @@ public partial class LoginViewModel : ObservableObject
                 return;
             }
 
-            match.PasswordHash = AuthService.Hash(newPassword);
+            match.PendingPasswordHash = PasswordHasher.Hash(AuthService.Hash(newPassword));
+            match.PasswordResetRequestedAtUtc = DateTime.UtcNow;
             await _sheets.UpsertFencerAsync(match);
+            _cache.InvalidateFencers();
 
-            await page.DisplayAlert("Password updated",
-                "You can now sign in with the new password.", "OK");
+            await page.DisplayAlert("Request sent",
+                "Your new password will start working as soon as an instructor approves it.", "OK");
 
             Username = match.Username ?? "";
             Password = "";

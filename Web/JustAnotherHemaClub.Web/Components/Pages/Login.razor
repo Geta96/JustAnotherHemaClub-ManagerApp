@@ -1,0 +1,70 @@
+@page "/login"
+@layout LoginLayout
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
+
+<PageTitle>Sign in — JAHC Manager</PageTitle>
+
+<div class="login-shell">
+    <img src="images/monochrome_logo.jpg" alt="Just Another HEMA Club" class="login-crest" />
+
+    <div class="login-card">
+        @if (HasError)
+        {
+            <div class="login-error">@ErrorMessage</div>
+        }
+        @if (Registered)
+        {
+            <div class="login-note">Account created — you can sign in now.</div>
+        }
+        @if (Reset)
+        {
+            <div class="login-note">Password updated — sign in with your new password.</div>
+        }
+
+        <form method="post" action="/auth/login" class="login-form">
+            <AntiforgeryToken />
+            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+
+            <label class="login-label" for="username">Username</label>
+            <input class="login-input" id="username" name="username" autocomplete="username" required />
+
+            <label class="login-label" for="password">Password</label>
+            <input class="login-input" id="password" name="password" type="password"
+                   autocomplete="current-password" required />
+
+            <label class="login-check">
+                <input type="checkbox" name="keepLoggedIn" value="true" />
+                <span>Keep me logged in</span>
+            </label>
+
+            <button class="login-button" type="submit">Sign in</button>
+        </form>
+
+        <div class="login-links">
+            <a class="login-button register" href="/register">Register as new fencer</a>
+            <a class="login-link" href="/forgot-password">Forgot my password</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    private string? ReturnUrl { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? Error { get; set; }
+
+    [SupplyParameterFromQuery(Name = "registered")]
+    private string? RegisteredFlag { get; set; }
+
+    [SupplyParameterFromQuery(Name = "reset")]
+    private string? ResetFlag { get; set; }
+
+    private bool HasError => !string.IsNullOrEmpty(Error);
+    private string ErrorMessage => Error == "locked"
+        ? "Too many failed attempts. Please wait a few minutes and try again."
+        : "Invalid username or password.";
+    private bool Registered => RegisteredFlag == "1";
+    private bool Reset => ResetFlag == "1";
+}

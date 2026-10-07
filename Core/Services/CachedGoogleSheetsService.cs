@@ -25,6 +25,27 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
 
     public CachedGoogleSheetsService(GoogleSheetsService inner) => _inner = inner;
 
+    // ---------- Config ----------
+    private int? _minSupportedAppVersion;
+    private bool _minSupportedAppVersionLoaded;
+
+    public async Task<int?> GetMinSupportedAppVersionAsync()
+    {
+        if (ServiceSwap.IsActive) return await ServiceSwap.CurrentSheets!.GetMinSupportedAppVersionAsync();
+        if (_minSupportedAppVersionLoaded) return _minSupportedAppVersion;
+        await _gate.WaitAsync();
+        try
+        {
+            if (!_minSupportedAppVersionLoaded)
+            {
+                _minSupportedAppVersion = await _inner.GetMinSupportedAppVersionAsync();
+                _minSupportedAppVersionLoaded = true;
+            }
+            return _minSupportedAppVersion;
+        }
+        finally { _gate.Release(); }
+    }
+
     // ---------- Fencers ----------
     public async Task<List<Fencer>> GetFencersAsync()
     {

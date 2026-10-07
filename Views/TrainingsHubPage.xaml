@@ -13,7 +13,7 @@
         <!-- =================== TRAININGS TAB =================== -->
         <DataTemplate x:Key="TrainingsTabTemplate"
                       x:DataType="vm:TrainingsViewModel">
-            <Grid RowDefinitions="Auto,Auto,*">
+            <Grid RowDefinitions="Auto,Auto,Auto,*">
 
                 <Button Grid.Row="0"
                         Text="New Training"
@@ -23,10 +23,23 @@
                         IsVisible="{Binding IsLoggedInInstructor}"
                         Clicked="OnNewTrainingClicked" />
 
-                <Label Grid.Row="1" Text="Past trainings by month" Style="{StaticResource H1}"
+                <!-- Instructor-only: filter the trainings list to a single fencer -->
+                <Border Grid.Row="1"
+                        Style="{StaticResource Card}"
+                        Margin="16,8,16,0"
+                        IsVisible="{Binding ShowFencerFilter}">
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Show fencer" Style="{StaticResource Caption}" />
+                        <Picker ItemsSource="{Binding FencerFilterOptions}"
+                                ItemDisplayBinding="{Binding Name, x:DataType=vm:FencerFilterOption}"
+                                SelectedItem="{Binding SelectedFencerFilter, Mode=TwoWay}" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <Label Grid.Row="2" Text="Past trainings by month" Style="{StaticResource H1}"
                        Margin="16,14,16,0" />
 
-                <CollectionView Grid.Row="2"
+                <CollectionView Grid.Row="3"
                                 ItemsSource="{Binding Months}"
                                 Margin="16,8,16,16">
                     <CollectionView.ItemsLayout>

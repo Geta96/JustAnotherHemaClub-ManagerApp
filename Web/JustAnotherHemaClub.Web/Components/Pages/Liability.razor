@@ -1,0 +1,118 @@
+﻿@page "/liability"
+@layout LoginLayout
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
+
+<PageTitle>Liability statement — JAHC Manager</PageTitle>
+
+<div class="login-shell">
+    <div class="login-card policy-card">
+        <h1 class="card-title">Liability statement</h1>
+        <p class="muted">Last updated: 2025</p>
+
+        <div class="tab-bar">
+            <a class="tab @(IsHu ? "" : "active")" href="/liability?lang=en">English</a>
+            <a class="tab @(IsHu ? "active" : "")" href="/liability?lang=hu">Magyar</a>
+        </div>
+
+        @if (!IsHu)
+        {
+            <div class="policy-text">
+                <p>Historical European Martial Arts (HEMA) training involves physical contact with weapons and
+                other participants. Injuries can occur even when proper equipment is worn and safety rules
+                are followed.</p>
+
+                <p>By checking the liability box on the registration / profile page you confirm that:</p>
+                <ul>
+                    <li>You participate in Club trainings, sparring and events voluntarily and at your own risk.</li>
+                    <li>You are physically fit for vigorous physical activity, or you have consulted a doctor
+                        and accept the responsibility of doing so.</li>
+                    <li>You will wear and maintain the protective equipment required for each activity.</li>
+                    <li>You will follow the safety rules and the instructors' directions during every session.</li>
+                    <li>You are 18 years of age or older, and therefore legally responsible for yourself; or</li>
+                    <li>You are under 18 years of age, in which case your legal guardian has consented to your
+                        participation in the Club's trainings and has already submitted a written declaration of
+                        consent to the instructors to this effect.</li>
+                    <li>Neither the Club, its instructors, nor other members are liable for injuries, loss or
+                        damage to property arising from your participation, except in cases of gross negligence
+                        or wilful misconduct.</li>
+                </ul>
+
+                <p>I acknowledge that participating in training involves physical exertion and a potential
+                risk of injury. In order to protect my own physical integrity, I will use appropriate
+                protective equipment and will follow the instructor's directions at all times. Neither the
+                association nor the instructor is liable for injuries or accidents arising from my own
+                fault or risk-taking.</p>
+
+                <p>During practice and sparring I will do everything I can to protect my partner's and my own
+                physical integrity. I will observe the safety regulations and the rules for using equipment.
+                I take responsibility for the personal and borrowed equipment I use. Before each training
+                session I make sure that it can be used safely.</p>
+
+                <p>I am required to use borrowed equipment for its intended purpose and to compensate for any
+                damage caused to it that is not the result of intended use.</p>
+
+                <p>I declare that my state of health permits me to participate in training, and that I have
+                no illness or limitation that would, during participation in training, pose a danger to
+                myself or to others.</p>
+
+                <p>If you do not agree to these terms, please do not check the liability box and do not take
+                part in the Club's training activities.</p>
+            </div>
+        }
+        else
+        {
+            <div class="policy-text">
+                <p>A felelősségvállalási nyilatkozat bejelölésével a regisztrációs / profil oldalon az
+                alábbiakat ismered el:</p>
+                <ul>
+                    <li>A Klub edzésein, gyakorlásain és eseményein önkéntesen, saját felelősségedre veszel részt.</li>
+                    <li>Fizikailag alkalmas vagy az intenzív testmozgásra, vagy orvossal konzultáltál és ezt a
+                        felelősséget vállalod.</li>
+                    <li>Az adott tevékenységhez előírt védőfelszerelést viseled és karbantartod.</li>
+                    <li>Minden alkalommal betartod a biztonsági szabályokat és az edzők utasításait.</li>
+                    <li>Betöltötted a 18. életévedet, és ezáltal jogilag felelősséget tudsz vállalni önmagadért; vagy</li>
+                    <li>Még nem töltötted be a 18. életévedet, amely esetben a törvényes gondviselőd hozzájárult a
+                        Klub edzésein való részvételedhez, és erről írásbeli hozzájáruló nyilatkozatot már
+                        benyújtott az edzőknek.</li>
+                    <li>A Klubot, az edzőket és a többi tagot nem terheli felelősség a részvételedből eredő
+                        sérülésekért, kár- vagy vagyonveszteségért, kivéve súlyos gondatlanság vagy szándékos
+                        magatartás esetén.</li>
+                </ul>
+
+                <p>Tudomásul veszem, hogy az edzésen való részvétel fizikai megterheléssel és potenciális
+                sérülésveszéllyel jár. Saját testi épségem megóvása érdekében megfelelő védőfelszerelést
+                használok, és az edző utasításait minden esetben betartom. Az esetleges sérülésekért,
+                balesetekért, amelyek saját hibámból vagy kockázatvállalásból erednek, az egyesületet és az
+                edzőt nem terheli felelősség.</p>
+
+                <p>Gyakorlás és a párbajok során mindent megteszek partnerem és a saját testi épségének
+                megóvásáért. Betartom a biztonsági előírásokat, az eszközhasználati szabályokat.</p>
+
+                <p>Felelősséget vállalok az általam használt saját és kölcsönzött felszerelésért, eszközökért.
+                Edzés előtt meggyőződök róla, hogy biztonságosan használhatók.</p>
+
+                <p>Köteles vagyok a kölcsön kapott eszközöket rendeltetésszerűen használni, és azokban
+                keletkezett esetleges kárt megtéríteni, ha az nem rendeltetésszerű használatból ered.</p>
+
+                <p>Kijelentem, hogy egészségi állapotom lehetővé teszi az edzésen való részvételt, és nem áll
+                fenn olyan betegségem vagy korlátozottságom, amely az edzéseken való részvétel során rám
+                vagy másokra veszélyt jelentene.</p>
+
+                <p>Ha nem értesz egyet ezekkel a feltételekkel, kérjük, ne jelöld be a felelősségvállalási
+                jelölőnégyzetet és ne vegyél részt a Klub edzésein.</p>
+            </div>
+        }
+
+        <div class="login-links">
+            <a class="login-link" href="/register">Back to registration</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "lang")]
+    private string? Lang { get; set; }
+
+    private bool IsHu => string.Equals(Lang, "hu", StringComparison.OrdinalIgnoreCase);
+}

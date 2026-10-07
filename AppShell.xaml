@@ -111,20 +111,20 @@
         <ShellContent ContentTemplate="{DataTemplate views:TrainingsHubPage}" />
     </FlyoutItem>
 
-    <FlyoutItem Title="Tournaments" Route="tournaments">
-        <ShellContent ContentTemplate="{DataTemplate views:TournamentsPage}" />
+    <FlyoutItem Title="Finance" Route="finance">
+        <ShellContent ContentTemplate="{DataTemplate views:FinancePage}" />
     </FlyoutItem>
 
     <FlyoutItem Title="Fencers" Route="fencers">
         <ShellContent ContentTemplate="{DataTemplate views:FencersPage}" />
     </FlyoutItem>
 
-    <FlyoutItem Title="Finance" Route="finance">
-        <ShellContent ContentTemplate="{DataTemplate views:FinancePage}" />
-    </FlyoutItem>
-
     <FlyoutItem x:Name="StatisticsFlyout" Title="Statistics" Route="statistics">
         <ShellContent ContentTemplate="{DataTemplate views:StatisticsPage}" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Tournaments" Route="tournaments">
+        <ShellContent ContentTemplate="{DataTemplate views:TournamentsPage}" />
     </FlyoutItem>
 
     <FlyoutItem Title="My Profile" Route="profile">

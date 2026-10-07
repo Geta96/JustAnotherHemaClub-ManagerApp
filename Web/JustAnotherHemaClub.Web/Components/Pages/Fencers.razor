@@ -1,0 +1,468 @@
+@page "/fencers"
+@using System.Globalization
+@using Microsoft.AspNetCore.Authorization
+@using JustAnotherHemaClub.Services
+@attribute [Authorize]
+@inject IGoogleSheetsService Sheets
+@inject ICacheControl Cache
+@inject AuthService Auth
+@inject UserSession Session
+
+<PageTitle>Fencers · JAHC Manager</PageTitle>
+
+<h1 class="page-title">Fencer profiles</h1>
+
+@if (!string.IsNullOrEmpty(ResetResult))
+{
+    <section class="card">
+        <p class="payment-status ok">
+            @(ResetResult switch
+            {
+                "approved" => "Password reset approved.",
+                "rejected" => "Password reset rejected.",
+                _ => "This request was already handled."
+            })
+    </p>
+</section>
+}
+
+@if (!_loading && Auth.IsLoggedInInstructor && _pendingResets.Count > 0)
+{
+    <section class="card">
+        <h2 class="card-title">Pending password resets</h2>
+        <p class="muted">Approving makes the fencer's requested new password active immediately.</p>
+        @foreach (var p in _pendingResets)
+        {
+            <div class="kv">
+                <span class="k">
+                    <strong>@p.DisplayName</strong>
+                    @if (!string.IsNullOrWhiteSpace(p.Username))
+                    {
+                        <span class="muted"> @@@p.Username</span>
+                    }
+                    @if (p.PasswordResetRequestedAtUtc is { } at)
+                    {
+                        <br />
+            
+                        <span class="muted">Requested @at.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                    }
+                </span>
+                <span class="v">
+                    <form method="post" action="/instructor/reset/review" style="display:inline">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="fencerId" value="@p.Id" />
+                        <input type="hidden" name="decision" value="approve" />
+                        <button class="attend-btn" type="submit">Approve</button>
+                    </form>
+                    <form method="post" action="/instructor/reset/review" style="display:inline">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="fencerId" value="@p.Id" />
+                        <input type="hidden" name="decision" value="reject" />
+                        <button class="undo-attend" type="submit">Reject</button>
+                    </form>
+                </span>
+            </div>
+        }
+    </section>
+}
+
+@if (_loading)
+{
+    <section class="card"><p class="muted">Loading…</p></section>
+}
+else
+{
+    <section class="card">
+        <h2 class="card-title">Select a fencer</h2>
+        <form method="get" action="/fencers" class="stack-form">
+            <label>Pick a fencer…
+                <select name="fencer" onchange="this.form.submit()">
+                    @foreach (var f in _fencers)
+                    {
+                        <option value="@f.Id" selected="@(f.Id == _selectedId)">@f.Name</option>
+                    }
+                </select>
+            </label>
+            <noscript><button class="attend-btn" type="submit">View</button></noscript>
+        </form>
+    </section>
+
+    @if (_selected is { } sel)
+    {
+        <section class="card fencer-hero">
+            <div class="hero-strip">
+                <div class="hero-avatar">@Initials(sel.Name)</div>
+                <div class="hero-name">
+                    <div class="hero-title">@sel.Name</div>
+                    @if (!string.IsNullOrWhiteSpace(sel.Username))
+                    {
+                        <div class="hero-handle">@@@sel.Username</div>
+                    }
+                </div>
+            </div>
+
+            <div class="chip-row">
+                @if (sel.Active)
+                {
+                    <span class="chip chip-green">Active</span>
+                }
+                @if (sel.IsStudent)
+                {
+                    <span class="chip chip-slate">Student · 60%</span>
+                }
+                @if (sel.IsInstructor)
+                {
+                    <span class="chip chip-wine">Instructor</span>
+                }
+            </div>
+
+            @* ---- Instructor-only detail block ---- *@
+            @if (Auth.IsLoggedInInstructor)
+            {
+                <div class="detail-block">
+                    <div class="kv"><span class="k">Email</span><span class="v">@sel.Email</span></div>
+                    <div class="kv"><span class="k">Username</span><span class="v">@sel.Username</span></div>
+                    <div class="kv">
+                        <span class="k">GDPR</span>
+                        <span class="v">@((MarkupString)(sel.GdprAccepted ? "&#10003;" : "&#10007;"))</span>
+                    </div>
+                    <div class="kv">
+                        <span class="k">Liability</span>
+                        <span class="v">@((MarkupString)(sel.LiabilityAccepted ? "&#10003;" : "&#10007;"))</span>
+                    </div>
+                    <div class="kv">
+                        <span class="k">Payment</span>
+                        <span class="v @_paymentClass">@_paymentText</span>
+                    </div>
+
+                    @if (_unpaidMonths.Count > 0)
+                    {
+                        <div class="subsection">
+                            <div class="sub-title">Months with missing payment</div>
+                            @foreach (var u in _unpaidMonths)
+                            {
+                                <div class="kv">
+                                    <span class="k">@MonthLabel(u.Year, u.Month)</span>
+                                    <span class="v danger">@u.Amount.ToString("N0") Ft</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            @* ---- Activity (everyone) ---- *@
+            <div class="detail-block">
+                <h3 class="block-title">Activity</h3>
+                <div class="kv"><span class="k">Average attendance</span><span class="v">@_averageAttendanceText</span></div>
+                <div class="kv"><span class="k">Most in one month</span><span class="v">@_mostAttendanceText</span></div>
+                <div class="kv"><span class="k">1 on 1 received</span><span class="v">@_oneOnOneReceived</span></div>
+                @if (sel.IsInstructor)
+                {
+                    <div class="kv"><span class="k">1 on 1 given</span><span class="v">@_oneOnOneGiven</span></div>
+                }
+
+                <div class="kv"><span class="k">Active months</span><span class="v">@_activeMonthsText</span></div>
+
+                <div class="subsection">
+                    <div class="sub-title">Recent trainings</div>
+                    @if (_recentSessions.Count == 0)
+                    {
+                        <p class="muted">No trainings attended yet.</p>
+                    }
+                    else
+                    {
+                        @foreach (var s in _recentSessions)
+                        {
+                            <div class="kv">
+                                <span class="k wine">@s.Date.ToString("yyyy-MM-dd (ddd)")</span>
+                                <span class="v">@(string.IsNullOrWhiteSpace(s.Topic) ? "(no topic)" : s.Topic)</span>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+
+            @* ---- Payment history (instructor: anyone; member: own only) ---- *@
+            @if (_showPaymentHistory)
+            {
+                <div class="detail-block">
+                    <h3 class="block-title">Payment History</h3>
+                    @if (_paymentHistory.Count == 0)
+                    {
+                        <p class="muted">No payments recorded yet.</p>
+                    }
+                    else
+                    {
+                        @foreach (var g in _paymentHistory)
+                        {
+                            <div class="subsection">
+                                <div class="sub-title wine">
+                                    @g.Header
+                                    @if (g.IsPaidUp)
+                                    {
+                                        <span class="paid-tick" title="Paid up">&#10003;</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="unpaid-cross" title="Not fully paid">&#10007;</span>
+                                    }
+                                </div>
+                                @foreach (var p in g.Payments)
+                                {
+                                    <div class="kv">
+                                        <span class="k">@p.Date.ToString("yyyy-MM-dd")</span>
+                                        <span class="v">@p.Amount.ToString("N0") Ft</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            }
+
+            @* ---- Promote to instructor (instructor only, target not instructor) ---- *@
+            @if (Auth.IsLoggedInInstructor && !sel.IsInstructor)
+            {
+                <form method="post" action="/fencers/promote" class="stack-form">
+                    <input type="hidden" name="fencerId" value="@sel.Id" />
+                    <button class="attend-btn" type="submit">Promote to instructor</button>
+                </form>
+            }
+        </section>
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "fencer")]
+    private string? SelectedParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "reset")]
+    private string? ResetResult { get; set; }
+
+    private readonly List<Fencer> _pendingResets = new();
+
+    private readonly List<Fencer> _fencers = new();
+    private Fencer? _selected;
+    private string? _selectedId;
+    private bool _loading = true;
+
+    // Selected fencer's computed details
+    private string _paymentText = "";
+    private string _paymentClass = "";
+    private readonly List<FencerDuesLedger.UnpaidMonth> _unpaidMonths = new();
+    private string _averageAttendanceText = "—";
+    private string _mostAttendanceText = "—";
+    private string _activeMonthsText = "—";
+    private int _oneOnOneReceived;
+    private int _oneOnOneGiven;
+    private bool _showPaymentHistory;
+
+    private readonly List<SessionRow> _recentSessions = new();
+    private readonly List<PaymentGroup> _paymentHistory = new();
+
+    private sealed record SessionRow(string Topic, DateTime Date);
+    private sealed record PaymentRow(DateTime Date, decimal Amount);
+    private sealed record PaymentGroup(string Header, bool IsPaidUp, List<PaymentRow> Payments);
+
+    private List<TrainingSession> _allTrainings = new();
+    private List<IndividualLesson> _allLessons = new();
+    private List<Payment> _allPayments = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureRestoredAsync();
+
+        // Reset requests can be filed (from either app) after the fencer cache
+        // was filled, so instructors always re-read the Fencers tab.
+        if (Auth.IsLoggedInInstructor)
+            Cache.InvalidateFencers();
+
+        try
+        {
+            var today = DateTime.Today;
+
+            var fencersTask = Sheets.GetFencersAsync();
+            var trainingsTask = Sheets.GetTrainingsAsync();
+            var lessonsTask = Sheets.GetIndividualLessonsAsync();
+            var rulesTask = Sheets.GetPriceRulesAsync();
+            await Task.WhenAll(fencersTask, trainingsTask, lessonsTask, rulesTask);
+
+            _fencers.AddRange(fencersTask.Result.OrderBy(f => f.Name));
+
+            _pendingResets.Clear();
+            if (Auth.IsLoggedInInstructor)
+                _pendingResets.AddRange(_fencers
+                    .Where(f => f.HasPendingPasswordReset)
+                    .OrderBy(f => f.PasswordResetRequestedAtUtc ?? DateTime.MaxValue));
+
+            _allTrainings = trainingsTask.Result;
+            _allLessons = lessonsTask.Result;
+            var allRules = rulesTask.Result;
+
+            // Default selection: the logged-in user, else the first fencer.
+            _selectedId = SelectedParam;
+            if (string.IsNullOrWhiteSpace(_selectedId) || _fencers.All(f => f.Id != _selectedId))
+                _selectedId = Auth.CurrentFencer?.Id;
+            if (string.IsNullOrWhiteSpace(_selectedId) || _fencers.All(f => f.Id != _selectedId))
+                _selectedId = _fencers.FirstOrDefault()?.Id;
+
+            _selected = _fencers.FirstOrDefault(f => f.Id == _selectedId);
+            if (_selected is null) return;
+
+            // ----- Month span for the dues ledger -----
+            // Must match the Finance page exactly, otherwise the two screens can
+            // disagree: include the current month, every training month (INCLUDING
+            // future materialized sessions), and any payment-only months. Capping
+            // at the current month or omitting payment-only months makes overpayment
+            // credit that lives in a later month vanish here, so a fencer who is
+            // "Overpaid" on Finance wrongly shows "All payed up" on Fencers.
+            var monthsSet = new HashSet<(int Y, int M)> { (today.Year, today.Month) };
+            foreach (var t in _allTrainings) monthsSet.Add((t.Date.Year, t.Date.Month));
+
+            var ordered = monthsSet.OrderBy(x => x.Y).ThenBy(x => x.M).ToList();
+            var paymentTasks = ordered.ToDictionary(ym => ym, ym => Sheets.GetPaymentsAsync(ym.Y, ym.M));
+            await Task.WhenAll(paymentTasks.Values);
+
+            // Fold in payment-only months (pre-payments / refunds with no training),
+            // then re-fetch so their payments enter the credit-carry chain.
+            var extra = paymentTasks.Values
+                .SelectMany(t => t.Result)
+                .Select(p => (Y: p.Year, M: p.Month))
+                .Where(ym => !monthsSet.Contains(ym))
+                .Distinct()
+                .ToList();
+            foreach (var ym in extra)
+            {
+                monthsSet.Add(ym);
+                paymentTasks[ym] = Sheets.GetPaymentsAsync(ym.Y, ym.M);
+            }
+            await Task.WhenAll(paymentTasks.Values);
+
+            var monthSpan = monthsSet.OrderBy(x => x.Y).ThenBy(x => x.M).ToList();
+            var paymentsByMonth = monthSpan.ToDictionary(ym => ym, ym => paymentTasks[ym].Result);
+            _allPayments = paymentsByMonth.Values.SelectMany(p => p).ToList();
+
+            BuildDetails(_selected, monthSpan, paymentsByMonth, allRules, today);
+        }
+        finally { _loading = false; }
+    }
+
+    private void BuildDetails(
+        Fencer fencer,
+        List<(int Y, int M)> monthSpan,
+        Dictionary<(int Y, int M), List<Payment>> paymentsByMonth,
+        List<PriceRule> allRules,
+        DateTime today)
+    {
+        // ---- Cumulative dues summary via the shared ledger ----
+        var inputs = new List<FencerDuesLedger.MonthInput>(monthSpan.Count);
+        foreach (var ym in monthSpan)
+        {
+            var att = _allTrainings
+                .Where(t => t.Date.Year == ym.Y && t.Date.Month == ym.M &&
+                            t.AttendeeFencerIds.Contains(fencer.Id))
+                .Count();
+            var paid = paymentsByMonth[ym]
+                .Where(p => p.FencerId == fencer.Id)
+                .Sum(p => p.Amount);
+            inputs.Add(new FencerDuesLedger.MonthInput(ym.Y, ym.M, att, paid));
+        }
+
+        var ledger = FencerDuesLedger.Compute(fencer.IsStudent, inputs, allRules);
+        var summary = FencerDuesLedger.Summarize(ledger, today.Year, today.Month);
+
+        (_paymentText, _paymentClass) = summary.Status switch
+        {
+            FencerDuesLedger.DuesStatus.Overpaid =>
+                (DuesCalculator.DescribeOverpayment(summary.ThisMonthEffectivePaid, summary.FinalCredit, fencer.IsStudent,
+                    FencerDuesLedger.RulesForMonth(allRules, today.Year, today.Month)), "ok"),
+            FencerDuesLedger.DuesStatus.DueThisMonth =>
+                ($"Due {summary.ThisMonthOutstanding:N0} Ft by the end of this month", "grey"),
+            FencerDuesLedger.DuesStatus.DueWithArrears =>
+                ($"Due {summary.TotalOutstanding:N0} Ft", "danger"),
+            _ => ("All payed up", "ok"),
+        };
+
+        _unpaidMonths.Clear();
+        _unpaidMonths.AddRange(summary.UnpaidMonths.OrderBy(u => u.Year).ThenBy(u => u.Month));
+
+        // ---- Activity ----
+        var attended = _allTrainings
+            .Where(t => t.AttendeeFencerIds.Contains(fencer.Id))
+            .OrderByDescending(t => t.Date)
+            .ToList();
+
+        _recentSessions.Clear();
+        _recentSessions.AddRange(attended.Take(4).Select(t => new SessionRow(t.Topic, t.Date)));
+
+        var perMonth = attended
+            .GroupBy(t => (t.Date.Year, t.Date.Month))
+            .Select(g => new { g.Key.Year, g.Key.Month, Count = g.Count() })
+            .OrderByDescending(x => x.Year).ThenByDescending(x => x.Month)
+            .ToList();
+
+        if (perMonth.Count == 0)
+        {
+            _averageAttendanceText = "—";
+            _mostAttendanceText = "—";
+            _activeMonthsText = "—";
+        }
+        else
+        {
+            var avg = perMonth.Average(x => x.Count);
+            _averageAttendanceText = $"{avg:0.0} avg · {perMonth.Count} mo";
+            var top = perMonth.OrderByDescending(x => x.Count).First();
+            _mostAttendanceText = $"{top.Count} in {MonthLabel(top.Year, top.Month)}";
+            _activeMonthsText = string.Join(", ", perMonth.Select(x => MonthLabel(x.Year, x.Month)));
+        }
+
+        _oneOnOneReceived = _allLessons.Count(l =>
+            l.StudentId == fencer.Id && l.Status == IndividualLessonStatus.Accepted);
+        _oneOnOneGiven = _allLessons.Count(l =>
+            l.InstructorId == fencer.Id && l.Status == IndividualLessonStatus.Accepted);
+
+        // ---- Payment history ----
+        _showPaymentHistory = Auth.IsLoggedInInstructor || fencer.Id == Auth.CurrentFencer?.Id;
+        _paymentHistory.Clear();
+        if (_showPaymentHistory)
+        {
+            // Months that still owe something; a month gets the green tick when
+            // it is NOT in this set (mirrors the MAUI Fencers page).
+            var unpaidMonthSet = summary.UnpaidMonths
+                .Select(u => (u.Year, u.Month))
+                .ToHashSet();
+
+            foreach (var g in _allPayments
+                .Where(p => p.FencerId == fencer.Id)
+                .GroupBy(p => (p.Year, p.Month))
+                .OrderByDescending(g => g.Key.Year).ThenByDescending(g => g.Key.Month))
+            {
+                var sessions = _allTrainings.Count(t =>
+                    t.Date.Year == g.Key.Year && t.Date.Month == g.Key.Month &&
+                    t.AttendeeFencerIds.Contains(fencer.Id));
+                var header = $"{MonthFullLabel(g.Key.Year, g.Key.Month)}: {sessions} session{(sessions == 1 ? "" : "s")}";
+                _paymentHistory.Add(new PaymentGroup(
+                    header,
+                    !unpaidMonthSet.Contains((g.Key.Year, g.Key.Month)),
+                    g.OrderBy(p => p.PaidOn).Select(p => new PaymentRow(p.PaidOn, p.Amount)).ToList()));
+            }
+        }
+    }
+
+    private static string Initials(string? name)
+    {
+        name = (name ?? "").Trim();
+        if (name.Length == 0) return "?";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 1
+            ? parts[0][..1].ToUpperInvariant()
+            : (parts[0][0].ToString() + parts[^1][0]).ToUpperInvariant();
+    }
+
+    private static string MonthLabel(int y, int m) =>
+        new DateTime(y, m, 1).ToString("MMM yyyy", CultureInfo.InvariantCulture);
+
+    private static string MonthFullLabel(int y, int m) =>
+        new DateTime(y, m, 1).ToString("MMMM yyyy", CultureInfo.InvariantCulture);
+}

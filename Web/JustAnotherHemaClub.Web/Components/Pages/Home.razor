@@ -1,0 +1,451 @@
+@page "/"
+@using Microsoft.AspNetCore.Authorization
+@using JustAnotherHemaClub.Services
+@attribute [Authorize]
+@inject IGoogleSheetsService Sheets
+@inject ICacheControl Cache
+@inject AuthService Auth
+@inject UserSession Session
+
+<PageTitle>Home · JAHC Manager</PageTitle>
+
+<h1 class="page-title">Home</h1>
+
+<section class="home-hero">
+    <img class="home-hero-bg" src="images/home_bg_web.jpg" alt="" aria-hidden="true" />
+    <div class="home-hero-tint"></div>
+</section>
+
+<section class="card">
+    <h2 class="card-title">About us</h2>
+    <p>We're a HEMA (Historical European Martial Arts) club located in Budapest focused on
+       longsword, footwork drills and free sparring.</p>
+</section>
+
+@if (_pendingResets.Count > 0)
+{
+    <section class="card">
+        <h2 class="card-title">Pending password resets</h2>
+        <p class="payment-status grey">
+            @_pendingResets.Count fencer@(_pendingResets.Count == 1 ? " is" : "s are") waiting for a password reset approval.
+        </p>
+        <ul>
+            @foreach (var p in _pendingResets)
+            {
+                <li>@p.DisplayName@(string.IsNullOrWhiteSpace(p.Username) ? "" : $" (@{p.Username})")</li>
+            }
+        </ul>
+        <a class="attend-btn" href="/fencers">Review requests</a>
+    </section>
+}
+
+@if (_hasNextLesson)
+{
+    <section class="card next-lesson @(_isAttending ? "attending" : "")">
+        <div class="next-lesson-row">
+            <div class="next-lesson-info">
+                <h2 class="card-title">Next lesson:</h2>
+                <div class="next-lesson-when">@_nextLessonWhen</div>
+                @if (!string.IsNullOrWhiteSpace(_nextLessonTopic))
+                {
+                    <div class="topic">@_nextLessonTopic</div>
+                }
+            </div>
+
+            @if (_canAttend)
+            {
+                <form method="post" action="/home/attend" class="attend-form">
+                    <input type="hidden" name="trainingId" value="@(_nextLesson?.Id ?? "")" />
+                    <input type="hidden" name="ruleId" value="@(_nextLessonRule?.Id ?? "")" />
+                    <input type="hidden" name="date" value="@_nextLessonDate.ToString("yyyy-MM-dd")" />
+                    <input type="hidden" name="attending" value="@(_isAttending ? "1" : "0")" />
+                    @if (_isAttending)
+                    {
+                        <button class="undo-attend" type="submit">&#8617; Undo</button>
+                    }
+                    else
+                    {
+                        <button class="attend-btn" type="submit">Attend</button>
+                    }
+                </form>
+            }
+        </div>
+    </section>
+}
+
+<section class="card">
+    <h2 class="card-title">Weekly Trainings</h2>
+
+    @if (_loading)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else if (_weekly.Count == 0)
+    {
+        <p class="muted">No weekly trainings scheduled.</p>
+    }
+    else
+    {
+        <ul class="weekly-list">
+            @foreach (var row in _weekly)
+            {
+                <li class="weekly-row">
+                    <div class="weekly-when">
+                        <span class="day">@row.DayShort</span>
+                        <span class="time">@row.TimeRange</span>
+                    </div>
+                    @if (row.HasTopic)
+                    {
+                        <span class="topic">@row.Topic</span>
+                    }
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+@if (_hasPaymentStatus)
+{
+    <section class="card">
+        <h2 class="card-title">Payment status</h2>
+        <p class="payment-status @_paymentStatusClass">@_paymentStatusText</p>
+    </section>
+}
+
+<section class="card">
+    <h2 class="card-title">Follow or Contact us</h2>
+    <div class="social-grid">
+        <a class="social-btn instagram" href="@InstagramUrl" target="_blank" rel="noopener">Instagram</a>
+        <a class="social-btn facebook" href="@FacebookUrl" target="_blank" rel="noopener">Facebook</a>
+        <a class="social-btn discord" href="@DiscordUrl" target="_blank" rel="noopener">Discord</a>
+    </div>
+</section>
+
+
+@code {
+    private const string InstagramUrl =
+        "https://www.instagram.com/just.another.hema.club?igsh=MXZudjI3MDJ4eWw1aA==";
+    private const string FacebookUrl = "https://www.facebook.com/share/18VtVUQPW5/";
+    private const string DiscordUrl = "https://discord.gg/tEcynS94d";
+
+    private record WeeklyRow(string DayShort, string TimeRange, string Topic)
+    {
+        public bool HasTopic => !string.IsNullOrWhiteSpace(Topic);
+    }
+
+    private readonly List<WeeklyRow> _weekly = new();
+    private bool _loading = true;
+
+    // --- Next lesson state ---
+    private TrainingSession? _nextLesson;
+    private RecurringTrainingRule? _nextLessonRule;
+    private DateTime _nextLessonDate;
+
+    private bool _hasNextLesson;
+    private bool _canAttend;
+    private bool _isAttending;
+    private string _nextLessonWhen = "";
+    private string _nextLessonTopic = "";
+
+    // --- Payment status state (logged-in fencer only) ---
+    private bool _hasPaymentStatus;
+    private string _paymentStatusText = "";
+    private string _paymentStatusClass = "ok";
+
+    // --- Pending password resets (instructors only) ---
+    private readonly List<Fencer> _pendingResets = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureRestoredAsync();
+
+        await LoadPendingResetsAsync();
+        await LoadNextLessonAsync();
+        await LoadPaymentStatusAsync();
+    }
+
+    /// <summary>
+    /// Finds the soonest upcoming training (materialized session or projected
+    /// recurring occurrence) and populates the "Next lesson" card. Mirrors the
+    /// MAUI HomeViewModel logic. Only logged-in (non-guest) fencers can attend.
+    /// </summary>
+    private async Task LoadNextLessonAsync()
+    {
+        try
+        {
+            var todayStart = DateTime.Today;
+
+            var trainingsTask = Sheets.GetTrainingsAsync();
+            var rulesTask = Sheets.GetRecurringTrainingsAsync();
+            await Task.WhenAll(trainingsTask, rulesTask);
+
+            var trainings = trainingsTask.Result;
+            var rules = rulesTask.Result;
+
+            var nextMaterialized = trainings
+                .Where(t => t.Date.Date >= todayStart)
+                .OrderBy(t => t.Date)
+                .FirstOrDefault();
+
+            RecurringTrainingRule? projectedRule = null;
+            DateTime projectedDate = default;
+            foreach (var rule in rules)
+            {
+                var occ = NextOccurrenceOnOrAfter(rule, todayStart);
+                if (occ is null) continue;
+                var start = occ.Value.Date + rule.TimeOfDay;
+                if (projectedRule is null || start < (projectedDate.Date + projectedRule.TimeOfDay))
+                {
+                    projectedRule = rule;
+                    projectedDate = occ.Value;
+                }
+            }
+
+            DateTime? matStart = nextMaterialized?.Date;
+            DateTime? projStart = projectedRule is null
+                ? null
+                : projectedDate.Date + projectedRule.TimeOfDay;
+
+            _nextLesson = null;
+            _nextLessonRule = null;
+
+            if (matStart is null && projStart is null)
+            {
+                _hasNextLesson = false;
+                _canAttend = false;
+                _isAttending = false;
+                return;
+            }
+
+            bool useProjected = projStart is not null &&
+                                (matStart is null || projStart < matStart);
+
+            DateTime whenStart;
+            string topic;
+            var me = Auth.CurrentFencer;
+
+            if (useProjected)
+            {
+                _nextLessonRule = projectedRule;
+                _nextLessonDate = projectedDate;
+                whenStart = projStart!.Value;
+                topic = projectedRule!.Topic ?? "";
+
+                // Proactively materialize the occurrence so the row exists when the
+                // card shows it. Duplicate-safe. If it fails we keep the rule so the
+                // Attend command can retry the materialization on demand.
+                try
+                {
+                    var session = await EnsureOccurrenceAsync(projectedRule, projectedDate);
+                    _nextLesson = session;
+                    _nextLessonRule = null;
+                    whenStart = session.Date;
+                    topic = session.Topic ?? "";
+                }
+                catch { /* keep _nextLessonRule so Attend can materialize later */ }
+            }
+            else
+            {
+                _nextLesson = nextMaterialized;
+                whenStart = matStart!.Value;
+                topic = nextMaterialized!.Topic ?? "";
+            }
+
+            _nextLessonWhen = $"{FormatFriendlyDay(whenStart)} at {whenStart:HH\\:mm}";
+            _nextLessonTopic = topic;
+
+            _canAttend = me is not null && !Auth.IsGuest &&
+                         (_nextLesson is not null || _nextLessonRule is not null);
+            _isAttending = me is not null && _nextLesson is not null &&
+                           _nextLesson.AttendeeFencerIds.Contains(me.Id);
+            _hasNextLesson = true;
+        }
+        catch
+        {
+            _nextLesson = null;
+            _nextLessonRule = null;
+            _hasNextLesson = false;
+            _canAttend = false;
+        }
+    }
+
+    /// <summary>
+    /// Computes the logged-in fencer's cumulative payment status (mirrors the
+    /// MAUI HomeViewModel.LoadPaymentStatusAsync and the Finance/Fencer pages) and
+    /// populates the payment-status card. Guests / not-logged-in users don't see it.
+    /// </summary>
+    private async Task LoadPaymentStatusAsync()
+    {
+        try
+        {
+            var me = Auth.CurrentFencer;
+            if (me is null || Auth.IsGuest)
+            {
+                _hasPaymentStatus = false;
+                return;
+            }
+
+            var today = DateTime.Today;
+
+            var trainingsTask = Sheets.GetTrainingsAsync();
+            var rulesTask = Sheets.GetPriceRulesAsync();
+            await Task.WhenAll(trainingsTask, rulesTask);
+
+            var trainings = trainingsTask.Result;
+            var allRules = rulesTask.Result;
+
+            // Months (up to the current one) in which this fencer attended anything.
+            var attendedMonths = trainings
+                .Where(t => t.Date.Date <= today &&
+                            t.AttendeeFencerIds.Contains(me.Id))
+                .Select(t => (Year: t.Date.Year, Month: t.Date.Month))
+                .Distinct()
+                .OrderBy(t => t.Year).ThenBy(t => t.Month)
+                .ToList();
+
+            if (attendedMonths.Count == 0)
+            {
+                _paymentStatusText = "All payed up";
+                _paymentStatusClass = "ok";
+                _hasPaymentStatus = true;
+                return;
+            }
+
+            // Walk a contiguous range from the first attended month through the
+            // current month so payment-only months stay in the credit-carry chain
+            // (keeps Home in agreement with Finance / Fencers).
+            var firstYm = attendedMonths[0];
+            var allMonths = new List<(int Year, int Month)>();
+            for (var d = new DateTime(firstYm.Year, firstYm.Month, 1);
+                 d <= new DateTime(today.Year, today.Month, 1);
+                 d = d.AddMonths(1))
+            {
+                allMonths.Add((d.Year, d.Month));
+            }
+
+            var paymentTasks = allMonths
+                .Select(ym => Sheets.GetPaymentsAsync(ym.Year, ym.Month))
+                .ToArray();
+            await Task.WhenAll(paymentTasks);
+
+            var monthInputs = new List<FencerDuesLedger.MonthInput>(allMonths.Count);
+            for (int i = 0; i < allMonths.Count; i++)
+            {
+                var ym = allMonths[i];
+
+                var attendedCount = trainings
+                    .Count(t => t.Date.Year == ym.Year && t.Date.Month == ym.Month &&
+                                t.AttendeeFencerIds.Contains(me.Id));
+
+                var cashPaid = paymentTasks[i].Result
+                    .Where(p => p.FencerId == me.Id)
+                    .Sum(p => p.Amount);
+
+                monthInputs.Add(new FencerDuesLedger.MonthInput(
+                    ym.Year, ym.Month, attendedCount, cashPaid));
+            }
+
+            var results = FencerDuesLedger.Compute(me.IsStudent, monthInputs, allRules);
+            var summary = FencerDuesLedger.Summarize(results, today.Year, today.Month);
+
+            (_paymentStatusText, _paymentStatusClass) = summary.Status switch
+            {
+                FencerDuesLedger.DuesStatus.Overpaid =>
+                    (DuesCalculator.DescribeOverpayment(
+                        summary.ThisMonthEffectivePaid, summary.FinalCredit, me.IsStudent,
+                        FencerDuesLedger.RulesForMonth(allRules, today.Year, today.Month)), "ok"),
+                FencerDuesLedger.DuesStatus.DueThisMonth =>
+                    ($"Due {summary.ThisMonthOutstanding:N0} Ft by the end of this month", "grey"),
+                FencerDuesLedger.DuesStatus.DueWithArrears =>
+                    ($"Due {summary.TotalOutstanding:N0} Ft", "danger"),
+                _ => ("All payed up", "ok"),
+            };
+
+            _hasPaymentStatus = true;
+        }
+        catch
+        {
+            _hasPaymentStatus = false;
+        }
+    }
+
+    /// <summary>
+    /// Ensures the occurrence of a rule on a date exists as a materialized
+    /// TrainingSession and returns it. Duplicate-safe by deterministic id and by
+    /// a (date, start-time, topic) look-alike match. Mirrors the MAUI
+    /// RecurringTrainingMaterializer.EnsureOccurrenceAsync.
+    /// </summary>
+    private async Task<TrainingSession> EnsureOccurrenceAsync(RecurringTrainingRule rule, DateTime date)
+    {
+        var day = date.Date;
+        var id = $"rec_{rule.Id}_{day:yyyyMMdd}";
+        var topicKey = (rule.Topic ?? "").Trim().ToLowerInvariant();
+
+        var existing = await Sheets.GetTrainingsAsync();
+
+        var byId = existing.FirstOrDefault(t => t.Id == id);
+        if (byId is not null) return byId;
+
+        var bySlot = existing.FirstOrDefault(t =>
+            t.Date.Date == day &&
+            t.Date.TimeOfDay == rule.TimeOfDay &&
+            (t.Topic ?? "").Trim().ToLowerInvariant() == topicKey);
+        if (bySlot is not null) return bySlot;
+
+        var session = new TrainingSession
+        {
+            Id = id,
+            Date = day + rule.TimeOfDay,
+            EndDate = day + rule.EndTimeOfDay,
+            Topic = rule.Topic ?? "",
+        };
+        await Sheets.UpsertTrainingAsync(session);
+        Cache.InvalidateTrainings();
+        return session;
+    }
+
+    private static DateTime? NextOccurrenceOnOrAfter(RecurringTrainingRule rule, DateTime from)
+    {
+        var start = from.Date;
+        if (rule.StartDate.Date > start)
+            start = rule.StartDate.Date;
+
+        int delta = ((int)rule.DayOfWeek - (int)start.DayOfWeek + 7) % 7;
+        var candidate = start.AddDays(delta);
+
+        if (rule.EndDate.HasValue && candidate > rule.EndDate.Value.Date)
+            return null;
+
+        return candidate;
+    }
+
+    private static string FormatFriendlyDay(DateTime when)
+    {
+        var day = when.Date;
+        var today = DateTime.Today;
+
+        if (day == today) return "Today";
+        if (day == today.AddDays(1)) return "Tomorrow";
+        if (day < today.AddDays(7)) return Capitalize(day.ToString("dddd"));
+        return day.ToString("d MMM");
+    }
+
+    private static string Capitalize(string s) =>
+        string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s[1..];
+
+    private async Task LoadPendingResetsAsync()
+    {
+        _pendingResets.Clear();
+        if (!Auth.IsLoggedInInstructor) return;
+        try
+        {
+            // Requests can be filed from either app after the cache was filled.
+            Cache.InvalidateFencers();
+            var fencers = await Sheets.GetFencersAsync();
+            _pendingResets.AddRange(fencers
+                .Where(f => f.HasPendingPasswordReset)
+                .OrderBy(f => f.PasswordResetRequestedAtUtc ?? DateTime.MaxValue));
+        }
+        catch { /* best-effort */ }
+    }
+}

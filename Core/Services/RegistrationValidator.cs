@@ -38,7 +38,7 @@ public static class RegistrationValidator
             !string.Equals(trimmedEmail, trimmedConfirmEmail, StringComparison.OrdinalIgnoreCase)
                                                        ? "Email addresses do not match." :
             string.IsNullOrWhiteSpace(username)        ? "Login username is required." :
-            !IsStrongPassword(password)                ? "Password must be at least 6 characters and include at least one number." :
+            !IsStrongPassword(password)                ? "Password must be at least 8 characters, with at least one letter and one digit." :
             password != confirmPassword                ? "Passwords do not match." :
             !gdprAccepted                              ? "You must accept the GDPR policy." :
             !liabilityAccepted                         ? "You must accept the liability statement." :
@@ -76,11 +76,12 @@ public static class RegistrationValidator
         }
     }
 
-    /// <summary>At least 6 characters and at least one digit.</summary>
+    /// <summary>At least 8 characters, with at least one letter and one digit.</summary>
     public static bool IsStrongPassword(string? password) =>
         !string.IsNullOrEmpty(password) &&
-        password.Length >= 6 &&
-        password.Any(char.IsDigit);
+        password.Length >= 8 &&
+        password.Any(char.IsDigit) &&
+        password.Any(char.IsLetter);
 
     /// <summary>True when another fencer already uses <paramref name="username"/> (case-insensitive).</summary>
     public static bool IsDuplicateUsername(string username, IEnumerable<Fencer> existing) =>
@@ -122,7 +123,7 @@ public static class RegistrationValidator
     {
         Id = Guid.NewGuid().ToString("N"),
         Username = (username ?? "").Trim(),
-        PasswordHash = AuthService.Hash(password),
+        PasswordHash = PasswordHasher.Hash(AuthService.Hash(password)),
         Name = (name ?? "").Trim(),
         Email = (email ?? "").Trim(),
         Active = true,

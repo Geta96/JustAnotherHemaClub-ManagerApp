@@ -4,6 +4,15 @@ namespace JustAnotherHemaClub.Services;
 
 public interface IGoogleSheetsService
 {
+    // ---- Config (app-wide settings stored on the "Config" sheet) ----
+
+    /// <summary>
+    /// Reads <c>MinSupportedAppVersion</c> from the <c>Config</c> sheet (column A = key,
+    /// column B = value). Returns <c>null</c> when the sheet/key is missing or unparseable,
+    /// so callers treat the gate as disabled rather than locking users out on a bad read.
+    /// </summary>
+    Task<int?> GetMinSupportedAppVersionAsync();
+
     Task<List<Fencer>> GetFencersAsync();
     Task AddFencerAsync(Fencer fencer);
     Task UpsertFencerAsync(Fencer fencer);

@@ -1,0 +1,97 @@
+@page "/register"
+@layout LoginLayout
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
+
+<PageTitle>Register — JAHC Manager</PageTitle>
+
+<div class="login-shell">
+    <img src="images/monochrome_logo.jpg" alt="Just Another HEMA Club" class="login-crest" />
+
+    <div class="login-card">
+        @if (HasError)
+        {
+            <div class="login-error">@Error</div>
+        }
+
+        <form method="post" action="/auth/register" class="login-form">
+            <AntiforgeryToken />
+            <label class="login-label" for="name">Full name</label>
+            <input class="login-input" id="name" name="name" autocomplete="name"
+                   value="@Name" required />
+
+            <label class="login-label" for="email">Email</label>
+            <input class="login-input" id="email" name="email" type="email" autocomplete="email"
+                   value="@Email" required />
+
+            <label class="login-label" for="confirmEmail">Confirm email</label>
+            <input class="login-input" id="confirmEmail" name="confirmEmail" type="email"
+                   value="@ConfirmEmail" required />
+
+            <label class="login-label" for="username">Username</label>
+            <input class="login-input" id="username" name="username" autocomplete="username"
+                   value="@Username" required />
+
+            <label class="login-label" for="password">Password</label>
+            <input class="login-input" id="password" name="password" type="password"
+                   autocomplete="new-password" required />
+
+            <label class="login-label" for="confirmPassword">Confirm password</label>
+            <input class="login-input" id="confirmPassword" name="confirmPassword" type="password"
+                   autocomplete="new-password" required />
+
+            <label class="login-check">
+                <input type="checkbox" name="isStudent" value="true" @(IsStudent ? "checked" : "") />
+                <span>I am a student</span>
+            </label>
+            <label class="login-check">
+                <input type="checkbox" name="gdpr" value="true" @(Gdpr ? "checked" : "") required />
+                <span>I accept the
+                    <a class="login-link" href="/gdpr" target="_blank" rel="noopener">GDPR policy</a>
+                </span>
+            </label>
+            <label class="login-check">
+                <input type="checkbox" name="liability" value="true" @(Liability ? "checked" : "") required />
+                <span>I accept the
+                    <a class="login-link" href="/liability" target="_blank" rel="noopener">liability statement</a>
+                </span>
+            </label>
+
+            <button class="login-button" type="submit">Create account</button>
+        </form>
+
+        <div class="login-links">
+            <a class="login-link" href="/login">Back to sign in</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? Error { get; set; }
+
+    // Re-populated after a failed submit so the user doesn't lose their input.
+    // Passwords are deliberately NOT echoed back (never place them in a URL).
+    [SupplyParameterFromQuery(Name = "name")]
+    private string? Name { get; set; }
+
+    [SupplyParameterFromQuery(Name = "email")]
+    private string? Email { get; set; }
+
+    [SupplyParameterFromQuery(Name = "confirmEmail")]
+    private string? ConfirmEmail { get; set; }
+
+    [SupplyParameterFromQuery(Name = "username")]
+    private string? Username { get; set; }
+
+    [SupplyParameterFromQuery(Name = "isStudent")]
+    private bool IsStudent { get; set; }
+
+    [SupplyParameterFromQuery(Name = "gdpr")]
+    private bool Gdpr { get; set; }
+
+    [SupplyParameterFromQuery(Name = "liability")]
+    private bool Liability { get; set; }
+
+    private bool HasError => !string.IsNullOrEmpty(Error);
+}

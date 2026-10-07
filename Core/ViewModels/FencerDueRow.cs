@@ -82,6 +82,13 @@ public partial class FencerDueRow : ObservableObject
     public decimal CreditIn { get; }
 
     /// <summary>
+    /// Active price rules for this row's month. Set by the parent when building
+    /// the row so the overpayment wording ("Payed for the month" / "Payed for X
+    /// more sessions") can be derived from the real tiers.
+    /// </summary>
+    public IReadOnlyList<PriceRule>? ActiveRules { get; set; }
+
+    /// <summary>
     /// Set by the parent when building the row: true only for instructors.
     /// Combined with the paid state so a single property drives button
     /// visibility (no DataTrigger vs. IsVisible-binding conflict).
@@ -131,6 +138,33 @@ public partial class FencerDueRow : ObservableObject
     public bool IsNotPaid     => !IsPaid;
     public bool IsExactlyPaid => IsPaid && !IsOverpaid;
 
+    /// <summary>
+    /// Human-friendly description of the forward credit shown on the "overpaid"
+    /// badge, e.g. "Payed for the month" or "Payed for 4 more sessions". Falls
+    /// back to the plain "Overpayed by X Ft" wording when the credit can't be
+    /// interpreted against the active tiers.
+    /// </summary>
+    public string OverpaymentText =>
+        DuesCalculator.DescribeOverpayment(
+            AlreadyPaid + CreditIn, Overpayment, Fencer.IsStudent, ActiveRules);
+
+    /// <summary>
+    /// First line of the green payment badge ("Payed for the month" / "Payed for
+    /// X more sessions"). Split from <see cref="OverpaymentOverpay"/> so long
+    /// wording wraps onto a second line and never crowds out the fencer name.
+    /// </summary>
+    public string OverpaymentPrimary =>
+        DuesCalculator.DescribeOverpaymentParts(
+            AlreadyPaid + CreditIn, Overpayment, Fencer.IsStudent, ActiveRules).Primary;
+
+    /// <summary>Optional second line of the green badge ("with X Ft overpay"); empty when none.</summary>
+    public string OverpaymentOverpay =>
+        DuesCalculator.DescribeOverpaymentParts(
+            AlreadyPaid + CreditIn, Overpayment, Fencer.IsStudent, ActiveRules).Overpay;
+
+    /// <summary>True when the second overpay line should be shown.</summary>
+    public bool HasOverpaymentOverpay => !string.IsNullOrEmpty(OverpaymentOverpay);
+
     public string Summary
     {
         get
@@ -142,9 +176,9 @@ public partial class FencerDueRow : ObservableObject
             var sessionsText = $"{SessionsAttended} session{(SessionsAttended == 1 ? "" : "s")}";
 
             // Overpayment wins over the "Paid"/"Upgrade" branches — the badge
-            // says "Overpayed by X" and Summary mirrors that.
+            // mirrors the friendly "Payed for …" wording.
             if (IsOverpaid)
-                return $"{sessionsText} \u00B7 {TierLabel} \u00B7 overpayed by {Overpayment:N0} Ft{student}";
+                return $"{sessionsText} \u00B7 {TierLabel} \u00B7 {LowerFirst(OverpaymentText)}{student}";
 
             if (IsUpgrade)
                 return $"{sessionsText} \u00B7 {TierLabel} \u00B7 paid {AlreadyPaid:N0}, +{AmountDue:N0} Ft due{student}";
@@ -197,9 +231,20 @@ public partial class FencerDueRow : ObservableObject
         // Overpayment / IsOverpaid intentionally unchanged.
     }
 
+    /// <summary>Lower-cases the first character so the phrase reads inline in Summary.</summary>
+    private static string LowerFirst(string s) =>
+        string.IsNullOrEmpty(s) ? s : char.ToLowerInvariant(s[0]) + s[1..];
+
     // Summary depends on most fields; cheapest correct approach is to re-raise
     // it from each setter rather than try to be clever about dependency tracking.
-    private void RaiseSummary() => OnPropertyChanged(nameof(Summary));
+    private void RaiseSummary()
+    {
+        OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(OverpaymentText));
+        OnPropertyChanged(nameof(OverpaymentPrimary));
+        OnPropertyChanged(nameof(OverpaymentOverpay));
+        OnPropertyChanged(nameof(HasOverpaymentOverpay));
+    }
 
     partial void OnSessionsAttendedChanged(int value)  => RaiseSummary();
     partial void OnTotalCostChanged(decimal value)     => RaiseSummary();

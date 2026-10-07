@@ -98,6 +98,7 @@ public partial class PoolStandingsTabViewModel : ObservableObject, IDisposable
             ls.RedCards      += m.LeftRedCards;     rs.RedCards      += m.RightRedCards;
             if      (m.WinnerFencerId == m.LeftFencerId)  ls.Wins++;
             else if (m.WinnerFencerId == m.RightFencerId) rs.Wins++;
+            else { ls.Draws++; rs.Draws++; }
         }
 
         var ordered = SortStats(stats.Values);
@@ -117,7 +118,7 @@ public partial class PoolStandingsTabViewModel : ObservableObject, IDisposable
             var name = nameById.TryGetValue(s.FencerId, out var n) ? n : "?";
             group.Rows.Add(new PoolStandingRowVm(
                 s.FencerId, name, i + 1,
-                s.MatchesDone, s.Wins, s.PointsFor, s.PointsAgainst, s.RedCards,
+                s.MatchesDone, s.Wins, s.Draws, s.PointsFor, s.PointsAgainst, s.RedCards,
                 showQualificationSeparator: showSeparator && i == lastQualifierIndex));
         }
     }
@@ -149,6 +150,7 @@ public partial class PoolStandingsTabViewModel : ObservableObject, IDisposable
                 ls.RedCards      += m.LeftRedCards;     rs.RedCards      += m.RightRedCards;
                 if      (m.WinnerFencerId == m.LeftFencerId)  ls.Wins++;
                 else if (m.WinnerFencerId == m.RightFencerId) rs.Wins++;
+                else { ls.Draws++; rs.Draws++; }
             }
         }
 
@@ -167,7 +169,7 @@ public partial class PoolStandingsTabViewModel : ObservableObject, IDisposable
             var name = nameById.TryGetValue(s.FencerId, out var n) ? n : "?";
             OverallRows.Add(new PoolStandingRowVm(
                 s.FencerId, name, i + 1,
-                s.MatchesDone, s.Wins, s.PointsFor, s.PointsAgainst, s.RedCards,
+                s.MatchesDone, s.Wins, s.Draws, s.PointsFor, s.PointsAgainst, s.RedCards,
                 showQualificationSeparator: showSeparator && i == lastQualifierIndex));
         }
     }
@@ -227,6 +229,6 @@ public partial class PoolStandingsTabViewModel : ObservableObject, IDisposable
     private sealed class MutableStats
     {
         public string FencerId = "";
-        public int MatchesDone, Wins, PointsFor, PointsAgainst, RedCards;
+        public int MatchesDone, Wins, Draws, PointsFor, PointsAgainst, RedCards;
     }
 }

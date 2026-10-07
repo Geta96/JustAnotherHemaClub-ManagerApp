@@ -26,10 +26,39 @@ public class AuthService
     public bool IsLoggedInFencer =>
         CurrentFencer is not null && !IsGuest;
 
+    /// <summary>
+    /// When false, the built-in <c>testuser</c> account shortcut is disabled.
+    /// The web app sets this to false outside of Development so the in-memory
+    /// test backdoor can never be used in production.
+    /// </summary>
+    public static bool TestAccountEnabled { get; set; } = true;
+
     public AuthService(IServiceProvider services, ICredentialStore store)
     {
         _sheets = new Lazy<IGoogleSheetsService>(services.GetRequiredService<IGoogleSheetsService>);
         _store = store;
+    }
+
+    /// <summary>
+    /// Verifies a candidate (already SHA-256 pre-hashed) secret against a stored
+    /// value in either the legacy (raw SHA-256 hex) or new PBKDF2 format, and
+    /// reports whether the stored value should be upgraded to PBKDF2.
+    /// </summary>
+    private static bool VerifyPreHashed(string preHash, string? stored, out bool needsUpgrade)
+    {
+        needsUpgrade = false;
+        var s = (stored ?? string.Empty).Trim();
+        if (s.Length == 0) return false;
+
+        if (PasswordHasher.IsPbkdf2(s))
+            return PasswordHasher.Verify(preHash, s);
+
+        // Legacy: constant-time compare against the stored SHA-256 hex.
+        var ok = CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(preHash),
+            Encoding.UTF8.GetBytes(s));
+        if (ok) needsUpgrade = true;   // migrate this account on successful login
+        return ok;
     }
 
     public async Task<bool> LoginAsync(string username, string password)
@@ -39,10 +68,11 @@ public class AuthService
         IsTestMode = false;
 
         var inputUser = (username ?? string.Empty).Trim();
-        var inputHash = Hash(password ?? string.Empty);
+        var inputHash = Hash(password ?? string.Empty);   // SHA-256 pre-hash
 
-        // --- Test user shortcut: all operations route to in-memory dummy data ---
-        if (string.Equals(inputUser, TestDataService.TestUsername, StringComparison.OrdinalIgnoreCase) &&
+        // --- Test user shortcut (disabled in production via TestAccountEnabled) ---
+        if (TestAccountEnabled &&
+            string.Equals(inputUser, TestDataService.TestUsername, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(inputHash, Hash(TestDataService.TestPassword), StringComparison.OrdinalIgnoreCase))
         {
             IsTestMode = true;
@@ -57,12 +87,35 @@ public class AuthService
         }
 
         var fencers = await _sheets.Value.GetFencersAsync();
-        var match = fencers.FirstOrDefault(f =>
-            !string.IsNullOrWhiteSpace(f.Username) &&
-            string.Equals(f.Username.Trim(), inputUser, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals((f.PasswordHash ?? "").Trim(), inputHash, StringComparison.OrdinalIgnoreCase));
+        Fencer? match = null;
+        bool upgrade = false;
+
+        foreach (var f in fencers)
+        {
+            if (string.IsNullOrWhiteSpace(f.Username) ||
+                !string.Equals(f.Username.Trim(), inputUser, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (VerifyPreHashed(inputHash, f.PasswordHash, out upgrade))
+            {
+                match = f;
+                break;
+            }
+        }
 
         CurrentFencer = match;
+
+        // Upgrade-on-login: silently re-hash legacy accounts to PBKDF2.
+        if (match is not null && upgrade)
+        {
+            try
+            {
+                match.PasswordHash = PasswordHasher.Hash(inputHash);
+                await _sheets.Value.UpsertFencerAsync(match);
+            }
+            catch { /* best-effort; login still succeeds */ }
+        }
+
         return match is not null;
     }
 
@@ -73,15 +126,37 @@ public class AuthService
         CurrentFencer = null;
 
         var inputUser = (username ?? string.Empty).Trim();
-        var inputHash = (passwordHash ?? string.Empty).Trim();
+        var inputHash = (passwordHash ?? string.Empty).Trim();   // device-stored SHA-256 hex
 
         var fencers = await _sheets.Value.GetFencersAsync();
-        var match = fencers.FirstOrDefault(f =>
-            !string.IsNullOrWhiteSpace(f.Username) &&
-            string.Equals(f.Username.Trim(), inputUser, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals((f.PasswordHash ?? "").Trim(), inputHash, StringComparison.OrdinalIgnoreCase));
+        Fencer? match = null;
+        bool upgrade = false;
+
+        foreach (var f in fencers)
+        {
+            if (string.IsNullOrWhiteSpace(f.Username) ||
+                !string.Equals(f.Username.Trim(), inputUser, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (VerifyPreHashed(inputHash, f.PasswordHash, out upgrade))
+            {
+                match = f;
+                break;
+            }
+        }
 
         CurrentFencer = match;
+
+        if (match is not null && upgrade)
+        {
+            try
+            {
+                match.PasswordHash = PasswordHasher.Hash(inputHash);
+                await _sheets.Value.UpsertFencerAsync(match);
+            }
+            catch { /* ignored */ }
+        }
+
         return match is not null;
     }
 
@@ -89,6 +164,17 @@ public class AuthService
     {
         IsGuest = true;
         CurrentFencer = null;
+    }
+
+    /// <summary>
+    /// Rehydrates <see cref="CurrentFencer"/> from an already-authenticated
+    /// identity (e.g. a web auth cookie) without re-hitting the backend. Used by
+    /// the Blazor web app to restore the signed-in fencer on each new scope.
+    /// </summary>
+    public void RestoreSession(Fencer fencer)
+    {
+        IsGuest = false;
+        CurrentFencer = fencer;
     }
 
     public void Logout()

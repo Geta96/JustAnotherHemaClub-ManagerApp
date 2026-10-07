@@ -1,0 +1,115 @@
+@page "/profile"
+@using Microsoft.AspNetCore.Authorization
+@using JustAnotherHemaClub.Services
+@attribute [Authorize]
+@inject IGoogleSheetsService Sheets
+@inject AuthService Auth
+@inject UserSession Session
+
+<PageTitle>My Profile · JAHC Manager</PageTitle>
+
+<h1 class="page-title">My Profile</h1>
+
+@if (Auth.IsGuest)
+{
+    <section class="card">
+        <h2 class="card-title">You are browsing as a guest</h2>
+        <p class="muted">Log in to view and edit your fencer profile.</p>
+    </section>
+}
+else if (_fencer is { } f)
+{
+    @if (_saved)
+    {
+        <section class="card"><p class="pay-ok">&#10003; Profile saved.</p></section>
+    }
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <section class="card"><p class="pay-due">@_error</p></section>
+    }
+
+    @* ---- Read-only identity card ---- *@
+    <section class="card">
+        <h2 class="card-title">Account</h2>
+        <div class="kv"><span class="k">Full name</span><span class="v">@f.Name</span></div>
+        <div class="kv"><span class="k">Username</span><span class="v">@@@f.Username</span></div>
+        <div class="kv"><span class="k">Email</span><span class="v">@f.Email</span></div>
+
+        <div class="chip-row" style="padding-left:0;">
+            @if (f.Active)
+            {
+                <span class="chip chip-green">Active</span>
+            }
+            @if (f.IsStudent)
+            {
+                <span class="chip chip-slate">Student · 60%</span>
+            }
+            @if (f.IsInstructor)
+            {
+                <span class="chip chip-wine">Instructor</span>
+            }
+        </div>
+    </section>
+
+    @* ---- Editable profile ---- *@
+    <section class="card">
+        <h2 class="card-title">Edit my profile</h2>
+        <form method="post" action="/profile/save" class="stack-form">
+            <label>Full name
+                <input type="text" name="name" value="@f.Name" />
+            </label>
+            <label>Email
+                <input type="text" name="email" value="@f.Email" />
+            </label>
+
+            <label class="attendee-check">
+                <input type="checkbox" name="isStudent" checked="@f.IsStudent" />
+                <span>I am a student (pays 60% of every fee).</span>
+            </label>
+            <label class="attendee-check">
+                <input type="checkbox" name="gdpr" checked="@f.GdprAccepted" />
+                <span>I have read and agree to the GDPR statement.</span>
+            </label>
+            <label class="attendee-check">
+                <input type="checkbox" name="liability" checked="@f.LiabilityAccepted" />
+                <span>I have read and agree to the liability statement.</span>
+            </label>
+
+            <button class="attend-btn" type="submit">Save</button>
+        </form>
+    </section>
+}
+else
+{
+    <section class="card"><p class="muted">Not signed in.</p></section>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "saved")]
+    private string? SavedParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? ErrorParam { get; set; }
+
+    private Fencer? _fencer;
+    private bool _saved;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureRestoredAsync();
+
+        _saved = SavedParam == "1";
+        if (!string.IsNullOrWhiteSpace(ErrorParam))
+            _error = $"Save failed: {ErrorParam}";
+
+        // Re-read the fresh row from the backend so edits by this or another
+        // session are reflected (Auth.CurrentFencer is only the cookie snapshot).
+        var me = Auth.CurrentFencer;
+        if (me is not null)
+        {
+            var all = await Sheets.GetFencersAsync();
+            _fencer = all.FirstOrDefault(x => x.Id == me.Id) ?? me;
+        }
+    }
+}

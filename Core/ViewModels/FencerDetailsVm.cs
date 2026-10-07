@@ -62,6 +62,13 @@ public class FencerPaymentMonthGroup
     public int Year { get; }
     public int Month { get; }
     public int SessionsAttended { get; }
+
+    /// <summary>
+    /// True when this month's fees are fully settled (nothing outstanding after
+    /// cash + carried credit). Drives the green tick next to the month name.
+    /// </summary>
+    public bool IsPaidUp { get; }
+
     public ObservableCollection<FencerPaymentRow> Payments { get; } = new();
 
     public string HeaderText =>
@@ -70,11 +77,13 @@ public class FencerPaymentMonthGroup
 
 
     public FencerPaymentMonthGroup(int year, int month, int sessionsAttended,
-                                   IEnumerable<FencerPaymentRow> payments)
+                                   IEnumerable<FencerPaymentRow> payments,
+                                   bool isPaidUp = false)
     {
         Year = year;
         Month = month;
         SessionsAttended = sessionsAttended;
+        IsPaidUp = isPaidUp;
         foreach (var p in payments) Payments.Add(p);
     }
 }
@@ -136,7 +145,7 @@ public partial class FencerDetailsVm : ObservableObject
         IsPaid
             ? "All fees paid."
             : AmountDue > 0
-                ? $"Owes {AmountDue:N0} Ft in total."
+                ? $"Owes {AmountDue:N0} Ft in total ({SessionsThisMonth} session{(SessionsThisMonth == 1 ? "" : "s")} this month)."
                 : "No sessions attended this month.";
 
     // --- New stats surface ---

@@ -15,6 +15,17 @@ public partial class MonthFinanceVm : ObservableObject
     public ObservableCollection<Expense> Expenses { get; } = new();
     public ObservableCollection<Income> Incomes { get; } = new();
 
+    /// <summary>
+    /// Full, unfiltered set of dues for the month. <see cref="Dues"/> is a
+    /// (possibly) filtered view of this list, driven by the Finance page's
+    /// "filter by fencer" picker. Totals/summary are always computed from the
+    /// currently-visible <see cref="Dues"/>.
+    /// </summary>
+    private readonly List<FencerDueRow> _allDues = new();
+
+    /// <summary>Read-only view of the full, unfiltered dues set for the month.</summary>
+    public IReadOnlyList<FencerDueRow> AllDues => _allDues;
+
     /// <summary>Price rules applicable to this month (newest-per-tier resolved by the calculator).</summary>
     public IReadOnlyList<PriceRule> ActiveRules { get; set; } = Array.Empty<PriceRule>();
 
@@ -70,6 +81,32 @@ public partial class MonthFinanceVm : ObservableObject
         OnPropertyChanged(nameof(TotalIncomes));
         OnPropertyChanged(nameof(Balance));
         OnPropertyChanged(nameof(Summary));
+    }
+
+    /// <summary>
+    /// Adds a dues row to both the master list and the currently-visible
+    /// collection. Used while building the month so the filter has a full set
+    /// to work from.
+    /// </summary>
+    public void AddDue(FencerDueRow row)
+    {
+        _allDues.Add(row);
+        Dues.Add(row);
+    }
+
+    /// <summary>
+    /// Rebuilds the visible <see cref="Dues"/> collection from the master list,
+    /// keeping only the fencer with <paramref name="fencerId"/> (or all fencers
+    /// when it is null/empty). Totals and the summary follow the visible set.
+    /// </summary>
+    public void ApplyFencerFilter(string? fencerId)
+    {
+        Dues.Clear();
+        var rows = string.IsNullOrWhiteSpace(fencerId)
+            ? _allDues
+            : _allDues.Where(d => d.Fencer.Id == fencerId);
+        foreach (var row in rows) Dues.Add(row);
+        RaiseTotals();
     }
 
     partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(ExpandGlyph));
