@@ -138,6 +138,11 @@ public partial class FencersViewModel : ObservableObject
             var paymentsByMonth = monthSpan.ToDictionary(
                 ym => ym, ym => paymentTasks[ym].Result);
 
+            // Flatten every month's payments so the details view's Payment History
+            // card has data to group (previously left empty, so the card showed
+            // nothing on mobile even though Finance/web had the payments).
+            var allPayments = paymentsByMonth.Values.SelectMany(p => p).ToList();
+
             // ===== Heavy CPU aggregation OFF the UI thread =====
             var statusByFencer = await Task.Run(() => ComputeStatuses(
                 all, allTrainings, monthSpan, paymentsByMonth, allRules, today), ct);
@@ -152,6 +157,7 @@ public partial class FencersViewModel : ObservableObject
             _statusByFencer = statusByFencer;
             _allTrainings = allTrainings;
             _allLessons = allLessons;
+            _allPayments = allPayments;
             _currentMonthRules = currentMonthRules;
 
             if (SelectedFencer is null)

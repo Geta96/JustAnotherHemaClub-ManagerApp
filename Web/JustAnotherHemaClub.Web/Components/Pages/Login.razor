@@ -11,7 +11,7 @@
     <div class="login-card">
         @if (HasError)
         {
-            <div class="login-error">Invalid username or password.</div>
+            <div class="login-error">@ErrorMessage</div>
         }
         @if (Registered)
         {
@@ -23,6 +23,7 @@
         }
 
         <form method="post" action="/auth/login" class="login-form">
+            <AntiforgeryToken />
             <input type="hidden" name="returnUrl" value="@ReturnUrl" />
 
             <label class="login-label" for="username">Username</label>
@@ -61,6 +62,9 @@
     private string? ResetFlag { get; set; }
 
     private bool HasError => !string.IsNullOrEmpty(Error);
+    private string ErrorMessage => Error == "locked"
+        ? "Too many failed attempts. Please wait a few minutes and try again."
+        : "Invalid username or password.";
     private bool Registered => RegisteredFlag == "1";
     private bool Reset => ResetFlag == "1";
 }

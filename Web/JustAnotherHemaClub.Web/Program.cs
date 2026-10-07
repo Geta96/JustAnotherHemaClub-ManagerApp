@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Threading.RateLimiting;
 using JustAnotherHemaClub.Models;
 using JustAnotherHemaClub.Services;
 using JustAnotherHemaClub.Web.Components;
@@ -41,24 +42,64 @@ builder.Services.AddScoped<UserSession>();
 
 builder.Services.AddSingleton<TournamentAccessRegistry>();
 
+// Backing store for per-account login lockout counters (web-only; keeps the
+// Core AuthService free of an IMemoryCache dependency used by MAUI).
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<LoginLockout>();
+
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
         options.LoginPath = "/login";
         options.LogoutPath = "/auth/logout";
         options.AccessDeniedPath = "/login";
-        options.ExpireTimeSpan = TimeSpan.FromDays(14);
+        options.ExpireTimeSpan = TimeSpan.FromDays(7);
         options.SlidingExpiration = true;
         options.Cookie.Name = "jahc.auth";
         options.Cookie.HttpOnly = true;
-        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SameSite = SameSiteMode.Strict;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
     });
 builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<AuthenticationStateProvider, HttpContextAuthenticationStateProvider>();
 
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Strict bucket for auth endpoints, partitioned by client IP.
+    options.AddPolicy("auth", httpContext =>
+    {
+        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,                         // 5 attempts
+            Window = TimeSpan.FromMinutes(1),        // per minute per IP
+            QueueLimit = 0,
+            AutoReplenishment = true,
+        });
+    });
+
+    // Gentle global limiter as defense-in-depth.
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(http =>
+    {
+        var key = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 100,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true,
+        });
+    });
+});
+
 var app = builder.Build();
+
+// The in-memory test backdoor is only allowed in Development.
+AuthService.TestAccountEnabled = app.Environment.IsDevelopment();
 
 if (!app.Environment.IsDevelopment())
 {
@@ -67,8 +108,31 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// --- Security headers (defense in depth) ---
+app.Use(async (context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers["X-Content-Type-Options"] = "nosniff";
+    headers["X-Frame-Options"] = "DENY";
+    headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()";
+    // Blazor Server needs inline styles and a websocket connection back to origin.
+    headers["Content-Security-Policy"] =
+        "default-src 'self'; " +
+        "img-src 'self' data:; " +
+        "style-src 'self' 'unsafe-inline'; " +
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+        "connect-src 'self' ws: wss:; " +
+        "frame-ancestors 'none'; " +
+        "base-uri 'self'; " +
+        "form-action 'self'";
+    await next();
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 app.UseAntiforgery();
 app.MapStaticAssets();
 
@@ -77,12 +141,24 @@ app.MapPost("/auth/login", async (
     HttpContext http,
     AuthService auth,
     TestDataService testData,
+    LoginLockout lockout,
     [Microsoft.AspNetCore.Mvc.FromForm] string username,
     [Microsoft.AspNetCore.Mvc.FromForm] string password,
     [Microsoft.AspNetCore.Mvc.FromForm] string? returnUrl) =>
 {
+    var safeReturn = Uri.EscapeDataString(returnUrl ?? "/");
+
+    // Per-account lockout: stop credential stuffing that rotates IPs.
+    if (lockout.IsLockedOut(username))
+        return Results.Redirect($"/login?error=locked&returnUrl={safeReturn}");
+
     if (!await auth.LoginAsync(username, password) || auth.CurrentFencer is null)
-        return Results.Redirect($"/login?error=1&returnUrl={Uri.EscapeDataString(returnUrl ?? "/")}");
+    {
+        lockout.RegisterFailure(username);
+        return Results.Redirect($"/login?error=1&returnUrl={safeReturn}");
+    }
+
+    lockout.Reset(username);
 
     if (auth.IsTestMode)
         ServiceSwap.Activate(testData);
@@ -106,7 +182,7 @@ app.MapPost("/auth/login", async (
 
     var target = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl;
     return Results.Redirect(target);
-}).DisableAntiforgery();
+}).RequireRateLimiting("auth");
 
 app.MapPost("/auth/logout", async (HttpContext http, AuthService auth) =>
 {
@@ -176,11 +252,11 @@ app.MapPost("/auth/register", async (
         cache.InvalidateFencers();
         return Results.Redirect("/login?registered=1");
     }
-    catch (Exception ex)
+    catch (Exception)
     {
-        return Fail(ex.Message);
+        return Fail("Something went wrong while creating your account. Please try again later.");
     }
-}).DisableAntiforgery();
+}).RequireRateLimiting("auth");
 
 // --- Attend / un-attend the "Next lesson" shown on the Home card ---
 // Mirrors HomeViewModel.ToggleAttendNextLessonAsync: toggles the signed-in
@@ -534,9 +610,9 @@ app.MapPost("/profile/save", async (
         cache.InvalidateFencers();
         return Results.Redirect("/profile?saved=1");
     }
-    catch (Exception ex)
+    catch (Exception)
     {
-        return Results.Redirect($"/profile?error={Uri.EscapeDataString(ex.Message)}");
+        return Results.Redirect($"/profile?error={Uri.EscapeDataString("Could not save your profile. Please try again later.")}");
     }
 }).RequireAuthorization().DisableAntiforgery();
 
@@ -1415,6 +1491,78 @@ app.MapPost("/tournaments/restart", async (
     cache.InvalidateTournaments();
     return Results.Redirect(back);
 }).RequireAuthorization().DisableAntiforgery();
+
+// ================= PASSWORD RESET (instructor-mediated) =================
+// The fencer proves identity (username + email) AND supplies the new password up
+// front. We park the new password's PBKDF2 hash in Fencer.PendingPasswordHash
+// (live PasswordHash untouched) until an instructor approves. Stored on the
+// shared sheet, so a request filed in either the web or MAUI app is visible to
+// instructors in both, and approval takes effect everywhere.
+app.MapPost("/auth/forgot-password", async (
+    IGoogleSheetsService sheets,
+    ICacheControl cache,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? username,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? email,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? newPassword,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? confirmPassword) =>
+{
+    if (!RegistrationValidator.IsStrongPassword(newPassword))
+        return Results.Redirect($"/forgot-password?error={Uri.EscapeDataString("Password must be at least 8 characters and include a letter and a number.")}");
+    if (newPassword != confirmPassword)
+        return Results.Redirect($"/forgot-password?error={Uri.EscapeDataString("Passwords do not match.")}");
+
+    var user = (username ?? "").Trim();
+    var mail = (email ?? "").Trim();
+
+    var fencers = await sheets.GetFencersAsync();
+    var match = fencers.FirstOrDefault(f =>
+        !string.IsNullOrWhiteSpace(f.Username) &&
+        string.Equals(f.Username.Trim(), user, StringComparison.OrdinalIgnoreCase) &&
+        !string.IsNullOrWhiteSpace(f.Email) &&
+        string.Equals(f.Email.Trim(), mail, StringComparison.OrdinalIgnoreCase));
+
+    if (match is not null)
+    {
+        // Park the requested password; live PasswordHash stays until approval.
+        match.PendingPasswordHash = PasswordHasher.Hash(AuthService.Hash(newPassword!));
+        match.PasswordResetRequestedAtUtc = DateTime.UtcNow;
+        await sheets.UpsertFencerAsync(match);
+        cache.InvalidateFencers();
+    }
+
+    // Uniform response whether or not the identity matched (no enumeration).
+    return Results.Redirect("/forgot-password?requested=1");
+})
+.RequireRateLimiting("auth");
+
+// --- Instructor: approve / reject a pending password reset. Approve promotes the
+//     parked hash to the live password; reject just clears the pending fields. ---
+app.MapPost("/instructor/reset/review", async (
+    HttpContext http,
+    IGoogleSheetsService sheets,
+    ICacheControl cache,
+    [Microsoft.AspNetCore.Mvc.FromForm] string fencerId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string decision) =>
+{
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect("/");
+    if (string.IsNullOrWhiteSpace(fencerId)) return Results.Redirect("/");
+
+    var fencers = await sheets.GetFencersAsync();
+    var target = fencers.FirstOrDefault(f => f.Id == fencerId);
+    if (target is null || !target.HasPendingPasswordReset) return Results.Redirect("/");
+
+    if (decision == "approve")
+        target.PasswordHash = target.PendingPasswordHash;   // promote the parked hash
+
+    // Both approve and reject clear the pending request.
+    target.PendingPasswordHash = null;
+    target.PasswordResetRequestedAtUtc = null;
+
+    await sheets.UpsertFencerAsync(target);
+    cache.InvalidateFencers();
+
+    return Results.Redirect("/");
+}).RequireAuthorization();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

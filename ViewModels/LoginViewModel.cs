@@ -245,6 +245,13 @@ public partial class LoginViewModel : ObservableObject
                 return;
             }
 
+            if (!RegistrationValidator.IsStrongPassword(newPassword))
+            {
+                await page.DisplayAlert("Weak password",
+                    "Please choose at least 8 characters, including a letter and a number.", "OK");
+                return;
+            }
+
             var confirm = await page.DisplayPromptAsync(
                 "Reset password",
                 "Re-enter the new password to confirm:",
@@ -256,7 +263,7 @@ public partial class LoginViewModel : ObservableObject
                 return;
             }
 
-            match.PasswordHash = AuthService.Hash(newPassword);
+            match.PasswordHash = PasswordHasher.Hash(AuthService.Hash(newPassword));
             await _sheets.UpsertFencerAsync(match);
 
             await page.DisplayAlert("Password updated",
