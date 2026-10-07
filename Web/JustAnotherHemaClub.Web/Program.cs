@@ -1544,14 +1544,19 @@ app.MapPost("/instructor/reset/review", async (
     [Microsoft.AspNetCore.Mvc.FromForm] string fencerId,
     [Microsoft.AspNetCore.Mvc.FromForm] string decision) =>
 {
-    if (!http.User.IsInRole("Instructor")) return Results.Redirect("/");
-    if (string.IsNullOrWhiteSpace(fencerId)) return Results.Redirect("/");
+    const string back = "/fencers";
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
+    if (string.IsNullOrWhiteSpace(fencerId)) return Results.Redirect(back);
 
+    // Re-read so a request filed from the MAUI app is seen.
+    cache.InvalidateFencers();
     var fencers = await sheets.GetFencersAsync();
     var target = fencers.FirstOrDefault(f => f.Id == fencerId);
-    if (target is null || !target.HasPendingPasswordReset) return Results.Redirect("/");
+    if (target is null || !target.HasPendingPasswordReset)
+        return Results.Redirect($"{back}?reset=handled");
 
-    if (decision == "approve")
+    var approve = decision == "approve";
+    if (approve)
         target.PasswordHash = target.PendingPasswordHash;   // promote the parked hash
 
     // Both approve and reject clear the pending request.
@@ -1561,7 +1566,7 @@ app.MapPost("/instructor/reset/review", async (
     await sheets.UpsertFencerAsync(target);
     cache.InvalidateFencers();
 
-    return Results.Redirect("/");
+    return Results.Redirect($"{back}?reset={(approve ? "approved" : "rejected")}");
 }).RequireAuthorization();
 
 app.MapRazorComponents<App>()

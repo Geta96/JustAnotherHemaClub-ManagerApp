@@ -304,6 +304,9 @@ html, body {
 }
 .attend-form { margin: 0; }
 .attend-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     background: #476FB5;
     color: var(--cream);
     border: none;
@@ -313,6 +316,7 @@ html, body {
     font-size: 16px;
     font-weight: 700;
     cursor: pointer;
+    text-decoration: none;
     transition: filter .15s ease;
 }
 .attend-btn:hover { filter: brightness(1.08); }

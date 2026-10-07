@@ -432,6 +432,31 @@ public partial class GoogleSheetsService : IGoogleSheetsService
         await UpdateAsync($"RecurringTrainings!A{rowIndex + 2}:H{rowIndex + 2}", blanks);
     }
 
+    // --- Config ---
+    // "Config" sheet: column A = key, column B = value. We look up the
+    // MinSupportedAppVersion row so the app can force-update stale clients.
+    public async Task<int?> GetMinSupportedAppVersionAsync()
+    {
+        try
+        {
+            var rows = await ReadAsync("Config!A1:B");
+            foreach (var r in rows)
+            {
+                if (string.Equals(S(r, 0).Trim(), "MinSupportedAppVersion",
+                        StringComparison.OrdinalIgnoreCase)
+                    && int.TryParse(S(r, 1).Trim(), NumberStyles.Integer,
+                        CultureInfo.InvariantCulture, out var v))
+                    return v;
+            }
+        }
+        catch
+        {
+            // Missing sheet / bad read: treat the gate as disabled rather than
+            // blocking everyone out of the app on a transient error.
+        }
+        return null;
+    }
+
     private static string S(IList<object> row, int i) =>
         i < row.Count ? row[i]?.ToString() ?? "" : "";
 

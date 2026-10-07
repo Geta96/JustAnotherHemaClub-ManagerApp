@@ -22,6 +22,23 @@
        longsword, footwork drills and free sparring.</p>
 </section>
 
+@if (_pendingResets.Count > 0)
+{
+    <section class="card">
+        <h2 class="card-title">Pending password resets</h2>
+        <p class="payment-status grey">
+            @_pendingResets.Count fencer@(_pendingResets.Count == 1 ? " is" : "s are") waiting for a password reset approval.
+        </p>
+        <ul>
+            @foreach (var p in _pendingResets)
+            {
+                <li>@p.DisplayName@(string.IsNullOrWhiteSpace(p.Username) ? "" : $" (@{p.Username})")</li>
+            }
+        </ul>
+        <a class="attend-btn" href="/fencers">Review requests</a>
+    </section>
+}
+
 @if (_hasNextLesson)
 {
     <section class="card next-lesson @(_isAttending ? "attending" : "")">
@@ -135,32 +152,14 @@
     private string _paymentStatusText = "";
     private string _paymentStatusClass = "ok";
 
+    // --- Pending password resets (instructors only) ---
+    private readonly List<Fencer> _pendingResets = new();
+
     protected override async Task OnInitializedAsync()
     {
         await Session.EnsureRestoredAsync();
 
-        try
-        {
-            var rules = await Sheets.GetRecurringTrainingsAsync();
-            var ordered = rules
-                .Where(r => !r.EndDate.HasValue || r.EndDate.Value.Date >= DateTime.Today)
-                .OrderBy(r => ((int)r.DayOfWeek + 6) % 7)
-                .ThenBy(r => r.TimeOfDay);
-
-            foreach (var r in ordered)
-            {
-                var end = r.EndTimeOfDay == default
-                    ? r.TimeOfDay.Add(TimeSpan.FromMinutes(90))
-                    : r.EndTimeOfDay;
-
-                _weekly.Add(new WeeklyRow(
-                    r.DayOfWeek.ToString()[..3],
-                    $"{r.TimeOfDay:hh\\:mm} – {end:hh\\:mm}",
-                    r.Topic ?? ""));
-            }
-        }
-        finally { _loading = false; }
-
+        await LoadPendingResetsAsync();
         await LoadNextLessonAsync();
         await LoadPaymentStatusAsync();
     }
@@ -433,4 +432,20 @@
 
     private static string Capitalize(string s) =>
         string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s[1..];
+
+    private async Task LoadPendingResetsAsync()
+    {
+        _pendingResets.Clear();
+        if (!Auth.IsLoggedInInstructor) return;
+        try
+        {
+            // Requests can be filed from either app after the cache was filled.
+            Cache.InvalidateFencers();
+            var fencers = await Sheets.GetFencersAsync();
+            _pendingResets.AddRange(fencers
+                .Where(f => f.HasPendingPasswordReset)
+                .OrderBy(f => f.PasswordResetRequestedAtUtc ?? DateTime.MaxValue));
+        }
+        catch { /* best-effort */ }
+    }
 }

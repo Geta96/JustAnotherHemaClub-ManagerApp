@@ -40,6 +40,8 @@ public sealed class TestDataService : IGoogleSheetsService, ICacheControl
 
     // ======================== IGoogleSheetsService ========================
 
+    public Task<int?> GetMinSupportedAppVersionAsync() => Task.FromResult<int?>(null);
+
     public Task<List<Fencer>> GetFencersAsync() => Task.FromResult(new List<Fencer>(_fencers));
 
     public Task AddFencerAsync(Fencer fencer) { _fencers.Add(fencer); return Task.CompletedTask; }

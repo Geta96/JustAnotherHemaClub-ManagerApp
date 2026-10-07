@@ -11,6 +11,7 @@ public partial class FencersViewModel : ObservableObject
 {
     private readonly IGoogleSheetsService _sheets;
     private readonly AuthService _auth;
+    private readonly ICacheControl? _cache;
 
     // Cancels any in-flight LoadAsync when the user navigates away mid-refresh.
     private CancellationTokenSource? _loadCts;
@@ -20,6 +21,11 @@ public partial class FencersViewModel : ObservableObject
     private DateTime _lastLoadedUtc = DateTime.MinValue;
 
     public ObservableCollection<Fencer> Fencers { get; } = new();
+
+    // Instructor-only: fencers whose password reset awaits approval.
+    public ObservableCollection<PendingResetRow> PendingResets { get; } = new();
+    public bool HasPendingResets => _auth.IsLoggedInInstructor && PendingResets.Count > 0;
+    [ObservableProperty] private string? resetMessage;
 
     private Dictionary<string, (int Sessions, FencerDuesLedger.DuesSummary Summary)> _statusByFencer = new();
 
@@ -49,10 +55,11 @@ public partial class FencersViewModel : ObservableObject
 
     public bool IsLoggedInInstructor => _auth.IsLoggedInInstructor;
 
-    public FencersViewModel(IGoogleSheetsService sheets, AuthService auth)
+    public FencersViewModel(IGoogleSheetsService sheets, AuthService auth, ICacheControl? cache = null)
     {
         _sheets = sheets;
         _auth = auth;
+        _cache = cache;
     }
 
     /// <summary>
@@ -79,6 +86,11 @@ public partial class FencersViewModel : ObservableObject
         BackendRequestSucceeded = false;
         BackendError = null;
         BackendStatus = "Loading fencers from Google Sheets...";
+
+        // Reset requests can be filed (from either app) after the cache was warmed
+        // at login, so instructors always re-read the Fencers tab.
+        if (_auth.IsLoggedInInstructor)
+            _cache?.InvalidateFencers();
 
         try
         {
@@ -154,6 +166,8 @@ public partial class FencersViewModel : ObservableObject
             Fencers.Clear();
             foreach (var f in all) Fencers.Add(f);
 
+            RebuildPendingResets(all);
+
             _statusByFencer = statusByFencer;
             _allTrainings = allTrainings;
             _allLessons = allLessons;
@@ -187,6 +201,69 @@ public partial class FencersViewModel : ObservableObject
             OnPropertyChanged(nameof(HasSelection));
         }
         finally { if (showSpinner) IsLoading = false; }
+    }
+
+    private void RebuildPendingResets(IEnumerable<Fencer> all)
+    {
+        PendingResets.Clear();
+        if (_auth.IsLoggedInInstructor)
+        {
+            foreach (var f in all.Where(f => f.HasPendingPasswordReset)
+                                 .OrderBy(f => f.PasswordResetRequestedAtUtc ?? DateTime.MaxValue))
+            {
+                PendingResets.Add(new PendingResetRow(f)
+                {
+                    ApproveAction = r => ReviewResetAsync(r, approve: true),
+                    RejectAction  = r => ReviewResetAsync(r, approve: false)
+                });
+            }
+        }
+        OnPropertyChanged(nameof(HasPendingResets));
+    }
+
+    /// <summary>
+    /// Approve promotes the parked hash to the live password; reject just clears
+    /// the pending fields. Re-reads the row first so a stale cache can't
+    /// overwrite a newer request or another instructor's decision.
+    /// </summary>
+    private async Task ReviewResetAsync(PendingResetRow row, bool approve)
+    {
+        if (row is null || !_auth.IsLoggedInInstructor) return;
+        ResetMessage = null;
+
+        try
+        {
+            _cache?.InvalidateFencers();
+            var fresh = (await _sheets.GetFencersAsync()).FirstOrDefault(f => f.Id == row.Fencer.Id);
+
+            if (fresh is not null && fresh.HasPendingPasswordReset)
+            {
+                if (approve)
+                    fresh.PasswordHash = fresh.PendingPasswordHash;
+
+                fresh.PendingPasswordHash = null;
+                fresh.PasswordResetRequestedAtUtc = null;
+                await _sheets.UpsertFencerAsync(fresh);
+
+                var idx = Fencers.IndexOf(Fencers.FirstOrDefault(f => f.Id == fresh.Id)!);
+                if (idx >= 0) Fencers[idx] = fresh;
+
+                ResetMessage = approve
+                    ? $"Password reset approved for {fresh.DisplayName}."
+                    : $"Password reset rejected for {fresh.DisplayName}.";
+            }
+            else
+            {
+                ResetMessage = "This request was already handled.";
+            }
+
+            PendingResets.Remove(row);
+            OnPropertyChanged(nameof(HasPendingResets));
+        }
+        catch (Exception ex)
+        {
+            ResetMessage = $"Couldn't update the request: {ex.Message}";
+        }
     }
 
     /// <summary>

@@ -4,12 +4,67 @@
 @using JustAnotherHemaClub.Services
 @attribute [Authorize]
 @inject IGoogleSheetsService Sheets
+@inject ICacheControl Cache
 @inject AuthService Auth
 @inject UserSession Session
 
 <PageTitle>Fencers · JAHC Manager</PageTitle>
 
 <h1 class="page-title">Fencer profiles</h1>
+
+@if (!string.IsNullOrEmpty(ResetResult))
+{
+    <section class="card">
+        <p class="payment-status ok">
+            @(ResetResult switch
+            {
+                "approved" => "Password reset approved.",
+                "rejected" => "Password reset rejected.",
+                _ => "This request was already handled."
+            })
+    </p>
+</section>
+}
+
+@if (!_loading && Auth.IsLoggedInInstructor && _pendingResets.Count > 0)
+{
+    <section class="card">
+        <h2 class="card-title">Pending password resets</h2>
+        <p class="muted">Approving makes the fencer's requested new password active immediately.</p>
+        @foreach (var p in _pendingResets)
+        {
+            <div class="kv">
+                <span class="k">
+                    <strong>@p.DisplayName</strong>
+                    @if (!string.IsNullOrWhiteSpace(p.Username))
+                    {
+                        <span class="muted"> @@@p.Username</span>
+                    }
+                    @if (p.PasswordResetRequestedAtUtc is { } at)
+                    {
+                        <br />
+            
+                        <span class="muted">Requested @at.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                    }
+                </span>
+                <span class="v">
+                    <form method="post" action="/instructor/reset/review" style="display:inline">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="fencerId" value="@p.Id" />
+                        <input type="hidden" name="decision" value="approve" />
+                        <button class="attend-btn" type="submit">Approve</button>
+                    </form>
+                    <form method="post" action="/instructor/reset/review" style="display:inline">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="fencerId" value="@p.Id" />
+                        <input type="hidden" name="decision" value="reject" />
+                        <button class="undo-attend" type="submit">Reject</button>
+                    </form>
+                </span>
+            </div>
+        }
+    </section>
+}
 
 @if (_loading)
 {
@@ -182,6 +237,11 @@ else
     [SupplyParameterFromQuery(Name = "fencer")]
     private string? SelectedParam { get; set; }
 
+    [SupplyParameterFromQuery(Name = "reset")]
+    private string? ResetResult { get; set; }
+
+    private readonly List<Fencer> _pendingResets = new();
+
     private readonly List<Fencer> _fencers = new();
     private Fencer? _selected;
     private string? _selectedId;
@@ -213,6 +273,11 @@ else
     {
         await Session.EnsureRestoredAsync();
 
+        // Reset requests can be filed (from either app) after the fencer cache
+        // was filled, so instructors always re-read the Fencers tab.
+        if (Auth.IsLoggedInInstructor)
+            Cache.InvalidateFencers();
+
         try
         {
             var today = DateTime.Today;
@@ -224,6 +289,13 @@ else
             await Task.WhenAll(fencersTask, trainingsTask, lessonsTask, rulesTask);
 
             _fencers.AddRange(fencersTask.Result.OrderBy(f => f.Name));
+
+            _pendingResets.Clear();
+            if (Auth.IsLoggedInInstructor)
+                _pendingResets.AddRange(_fencers
+                    .Where(f => f.HasPendingPasswordReset)
+                    .OrderBy(f => f.PasswordResetRequestedAtUtc ?? DateTime.MaxValue));
+
             _allTrainings = trainingsTask.Result;
             _allLessons = lessonsTask.Result;
             var allRules = rulesTask.Result;

@@ -62,6 +62,10 @@ public partial class HomeViewModel : ObservableObject
         set => SetProperty(ref _paymentStatusColor, value);
     }
 
+    // --- Pending password resets (instructors only) ---
+    [ObservableProperty] private bool hasPendingResets;
+    [ObservableProperty] private string pendingResetsText = "";
+
     // --- Next lesson card ---
     private TrainingSession? _nextLesson;
 
@@ -164,8 +168,11 @@ public partial class HomeViewModel : ObservableObject
         // Load the "Next lesson" card (best-effort; a failure just hides it).
         await LoadNextLessonAsync();
 
-        // Load the personal payment status card (best-effort; hidden on failure).
+        // Payment status card for the logged-in fencer.
         await LoadPaymentStatusAsync();
+
+        // Instructors: surface pending password-reset requests.
+        await LoadPendingResetsAsync();
 
         // Use the user's idle time on the home page to warm the datasets the
         // other tabs need (tournaments, individual lessons, recurring trainings,
@@ -234,13 +241,6 @@ public partial class HomeViewModel : ObservableObject
             _nextLesson     = null;
             _nextLessonRule = null;
 
-            if (matStart is null && projStart is null)
-            {
-                HasNextLesson = false;
-                CanAttendNextLesson = false;
-                IsAttendingNextLesson = false;
-                return;
-            }
 
             // Prefer whichever starts first. When the projected occurrence is the
             // same slot as the materialized one, the materialized row wins (equal
@@ -316,7 +316,7 @@ public partial class HomeViewModel : ObservableObject
         try
         {
             var me = _auth.CurrentFencer;
-            if (me is null || _auth.IsGuest)
+            if (me is null || _auth.IsGuest || _auth.IsLoggedInInstructor)
             {
                 HasPaymentStatus = false;
                 return;
@@ -502,11 +502,13 @@ public partial class HomeViewModel : ObservableObject
         else
             _nextLesson.AttendeeFencerIds.Add(me.Id);
 
+        // Optimistically reflect the change in the UI.
+        IsAttendingNextLesson = !wasAttending;
+
         try
         {
+            // Persist the updated attendee list for this session.
             await _sheets.UpsertTrainingAsync(_nextLesson);
-            _cache.InvalidateTrainings();
-            IsAttendingNextLesson = !wasAttending;
         }
         catch
         {
@@ -521,11 +523,43 @@ public partial class HomeViewModel : ObservableObject
     private static Task OpenInstagram() =>
         Launcher.Default.OpenAsync(InstagramUrl);
 
-    [RelayCommand]
-    private static Task OpenFacebook() =>
-        Launcher.Default.OpenAsync(FacebookUrl);
+    private async Task LoadPendingResetsAsync()
+    {
+        try
+        {
+            if (!_auth.IsLoggedInInstructor)
+            {
+                HasPendingResets = false;
+                return;
+            }
+
+            // Requests can be filed (from either app) after the cache was warmed.
+            _cache.InvalidateFencers();
+            var fencers = await _sheets.GetFencersAsync();
+            var pending = fencers
+                .Where(f => f.HasPendingPasswordReset)
+                .OrderBy(f => f.PasswordResetRequestedAtUtc ?? DateTime.MaxValue)
+                .ToList();
+
+            if (pending.Count == 0)
+            {
+                HasPendingResets = false;
+                return;
+            }
+
+            var header = pending.Count == 1
+                ? "1 fencer is waiting for a password reset approval:"
+                : $"{pending.Count} fencers are waiting for a password reset approval:";
+            PendingResetsText = header + "\n" + string.Join("\n", pending.Select(f =>
+                string.IsNullOrWhiteSpace(f.Username) ? $"• {f.DisplayName}" : $"• {f.DisplayName} (@{f.Username})"));
+            HasPendingResets = true;
+        }
+        catch
+        {
+            HasPendingResets = false;
+        }
+    }
 
     [RelayCommand]
-    private static Task OpenDiscord() =>
-        Launcher.Default.OpenAsync(DiscordUrl);
+    private static Task OpenPendingResets() => Shell.Current.GoToAsync("//fencers");
 }
