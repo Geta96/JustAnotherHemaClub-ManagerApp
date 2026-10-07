@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JustAnotherHemaClub.Models;
@@ -9,7 +10,7 @@ public partial class MonthFinanceVm : ObservableObject
 {
     public int Year { get; }
     public int Month { get; }
-    public string Title => new DateTime(Year, Month, 1).ToString("yyyy MMMM");
+    public string Title => new DateTime(Year, Month, 1).ToString("yyyy MMMM", CultureInfo.InvariantCulture);
 
     public ObservableCollection<FencerDueRow> Dues { get; } = new();
     public ObservableCollection<Expense> Expenses { get; } = new();

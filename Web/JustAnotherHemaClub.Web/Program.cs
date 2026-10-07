@@ -10,6 +10,12 @@ using Microsoft.AspNetCore.Components.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Pin formatting culture so date/number output is identical for every visitor,
+// regardless of their browser's Accept-Language or the server's locale.
+var invariant = System.Globalization.CultureInfo.InvariantCulture;
+System.Globalization.CultureInfo.DefaultThreadCurrentCulture = invariant;
+System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = invariant;
+
 // Blazor Web App with interactive server rendering. The Google service-account
 // JSON stays server-side (see ICredentialProvider): all Sheets I/O runs here,
 // never in the browser.
@@ -108,6 +114,15 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Force every request/circuit to the invariant culture so no Accept-Language
+// header can flip date/number rendering back to a locale format.
+app.UseRequestLocalization(new Microsoft.AspNetCore.Builder.RequestLocalizationOptions
+{
+    DefaultRequestCulture = new Microsoft.AspNetCore.Localization.RequestCulture(invariant),
+    SupportedCultures = new[] { invariant },
+    SupportedUICultures = new[] { invariant },
+});
 
 // --- Security headers (defense in depth) ---
 app.Use(async (context, next) =>
@@ -289,7 +304,9 @@ app.MapPost("/home/attend", async (
 
     // Fall back to (or create) the recurring occurrence when we only have a rule.
     if (session is null && !string.IsNullOrWhiteSpace(ruleId) &&
-        DateTime.TryParse(date, out var day))
+        DateTime.TryParse(date, System.Globalization.CultureInfo.InvariantCulture,
+                          System.Globalization.DateTimeStyles.None, out var day))
+
     {
         var rules = await sheets.GetRecurringTrainingsAsync();
         var rule = rules.FirstOrDefault(r => r.Id == ruleId);
@@ -389,8 +406,11 @@ app.MapPost("/weekly/save", async (
     rule.Topic = form["topic"].ToString();
     if (ParseTime(form["startTime"], out var st)) rule.TimeOfDay = st;
     if (ParseTime(form["endTime"], out var et)) rule.EndTimeOfDay = et;
-    if (DateTime.TryParse(form["startDate"], out var sd)) rule.StartDate = sd;
-    rule.EndDate = form["hasEndDate"] == "on" && DateTime.TryParse(form["endDate"], out var ed)
+    if (DateTime.TryParse(form["startDate"], System.Globalization.CultureInfo.InvariantCulture,
+                          System.Globalization.DateTimeStyles.None, out var sd)) rule.StartDate = sd;
+    rule.EndDate = form["hasEndDate"] == "on" &&
+                   DateTime.TryParse(form["endDate"], System.Globalization.CultureInfo.InvariantCulture,
+                                     System.Globalization.DateTimeStyles.None, out var ed)
         ? ed : null;
 
     await sheets.UpsertRecurringTrainingAsync(rule);
@@ -408,8 +428,11 @@ app.MapPost("/weekly/add", async (
     if (!Enum.TryParse<DayOfWeek>(form["dayOfWeek"], out var dow)) dow = DayOfWeek.Tuesday;
     ParseTime(form["startTime"], out var st);
     ParseTime(form["endTime"], out var et);
-    DateTime.TryParse(form["startDate"], out var sd);
+    DateTime.TryParse(form["startDate"], System.Globalization.CultureInfo.InvariantCulture,
+                      System.Globalization.DateTimeStyles.None, out var sd);
     if (sd == default) sd = DateTime.Today;
+    DateTime.TryParse(form["endDate"], System.Globalization.CultureInfo.InvariantCulture,
+                      System.Globalization.DateTimeStyles.None, out var ed);
 
     var rule = new RecurringTrainingRule
     {
@@ -419,7 +442,7 @@ app.MapPost("/weekly/add", async (
         EndTimeOfDay = et == default ? new TimeSpan(20, 0, 0) : et,
         Topic = form["topic"].ToString(),
         StartDate = sd,
-        EndDate = form["hasEndDate"] == "on" && DateTime.TryParse(form["endDate"], out var ed) ? ed : null,
+        EndDate = ed,
         CreatedByFencerId = http.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "",
     };
 
@@ -455,7 +478,8 @@ app.MapPost("/lessons/create", async (
     if (string.IsNullOrWhiteSpace(meId)) return Results.Redirect("/login");
 
     var form = await http.Request.ReadFormAsync();
-    DateTime.TryParse(form["date"], out var d);
+    DateTime.TryParse(form["date"], System.Globalization.CultureInfo.InvariantCulture,
+                      System.Globalization.DateTimeStyles.None, out var d);
     ParseTime(form["time"], out var tt);
     var when = (d == default ? DateTime.Today : d.Date) + tt;
     var topic = form["topic"].ToString();
@@ -737,9 +761,10 @@ app.MapPost("/finance/price/add", async (
     var hasEnd = form["hasEndDate"] == "on";
     if (isCustom && !hasEnd) return Results.Redirect(back);
 
-    DateTime.TryParse(form["startDate"], out var start);
-    if (start == default) start = DateTime.Today;
-    DateTime.TryParse(form["endDate"], out var end);
+    DateTime.TryParse(form["startDate"], System.Globalization.CultureInfo.InvariantCulture,
+                      System.Globalization.DateTimeStyles.None, out var start);
+    DateTime.TryParse(form["endDate"], System.Globalization.CultureInfo.InvariantCulture,
+                      System.Globalization.DateTimeStyles.None, out var end);
 
     await sheets.UpsertPriceRuleAsync(new PriceRule
     {
@@ -769,9 +794,11 @@ app.MapPost("/finance/price/save", async (
             System.Globalization.CultureInfo.InvariantCulture, out var full)) rule.FullPrice = full;
     if (decimal.TryParse(form["studentPrice"], System.Globalization.NumberStyles.Number,
             System.Globalization.CultureInfo.InvariantCulture, out var student)) rule.StudentPrice = student;
-    if (DateTime.TryParse(form["startDate"], out var start)) rule.StartDate = start;
+    if (DateTime.TryParse(form["startDate"], System.Globalization.CultureInfo.InvariantCulture,
+                          System.Globalization.DateTimeStyles.None, out var start)) rule.StartDate = start;
     var hasEnd = form["hasEndDate"] == "on";
-    rule.EndDate = hasEnd && DateTime.TryParse(form["endDate"], out var end) ? end : null;
+    rule.EndDate = hasEnd && DateTime.TryParse(form["endDate"], System.Globalization.CultureInfo.InvariantCulture,
+                                               System.Globalization.DateTimeStyles.None, out var end) ? end : null;
     rule.IsCustomPeriod = form["isCustomPeriod"] == "on";
     if (rule.IsCustomPeriod && rule.EndDate is null) return Results.Redirect(back);
 
@@ -997,11 +1024,10 @@ app.MapPost("/tournaments/pool/auto", async (
             old.Index = int.MaxValue;
             await sheets.UpsertPoolAsync(tournamentId, old);
         }
-        for (int i = 0; i < draft.Count; i++)
-        {
-            draft[i].Index = i;
-            await sheets.UpsertPoolAsync(tournamentId, draft[i]);
-        }
+        for (int i = 0; i < draft.Count; i++) draft[i].Index = i;
+        TournamentEngine.GeneratePoolMatches(draft);
+        foreach (var pool in draft)
+            await sheets.UpsertPoolAsync(tournamentId, pool);
     }
     catch (Exception ex)
     {

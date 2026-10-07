@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JustAnotherHemaClub.Models;
 using JustAnotherHemaClub.Services;
+using System.Globalization;
 
 namespace JustAnotherHemaClub.ViewModels;
 
@@ -468,8 +469,8 @@ public partial class HomeViewModel : ObservableObject
 
         if (day == today) return "Today";
         if (day == today.AddDays(1)) return "Tomorrow";
-        if (day < today.AddDays(7)) return day.ToString("dddd");
-        return day.ToString("d MMM");
+        if (day < today.AddDays(7)) return day.ToString("dddd", CultureInfo.InvariantCulture);
+        return day.ToString("d MMM", CultureInfo.InvariantCulture);
     }
 
     [RelayCommand]
@@ -522,6 +523,15 @@ public partial class HomeViewModel : ObservableObject
     [RelayCommand]
     private static Task OpenInstagram() =>
         Launcher.Default.OpenAsync(InstagramUrl);
+
+    [RelayCommand]
+    private static Task OpenFacebook() =>
+        Launcher.Default.OpenAsync(FacebookUrl);
+
+    [RelayCommand]
+    private static Task OpenDiscord() =>
+        Launcher.Default.OpenAsync(DiscordUrl);
+
 
     private async Task LoadPendingResetsAsync()
     {

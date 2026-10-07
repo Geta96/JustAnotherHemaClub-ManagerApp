@@ -9,7 +9,7 @@ public class FencerSessionRow
 {
     public string Topic { get; }
     public DateTime Date { get; }
-    public string DateText => Date.ToString("yyyy-MM-dd (ddd)");
+    public string DateText => Date.ToString("yyyy-MM-dd (ddd)", CultureInfo.InvariantCulture);
 
     public FencerSessionRow(string topic, DateTime date)
     {
