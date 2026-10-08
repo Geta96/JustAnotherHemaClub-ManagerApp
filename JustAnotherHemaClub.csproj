@@ -14,8 +14,8 @@
 
         <ApplicationTitle>JAHC Manager</ApplicationTitle>
         <ApplicationId>com.jahc.manager</ApplicationId>
-        <ApplicationVersion>13</ApplicationVersion>
-        <ApplicationDisplayVersion>1.0.16</ApplicationDisplayVersion>
+        <ApplicationVersion>14</ApplicationVersion>
+        <ApplicationDisplayVersion>1.0.17</ApplicationDisplayVersion>
 
         <SupportedOSPlatformVersion>24.0</SupportedOSPlatformVersion>
 

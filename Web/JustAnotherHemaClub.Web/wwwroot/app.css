@@ -89,15 +89,16 @@ html, body {
     font-size: 22px; font-weight: 700;
 }
 
-.logout-form { margin-top: auto; }
+.logout-form { margin: 0; }
 .logout {
     margin-top: 0;
     width: 100%;
     display: flex; align-items: center; gap: 12px;
-    height: 48px; padding: 0 16px;
+    height: 52px; padding: 0 16px;
     background: none; border: none; cursor: pointer;
-    color: var(--danger); font-weight: 700; font-size: 15px;
+    color: var(--danger); font-weight: 700; font-size: 16px;
 }
+.logout:hover { background: var(--cream-soft); }
 
 .scrim {
     position: fixed; inset: 0;
@@ -1330,4 +1331,12 @@ html, body {
     color: var(--danger);
     font-weight: 700;
     margin-left: .35rem;
+}
+
+.flyout-version {
+    margin-top: auto;
+    padding: 8px 16px;
+    text-align: center;
+    font-size: 12px;
+    opacity: 0.6;
 }

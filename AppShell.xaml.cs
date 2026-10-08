@@ -21,6 +21,8 @@ public partial class AppShell : Shell
             ? "Signed in as Guest"
             : $"Signed in as {_auth.CurrentFencer?.Name ?? _auth.CurrentFencer?.Username ?? "user"}";
 
+        VersionLabel.Text = $"Version {Strip(AppInfo.Current.VersionString)} ({Strip(AppInfo.Current.BuildString)})";
+
         ApplyStatusBarInset();
 
         // Re-apply after the Shell handler has finished setting up its Android views
@@ -126,6 +128,12 @@ public partial class AppShell : Shell
         MainActivity.ApplyWineStatusBar();
 
         await Task.CompletedTask;
+    }
+
+    private static string Strip(string value)
+    {
+        var plus = value.IndexOf('+');
+        return plus >= 0 ? value[..plus] : value;
     }
 }
 
