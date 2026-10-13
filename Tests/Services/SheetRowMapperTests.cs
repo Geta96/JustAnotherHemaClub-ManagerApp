@@ -99,14 +99,16 @@ public class SheetRowMapperTests
     [Fact]
     public void MapPayment_BadNumbers_FallBackToZero()
     {
-        var r = Row("F1", "notyear", "notmonth", "notamount", "notdate");
+        // Numeric cells fall back to zero; the date cell must still be strict
+        // ISO because MapPayment.ParseDate deliberately throws on non-ISO.
+        var r = Row("F1", "notyear", "notmonth", "notamount", "2026-03-05T00:00:00");
         var p = SheetRowMapper.MapPayment(r)!;
 
         p.FencerId.Should().Be("F1");
         p.Year.Should().Be(0);
         p.Month.Should().Be(0);
         p.Amount.Should().Be(0m);
-        p.PaidOn.Should().Be(default);
+        p.PaidOn.Should().Be(new DateTime(2026, 3, 5));
     }
 
     [Fact]

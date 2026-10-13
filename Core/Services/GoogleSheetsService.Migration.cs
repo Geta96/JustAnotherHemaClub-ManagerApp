@@ -33,9 +33,11 @@ public partial class GoogleSheetsService
     };
 
     /// <summary>
-    /// Reads a range with UNFORMATTED_VALUE so date cells corrupted by the old
-    /// USER_ENTERED writer come back as Sheets serial numbers (doubles) instead
-    /// of locale-formatted text — the only way to recover the true instant.
+    /// Runtime read. Uses UNFORMATTEDVALUE so a cell's stored value is returned
+    /// verbatim: migrated rows come back as their ISO "o" text (the strict
+    /// parser accepts them), and S() invariantly stringifies anything numeric.
+    /// Does NOT request FORMATTEDSTRING — that would reshape any still-typed date
+    /// into a locale display string and defeat the strict ISO reader.
     /// </summary>
     private async Task<IList<IList<object>>> ReadUnformattedAsync(string range)
     {
@@ -43,7 +45,23 @@ public partial class GoogleSheetsService
         var req = svc.Spreadsheets.Values.Get(_spreadsheetId, range);
         req.ValueRenderOption =
             SpreadsheetsResource.ValuesResource.GetRequest.ValueRenderOptionEnum.UNFORMATTEDVALUE;
-        // Ask for serials, not the sheet's display format.
+        var resp = await req.ExecuteAsync();
+        return resp.Values ?? new List<IList<object>>();
+    }
+
+    /// <summary>
+    /// Migration-only read: forces SERIALNUMBER so typed-date cells written by
+    /// the old USER_ENTERED client come back as bare doubles that
+    /// <see cref="TryRecoverDate"/> can turn back into the true instant. This is
+    /// the ONLY place that should request serials — runtime reads must get the
+    /// stored ISO text (see <see cref="ReadUnformattedAsync"/>).
+    /// </summary>
+    private async Task<IList<IList<object>>> ReadForMigrationAsync(string range)
+    {
+        var svc = await GetServiceAsync();
+        var req = svc.Spreadsheets.Values.Get(_spreadsheetId, range);
+        req.ValueRenderOption =
+            SpreadsheetsResource.ValuesResource.GetRequest.ValueRenderOptionEnum.UNFORMATTEDVALUE;
         req.DateTimeRenderOption =
             SpreadsheetsResource.ValuesResource.GetRequest.DateTimeRenderOptionEnum.SERIALNUMBER;
         var resp = await req.ExecuteAsync();
@@ -95,7 +113,7 @@ public partial class GoogleSheetsService
             IList<IList<object>> rows;
             try
             {
-                rows = await ReadUnformattedAsync(spec.ReadRange);
+                rows = await ReadForMigrationAsync(spec.ReadRange);
             }
             catch (Google.GoogleApiException)
             {
@@ -123,12 +141,22 @@ public partial class GoogleSheetsService
 
                     if (!TryRecoverDate(cell, out var date)) continue; // unrecoverable → leave untouched
 
+                    var iso = date.ToString("o", CultureInfo.InvariantCulture);
+
+                    // Skip cells that are ALREADY exactly this ISO string. Without
+                    // this, an idempotent re-run reports the same non-zero count
+                    // every time (ISO→ISO rewrites), hiding whether anything was
+                    // actually corrupt. Now the count == cells genuinely changed.
+                    var original = cell.ToString() ?? "";
+                    if (string.Equals(original, iso, StringComparison.Ordinal))
+                        continue;
+
                     updates.Add(new ValueRange
                     {
                         Range = $"{spec.Sheet}!{letter}{sheetRow}",
                         Values = new List<IList<object>>
                         {
-                            new List<object> { date.ToString("o", CultureInfo.InvariantCulture) }
+                            new List<object> { iso }
                         }
                     });
                     fixedCells++;

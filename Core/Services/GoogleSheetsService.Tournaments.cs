@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Google.Apis.Sheets.v4;
 using Google.Apis.Sheets.v4.Data;
 using JustAnotherHemaClub.Models;
@@ -31,7 +31,9 @@ public partial class GoogleSheetsService
     /// </summary>
     public async Task<List<Tournament>> GetTournamentHeadersAsync()
     {
-        var headersTask = ReadAsync(TournamentsRange);
+        // Headers carry a CreatedAt date → read UNFORMATTED so a serial-stored value
+        // can't be re-read as locale-formatted text and flipped (see GetTrainingsAsync).
+        var headersTask = ReadUnformattedAsync(TournamentsRange);
         var fencersTask = ReadAsync(FencersRangeT);
         await Task.WhenAll(headersTask, fencersTask);
 
@@ -57,11 +59,13 @@ public partial class GoogleSheetsService
     {
         if (string.IsNullOrWhiteSpace(tournamentId)) return null;
 
-        // Five reads in parallel.
-        var hdrTask     = ReadAsync(TournamentsRange);
+        // Five reads in parallel. Headers (CreatedAt) and Matches (Started/Finished/
+        // Updated/Locked UTC) carry dates → read those UNFORMATTED so serial-stored
+        // values can't be re-read as locale-formatted text and flipped.
+        var hdrTask     = ReadUnformattedAsync(TournamentsRange);
         var fencersTask = ReadAsync(FencersRangeT);
         var poolsTask   = ReadAsync(PoolsRange);
-        var matchesTask = ReadAsync(MatchesRange);
+        var matchesTask = ReadUnformattedAsync(MatchesRange);
         var standTask   = ReadAsync(FinalStandingsRange);
         await Task.WhenAll(hdrTask, fencersTask, poolsTask, matchesTask, standTask);
 
@@ -126,7 +130,9 @@ public partial class GoogleSheetsService
 
     public async Task<List<Match>> GetMatchesAsync(string tournamentId)
     {
-        var rows = await ReadAsync(MatchesRange);
+        // Matches carry Started/Finished/Updated/Locked UTC dates → read UNFORMATTED
+        // so serial-stored values can't be re-read as locale-formatted text and flipped.
+        var rows = await ReadUnformattedAsync(MatchesRange);
         return rows.Where(r => !string.IsNullOrWhiteSpace(S(r, 0)) && S(r, 0) == tournamentId)
                    .Select(ParseMatch)
                    .ToList();
@@ -169,7 +175,7 @@ public partial class GoogleSheetsService
     {
         if (string.IsNullOrWhiteSpace(tournamentId)) return;
 
-        // Five sheet clears in parallel � each is now ONE batched HTTP call regardless
+        // Five sheet clears in parallel — each is now ONE batched HTTP call regardless
         // of how many rows match, so total wall-time is roughly the slowest sheet.
         await Task.WhenAll(
             ClearRowsAsync(TournamentsRange,    "Tournaments!A{0}:F{0}",        0, tournamentId),
@@ -422,8 +428,7 @@ public partial class GoogleSheetsService
         Id            = S(r, 0),
         Name          = S(r, 1),
         PasswordPlain = S(r, 2),
-        CreatedAt     = DateTime.TryParse(S(r, 3), CultureInfo.InvariantCulture,
-                                          DateTimeStyles.RoundtripKind, out var c) ? c : DateTime.UtcNow,
+        CreatedAt     = SheetRowMapper.TryParseDate(S(r, 3), out var c) ? c : DateTime.UtcNow,
         State         = Enum.TryParse<TournamentState>(S(r, 4), true, out var st) ? st : TournamentState.Setup,
         Version       = int.TryParse(S(r, 5), out var v) ? v : 0
     };
@@ -464,17 +469,13 @@ public partial class GoogleSheetsService
         RemainingTimeSeconds = int.TryParse(S(r, 15), out var sec) ? sec : 180,
         Status           = Enum.TryParse<MatchStatus>(S(r, 16), true, out var st) ? st : MatchStatus.Pending,
         WinnerFencerId   = string.IsNullOrEmpty(S(r, 17)) ? null : S(r, 17),
-        StartedAtUtc     = DateTime.TryParse(S(r, 18), CultureInfo.InvariantCulture,
-                                             DateTimeStyles.RoundtripKind, out var sa) ? sa : (DateTime?)null,
-        FinishedAtUtc    = DateTime.TryParse(S(r, 19), CultureInfo.InvariantCulture,
-                                             DateTimeStyles.RoundtripKind, out var fa) ? fa : (DateTime?)null,
+        StartedAtUtc     = SheetRowMapper.TryParseDate(S(r, 18), out var sa) ? sa : (DateTime?)null,
+        FinishedAtUtc    = SheetRowMapper.TryParseDate(S(r, 19), out var fa) ? fa : (DateTime?)null,
         Version          = int.TryParse(S(r, 20), out var vv) ? vv : 0,
-        UpdatedAtUtc     = DateTime.TryParse(S(r, 21), CultureInfo.InvariantCulture,
-                                             DateTimeStyles.RoundtripKind, out var ua) ? ua : (DateTime?)null,
+        UpdatedAtUtc     = SheetRowMapper.TryParseDate(S(r, 21), out var ua) ? ua : (DateTime?)null,
         UpdatedByUserId  = string.IsNullOrEmpty(S(r, 22)) ? null : S(r, 22),
         LockedByUserId   = string.IsNullOrEmpty(S(r, 23)) ? null : S(r, 23),
-        LockedAtUtc      = DateTime.TryParse(S(r, 24), CultureInfo.InvariantCulture,
-                                             DateTimeStyles.RoundtripKind, out var la) ? la : (DateTime?)null
+        LockedAtUtc      = SheetRowMapper.TryParseDate(S(r, 24), out var la) ? la : (DateTime?)null
     };
 
     private async Task ClearRowsAsync(string readRange, string rowRangeFormat,

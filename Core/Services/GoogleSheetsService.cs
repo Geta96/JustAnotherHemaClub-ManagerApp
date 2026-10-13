@@ -97,7 +97,9 @@ public partial class GoogleSheetsService : IGoogleSheetsService
     //          K=PendingPasswordHash, L=PasswordResetRequestedAtUtc (ISO-8601 UTC)
     public async Task<List<Fencer>> GetFencersAsync()
     {
-        var rows = await ReadAsync("Fencers!A2:L");
+        // UNFORMATTED so the ISO/serial reset timestamp can't be re-read as
+        // locale-formatted text and flipped (see GetTrainingsAsync).
+        var rows = await ReadUnformattedAsync("Fencers!A2:L");
         return rows.Select(r => new Fencer
         {
             Id = S(r, 0),
@@ -111,10 +113,12 @@ public partial class GoogleSheetsService : IGoogleSheetsService
             LiabilityAccepted = ParseBool(S(r, 8)),
             IsInstructor = ParseBool(S(r, 9)),
             PendingPasswordHash = string.IsNullOrWhiteSpace(S(r, 10)) ? null : S(r, 10),
+            // Parse locale-invariantly (ISO or serial), then pin to UTC so the
+            // stored instant keeps its meaning regardless of DateTimeKind.
             PasswordResetRequestedAtUtc =
-                DateTime.TryParse(S(r, 11), CultureInfo.InvariantCulture,
-                    DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var reqAt)
-                    ? reqAt : null
+                SheetRowMapper.TryParseDate(S(r, 11), out var reqAt)
+                    ? DateTime.SpecifyKind(reqAt, DateTimeKind.Utc)
+                    : null
         }).ToList();
     }
 
@@ -154,7 +158,11 @@ public partial class GoogleSheetsService : IGoogleSheetsService
     // Columns: A=Id, B=Date, C=Topic, D=AttendeeFencerIds, E=EndDate
     public async Task<List<TrainingSession>> GetTrainingsAsync()
     {
-        var rows = await ReadAsync("Trainings!A2:E");
+        // Read UNFORMATTED so any date cell a stale USER_ENTERED client stored as a
+        // real Sheets serial comes back as a number, not a locale-formatted string.
+        // SheetRowMapper.TryParseDate then accepts BOTH canonical ISO "o" strings and
+        // bare serial numbers, so parsing never depends on the device/spreadsheet locale.
+        var rows = await ReadUnformattedAsync("Trainings!A2:E");
 
         // Keyed by Id so historical duplicate rows (created before
         // UpsertTrainingAsync became a real upsert) are merged into a single
@@ -168,15 +176,13 @@ public partial class GoogleSheetsService : IGoogleSheetsService
             var id = S(r, 0);
             if (string.IsNullOrWhiteSpace(id)) continue;
 
-            if (!DateTime.TryParse(S(r, 1), CultureInfo.InvariantCulture,
-                                   DateTimeStyles.RoundtripKind, out var date))
+            if (!SheetRowMapper.TryParseDate(S(r, 1), out var date))
                 continue; // skip rows with an unparseable start date instead of throwing
 
             DateTime end;
             var endStr = S(r, 4);
             if (!string.IsNullOrWhiteSpace(endStr) &&
-                DateTime.TryParse(endStr, CultureInfo.InvariantCulture,
-                                  DateTimeStyles.RoundtripKind, out var parsedEnd))
+                SheetRowMapper.TryParseDate(endStr, out var parsedEnd))
                 end = parsedEnd;
             else
                 end = date.AddMinutes(90); // legacy rows default to a 90-minute session
@@ -252,7 +258,9 @@ public partial class GoogleSheetsService : IGoogleSheetsService
     // --- Payments ---
     public async Task<List<Payment>> GetPaymentsAsync(int year, int month)
     {
-        var rows = await ReadAsync("Payments!A2:E");
+        // UNFORMATTED + SheetRowMapper.TryParseDate so serial-stored dates can't be
+        // re-read as locale-formatted text and flipped (see GetTrainingsAsync).
+        var rows = await ReadUnformattedAsync("Payments!A2:E");
         return rows
             .Where(r => !string.IsNullOrWhiteSpace(S(r, 0)))   // skip blank/partial rows
             .Select(r => new Payment
@@ -261,7 +269,7 @@ public partial class GoogleSheetsService : IGoogleSheetsService
                 Year = int.TryParse(S(r, 1), out var y) ? y : 0,
                 Month = int.TryParse(S(r, 2), out var mo) ? mo : 0,
                 Amount = decimal.TryParse(S(r, 3), NumberStyles.Any, CultureInfo.InvariantCulture, out var a) ? a : 0m,
-                PaidOn = DateTime.TryParse(S(r, 4), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var d) ? d : default
+                PaidOn = SheetRowMapper.TryParseDate(S(r, 4), out var paidOn) ? paidOn : default
             })
             .Where(p => p.Year == year && p.Month == month)
             .ToList();
@@ -278,13 +286,15 @@ public partial class GoogleSheetsService : IGoogleSheetsService
     // --- Expenses ---
     public async Task<List<Expense>> GetExpensesAsync(DateTime from, DateTime to)
     {
-        var rows = await ReadAsync("Expenses!A2:E");
+        // UNFORMATTED + SheetRowMapper.TryParseDate so serial-stored dates can't be
+        // re-read as locale-formatted text and flipped (see GetTrainingsAsync).
+        var rows = await ReadUnformattedAsync("Expenses!A2:E");
         return rows
             .Where(r => !string.IsNullOrWhiteSpace(S(r, 0)))   // skip blank/partial rows
             .Select(r => new Expense
             {
                 Id = S(r, 0),
-                Date = DateTime.TryParse(S(r, 1), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var d) ? d : default,
+                Date = SheetRowMapper.TryParseDate(S(r, 1), out var date) ? date : default,
                 Category = S(r, 2),
                 Description = S(r, 3),
                 Amount = decimal.TryParse(S(r, 4), NumberStyles.Any, CultureInfo.InvariantCulture, out var a) ? a : 0m
@@ -323,7 +333,9 @@ public partial class GoogleSheetsService : IGoogleSheetsService
     //          F=Notes, G=NextIdea, H=Status, I=RequestedInstructorIds (CSV)
     public async Task<List<IndividualLesson>> GetIndividualLessonsAsync()
     {
-        var rows = await ReadAsync("IndividualLessons!A2:I");
+        // UNFORMATTED + SheetRowMapper.TryParseDate so serial-stored dates can't be
+        // re-read as locale-formatted text and flipped (see GetTrainingsAsync).
+        var rows = await ReadUnformattedAsync("IndividualLessons!A2:I");
         var list = new List<IndividualLesson>();
         foreach (var r in rows)
         {
@@ -340,8 +352,7 @@ public partial class GoogleSheetsService : IGoogleSheetsService
             list.Add(new IndividualLesson
             {
                 Id = id,
-                Date = DateTime.TryParse(S(r, 1), CultureInfo.InvariantCulture,
-                                         DateTimeStyles.RoundtripKind, out var d) ? d : DateTime.MinValue,
+                Date = SheetRowMapper.TryParseDate(S(r, 1), out var lessonDate) ? lessonDate : DateTime.MinValue,
                 StudentId = S(r, 2),
                 InstructorId = S(r, 3),
                 Topic = S(r, 4),
@@ -457,8 +468,19 @@ public partial class GoogleSheetsService : IGoogleSheetsService
         return null;
     }
 
-    private static string S(IList<object> row, int i) =>
-        i < row.Count ? row[i]?.ToString() ?? "" : "";
+    private static string S(IList<object> row, int i)
+    {
+        if (i >= row.Count) return "";
+        return row[i] switch
+        {
+            null => "",
+            string s => s,
+            DateTime dt => dt.ToString("o", CultureInfo.InvariantCulture),
+            DateTimeOffset dto => dto.ToString("o", CultureInfo.InvariantCulture),
+            IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
+            var o => o.ToString() ?? ""
+        };
+    }
 
     /// <summary>Serializes a bool as the canonical "TRUE"/"FALSE" text that
     /// <see cref="ParseBool"/> round-trips reliably, avoiding the ambiguity of

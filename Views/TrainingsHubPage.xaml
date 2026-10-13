@@ -123,9 +123,6 @@
                                                                             <BindableLayout.ItemTemplate>
                                                                                 <DataTemplate x:DataType="vm:FencerToggle">
                                                                                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Padding="0,2">
-                                                                                        <Grid.GestureRecognizers>
-                                                                                            <TapGestureRecognizer Tapped="OnAttendeeRowTapped" />
-                                                                                        </Grid.GestureRecognizers>
                                                                                         <CheckBox Grid.Column="0" IsChecked="{Binding IsAttending}" />
                                                                                         <Label   Grid.Column="1" Text="{Binding Fencer.Name}"
                                                                                                  VerticalOptions="Center" />
@@ -369,18 +366,18 @@
 
                             <VerticalStackLayout Spacing="6" IsVisible="{Binding ShowRequestPickerSection}">
                                 <Label Text="Request from instructor(s)" Style="{StaticResource Caption}" />
-                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding RequestTargets}">
-                                    <BindableLayout.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:FencerToggle">
-                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Padding="0,2">
-                                                <CheckBox Grid.Column="0" IsChecked="{Binding IsAttending}" />
-                                                <Label   Grid.Column="1" Text="{Binding Fencer.Name}"
+                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding RequestTargets}">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:FencerToggle">
+                                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Padding="0,2">
+                                                    <CheckBox Grid.Column="0" IsChecked="{Binding IsAttending}" />
+                                                    <Label   Grid.Column="1" Text="{Binding Fencer.Name}"
                                                          VerticalOptions="Center" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </BindableLayout.ItemTemplate>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </VerticalStackLayout>
                                 </VerticalStackLayout>
-                            </VerticalStackLayout>
 
                             <Entry Placeholder="Topic" Text="{Binding NewTopic}" />
 
@@ -592,5 +589,14 @@
                                WidthRequest="48" HeightRequest="48" />
             <Label Text="Loading..." TextColor="{StaticResource Wine}" FontAttributes="Bold" />
         </VerticalStackLayout>
+
+        <!-- Error banner: pinned to the top row, inside the single root Grid -->
+        <Label Grid.Row="0"
+               Text="{Binding LoadError}"
+               IsVisible="{Binding HasLoadError}"
+               TextColor="White"
+               BackgroundColor="#C0392B"
+               Padding="12,8"
+               LineBreakMode="WordWrap" />
     </Grid>
 </ContentPage>

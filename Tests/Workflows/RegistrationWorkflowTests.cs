@@ -114,6 +114,8 @@ public class RegistrationWorkflowTests
     [InlineData("12345")]        // 5 chars, all digits (too short)
     [InlineData("abcdef")]       // 6 chars, no digit
     [InlineData("abc")]          // too short and no digit
+    [InlineData("secret1")]      // 7 chars ? below the 8-char minimum
+    [InlineData("123456a")]      // 7 chars ? below the 8-char minimum
     public void Validate_WeakPassword_Fails(string password)
     {
         var result = ValidateRegistration(name: "Alice", email: "a@b.com",
@@ -126,8 +128,8 @@ public class RegistrationWorkflowTests
     }
 
     [Theory]
-    [InlineData("secret1")]      // 7 chars, has digit
-    [InlineData("123456a")]      // 7 chars, has letter and digit
+    [InlineData("secret12")]     // 8 chars, has letters and digit
+    [InlineData("123456ab")]     // 8 chars, has letters and digits
     [InlineData("P@ssw0rd")]     // strong
     public void Validate_StrongPassword_Passes(string password)
     {
@@ -284,13 +286,20 @@ public class RegistrationWorkflowTests
     }
 
     [Fact]
-    public void CreateFencer_PasswordHashedDeterministically()
+    public void CreateFencer_PasswordHashedWithRandomSalt()
     {
         var fencer1 = BuildRegistrationFencer(password: "secret99");
         var fencer2 = BuildRegistrationFencer(password: "secret99");
 
-        fencer1.PasswordHash.Should().Be(fencer2.PasswordHash,
-            "same password should produce the same hash");
+        // PBKDF2 uses a per-hash random salt, so the same password now yields
+        // DIFFERENT stored strings. Both must still verify against the password.
+        fencer1.PasswordHash.Should().NotBe(fencer2.PasswordHash,
+            "a random salt makes each stored hash unique even for identical passwords");
+
+        PasswordHasher.Verify(AuthService.Hash("secret99"), fencer1.PasswordHash)
+            .Should().BeTrue();
+        PasswordHasher.Verify(AuthService.Hash("secret99"), fencer2.PasswordHash)
+            .Should().BeTrue();
     }
 
     [Fact]

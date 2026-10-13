@@ -33,6 +33,10 @@ public partial class TrainingsHubViewModel : ObservableObject
 
     [ObservableProperty] private bool isLoading;
 
+    [ObservableProperty] private string? loadError;
+    public bool HasLoadError => !string.IsNullOrEmpty(LoadError);
+    partial void OnLoadErrorChanged(string? value) => OnPropertyChanged(nameof(HasLoadError));
+
     // Suppress silent re-loads for 30 seconds after the last successful fetch.
     private static readonly TimeSpan SilentReloadThrottle = TimeSpan.FromSeconds(30);
     private DateTime _lastLoadedUtc = DateTime.MinValue;
@@ -55,6 +59,7 @@ public partial class TrainingsHubViewModel : ObservableObject
             return;
 
         if (showSpinner) IsLoading = true;
+        LoadError = null;
         try
         {
             await Task.WhenAll(
@@ -62,6 +67,13 @@ public partial class TrainingsHubViewModel : ObservableObject
                 WeeklyVm.LoadAsync(false),
                 LessonsVm.LoadAsync(false));
             _lastLoadedUtc = DateTime.UtcNow;
+        }
+        catch (Exception ex)
+        {
+            // Never let a bad row / parse failure tear down the page. Surface it
+            // so the user sees a message instead of an app crash.
+            LoadError = $"Could not load trainings: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[TrainingsHub] Load failed: {ex}");
         }
         finally { if (showSpinner) IsLoading = false; }
     }

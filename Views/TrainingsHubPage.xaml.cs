@@ -21,11 +21,18 @@ public partial class TrainingsHubPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        // Let Shell finish its transition before hitting the cache layer.
-        await Task.Yield();
-        // Show the centered spinner on the first load; stay silent afterwards.
-        await _vm.LoadAllAsync(showSpinner: !_loadedOnce);
-        _loadedOnce = true;
+        try
+        {
+            // Let Shell finish its transition before hitting the cache layer.
+            await Task.Yield();
+            // Show the centered spinner on the first load; stay silent afterwards.
+            await _vm.LoadAllAsync(showSpinner: !_loadedOnce);
+            _loadedOnce = true;
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert("Trainings", $"Failed to load this page.\n\n{ex.Message}", "OK");
+        }
     }
 
     protected override void OnDisappearing()
