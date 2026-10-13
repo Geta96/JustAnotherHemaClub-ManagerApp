@@ -317,7 +317,7 @@ public partial class HomeViewModel : ObservableObject
         try
         {
             var me = _auth.CurrentFencer;
-            if (me is null || _auth.IsGuest || _auth.IsLoggedInInstructor)
+            if (me is null || _auth.IsGuest)
             {
                 HasPaymentStatus = false;
                 return;
