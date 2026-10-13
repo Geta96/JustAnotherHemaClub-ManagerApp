@@ -202,10 +202,10 @@
                                         </VerticalStackLayout>
 
                                         <Label Text="Expenses" FontAttributes="Bold" TextColor="{StaticResource Wine}"
-                                               IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.IsLoggedInInstructor}" />
+                                               IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}" />
 
                                         <VerticalStackLayout BindableLayout.ItemsSource="{Binding Expenses}" Spacing="6"
-                                                             IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.IsLoggedInInstructor}">
+                                                             IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}">
                                             <BindableLayout.ItemTemplate>
                                                 <DataTemplate x:DataType="m:Expense">
                                                     <Border Style="{StaticResource Card}">
@@ -223,7 +223,7 @@
                                         </VerticalStackLayout>
 
                                         <Border Style="{StaticResource Card}"
-                                                IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.IsLoggedInInstructor}">
+                                                IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}">
                                             <VerticalStackLayout Spacing="8">
                                                 <!-- Money OUT trigger: desaturated wine to read as a "cost" affordance. -->
                                                 <Button Text="Add Expense"
@@ -256,10 +256,10 @@
 
                                         <!-- ===== Income (one-off, non-dues): donations, gear sales, fencers paying for extras. ===== -->
                                         <Label Text="Income" FontAttributes="Bold" TextColor="{StaticResource Wine}"
-                                               IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.IsLoggedInInstructor}" />
+                                               IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}" />
 
                                         <VerticalStackLayout BindableLayout.ItemsSource="{Binding Incomes}" Spacing="6"
-                                                             IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.IsLoggedInInstructor}">
+                                                             IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}">
                                             <BindableLayout.ItemTemplate>
                                                 <DataTemplate x:DataType="m:Income">
                                                     <Border Style="{StaticResource Card}">
@@ -277,7 +277,7 @@
                                         </VerticalStackLayout>
 
                                         <Border Style="{StaticResource Card}"
-                                                IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.IsLoggedInInstructor}">
+                                                IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}">
                                             <VerticalStackLayout Spacing="8">
                                                 <!-- Money IN trigger: blue, to read as a "deposit" affordance. -->
                                                 <Button Text="Add Income"

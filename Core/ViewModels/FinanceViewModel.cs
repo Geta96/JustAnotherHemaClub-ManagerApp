@@ -42,10 +42,45 @@ public partial class FinanceViewModel : ObservableObject
 
     public bool ShowFencerFilter => _auth.IsLoggedInInstructor && FencerFilterOptions.Count > 1;
 
+    /// <summary>
+    /// True when the instructor has filtered the Monthly tab down to a single
+    /// fencer (i.e. not the null-id "All fencers" sentinel). Drives the
+    /// decluttered single-fencer view: Expenses/Income cards are hidden and the
+    /// month cards are force-expanded for readability.
+    /// </summary>
+    public bool IsFencerSelected =>
+        SelectedFencerFilter is not null && !string.IsNullOrWhiteSpace(SelectedFencerFilter.Id);
+
+    /// <summary>
+    /// Whether the per-month Expenses and Income cards should be shown. They are
+    /// club-wide (not per-fencer), so they're hidden while a single fencer is
+    /// selected to keep that view focused on just their dues.
+    /// </summary>
+    public bool ShowExpensesAndIncomes => _auth.IsLoggedInInstructor && !IsFencerSelected;
+
     [ObservableProperty] private FencerFilterOption? selectedFencerFilter;
 
     partial void OnSelectedFencerFilterChanged(FencerFilterOption? value)
-        => ApplyFencerFilter(value?.Id);
+    {
+        ApplyFencerFilter(value?.Id);
+
+        OnPropertyChanged(nameof(IsFencerSelected));
+        OnPropertyChanged(nameof(ShowExpensesAndIncomes));
+
+        // When drilling into a single fencer, expand every month so their dues
+        // are all visible at a glance. Returning to "All" restores the default
+        // (only the newest month expanded).
+        if (IsFencerSelected)
+        {
+            foreach (var month in Months)
+                month.IsExpanded = true;
+        }
+        else
+        {
+            for (int i = 0; i < Months.Count; i++)
+                Months[i].IsExpanded = i == 0;
+        }
+    }
 
     /// <summary>Applies the current fencer filter to every month's dues list.</summary>
     private void ApplyFencerFilter(string? fencerId)
