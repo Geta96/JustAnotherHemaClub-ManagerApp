@@ -7,14 +7,21 @@ using JustAnotherHemaClub.Web.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Pin formatting culture so date/number output is identical for every visitor,
-// regardless of their browser's Accept-Language or the server's locale.
-var invariant = System.Globalization.CultureInfo.InvariantCulture;
-System.Globalization.CultureInfo.DefaultThreadCurrentCulture = invariant;
-System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = invariant;
+// Behind Cloudflare (and Azure's front end), trust the X-Forwarded-* headers so
+// the app sees the ORIGINAL https scheme and host. Without this, UseHttpsRedirection
+// can loop and auth cookies/redirects use the wrong host. Cloudflare's proxy IPs
+// are dynamic, so we clear the known-proxy allowlist and accept the headers.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // Blazor Web App with interactive server rendering. The Google service-account
 // JSON stays server-side (see ICredentialProvider): all Sheets I/O runs here,
@@ -104,8 +111,9 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-// The in-memory test backdoor is only allowed in Development.
-AuthService.TestAccountEnabled = app.Environment.IsDevelopment();
+// Must run before UseHttpsRedirection / auth so downstream middleware sees the
+// real client scheme + host forwarded by Cloudflare / Azure.
+app.UseForwardedHeaders();
 
 if (!app.Environment.IsDevelopment())
 {
@@ -114,37 +122,6 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
-// Force every request/circuit to the invariant culture so no Accept-Language
-// header can flip date/number rendering back to a locale format.
-app.UseRequestLocalization(new Microsoft.AspNetCore.Builder.RequestLocalizationOptions
-{
-    DefaultRequestCulture = new Microsoft.AspNetCore.Localization.RequestCulture(invariant),
-    SupportedCultures = new[] { invariant },
-    SupportedUICultures = new[] { invariant },
-});
-
-// --- Security headers (defense in depth) ---
-app.Use(async (context, next) =>
-{
-    var headers = context.Response.Headers;
-    headers["X-Content-Type-Options"] = "nosniff";
-    headers["X-Frame-Options"] = "DENY";
-    headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
-    headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()";
-    // Blazor Server needs inline styles and a websocket connection back to origin.
-    headers["Content-Security-Policy"] =
-        "default-src 'self'; " +
-        "img-src 'self' data:; " +
-        "style-src 'self' 'unsafe-inline'; " +
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-        "connect-src 'self' ws: wss:; " +
-        "frame-ancestors 'none'; " +
-        "base-uri 'self'; " +
-        "form-action 'self'";
-    await next();
-});
-
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
@@ -1178,7 +1155,7 @@ app.MapPost("/tournaments/start", async (
     var back = $"/tournaments/{tournamentId}";
     if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
     var t = await sheets.GetTournamentAsync(tournamentId);
-    if (t is null || t.State != TournamentState.Setup) return Results.Redirect(back);
+    if (t is null || t.State == TournamentState.Finished) return Results.Redirect(back);
 
     if (t.Fencers.Count(f => !f.IsWithdrawn) < 4)
         return Results.Redirect($"{back}?error={Uri.EscapeDataString("Need at least 4 active fencers.")}");
@@ -1465,7 +1442,7 @@ app.MapPost("/tournaments/reopen", async (
     var back = $"/tournaments/{tournamentId}";
     if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
     var t = await sheets.GetTournamentAsync(tournamentId);
-    if (t is null || t.State != TournamentState.Finished) return Results.Redirect(back);
+    if (t is null || t.State == TournamentState.Finished) return Results.Redirect(back);
 
     t.State = t.Bracket is not null ? TournamentState.EliminationInProgress : TournamentState.PoolsClosed;
     await sheets.UpsertTournamentHeaderAsync(t);
