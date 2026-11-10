@@ -1375,3 +1375,47 @@ html, body {
     font-size: .85em;
     overflow-wrap: anywhere;
 }
+
+/* --- Finance: inline payment option buttons --- */
+.pay-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 12px 0;
+}
+.pay-option-form { margin: 0; }
+
+.pay-btn {
+    display: block;
+    width: 100%;
+    text-align: center;
+    border: none;
+    border-radius: 8px;
+    min-height: 46px;
+    padding: 10px 18px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--cream);
+    cursor: pointer;
+    transition: filter .15s ease;
+    overflow-wrap: anywhere;   /* long "Upgrade to …" labels wrap, never overflow */
+}
+.pay-btn:hover { filter: brightness(1.08); }
+
+/* "Pay Remaining" clears the balance → green, reads as the key positive action. */
+.pay-remaining { background: #1F8A2E; }
+/* Pass / tier upgrades → brand slate blue. */
+.pay-pass { background: var(--slate); }
+/* Custom amount → wine, visually separated from the preset tiers. */
+.pay-custom { background: var(--wine); }
+
+.pay-custom-form {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(140,90,89,.20);
+}
+.pay-custom-form .pay-btn { align-self: stretch; }
+
+/* --- Trainings: attend button "attending" (on) state --- */
+.attend-btn-on { background: #1F8A2E; }   /* green = already attending */
+.training-row .attend-form .attend-btn { min-width: 128px; }

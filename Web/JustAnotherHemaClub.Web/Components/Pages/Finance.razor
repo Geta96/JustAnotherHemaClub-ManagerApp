@@ -249,23 +249,23 @@ else
                                             <div class="pay-options">
                                                 @foreach (var opt in BuildOptions(d, m))
                                                 {
-                                                    <form method="post" action="/finance/markpaid" class="inline-form">
+                                                    <form method="post" action="/finance/markpaid" class="pay-option-form">
                                                         <input type="hidden" name="fencerId" value="@d.Fencer.Id" />
                                                         <input type="hidden" name="year" value="@m.Year" />
                                                         <input type="hidden" name="month" value="@m.Month" />
                                                         <input type="hidden" name="amount" value="@opt.Amount.ToString(CultureInfo.InvariantCulture)" />
-                                                        <button class="attend-btn" type="submit">@opt.MenuText</button>
+                                                        <button class="pay-btn pay-@opt.Kind" type="submit">@opt.MenuText</button>
                                                     </form>
                                                 }
                                             </div>
-                                            <form method="post" action="/finance/markpaid" class="stack-form">
+                                            <form method="post" action="/finance/markpaid" class="stack-form pay-custom-form">
                                                 <input type="hidden" name="fencerId" value="@d.Fencer.Id" />
                                                 <input type="hidden" name="year" value="@m.Year" />
                                                 <input type="hidden" name="month" value="@m.Month" />
                                                 <label>Custom amount (Ft; negative to refund)
                                                     <input type="number" name="amount" step="any" />
                                                 </label>
-                                                <button class="attend-btn" type="submit">Record custom amount</button>
+                                                <button class="pay-btn pay-custom" type="submit">Record custom amount</button>
                                             </form>
                                         </details>
                                     }

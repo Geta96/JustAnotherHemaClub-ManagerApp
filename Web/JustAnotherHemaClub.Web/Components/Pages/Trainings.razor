@@ -336,13 +336,35 @@ else
                                             <input type="hidden" name="returnUrl" value="/trainings?tab=trainings" />
                                             @if (attending)
                                             {
-                                                <button class="undo-attend" type="submit">&#10003; Attending</button>
+                                                <button class="attend-btn attend-btn-on" type="submit">&#10003; Attending</button>
                                             }
                                             else
                                             {
                                                 <button class="attend-btn" type="submit">Attend</button>
                                             }
                                         </form>
+                                    }
+
+                                    @if (Auth.IsLoggedInInstructor)
+                                    {
+                                        <details class="attendee-editor">
+                                            <summary>Attendees (@t.AttendeeFencerIds.Count)</summary>
+                                            <form method="post" action="/trainings/attendees" class="attendee-form">
+                                                <input type="hidden" name="trainingId" value="@t.Id" />
+                                                <input type="hidden" name="returnUrl" value="/trainings?tab=trainings" />
+                                                <div class="attendee-grid">
+                                                    @foreach (var f in _activeFencers)
+                                                    {
+                                                        <label class="attendee-check">
+                                                            <input type="checkbox" name="attendee" value="@f.Id"
+                                                                   checked="@(t.AttendeeFencerIds.Contains(f.Id))" />
+                                                            <span>@f.DisplayName</span>
+                                                        </label>
+                                                    }
+                                                </div>
+                                                <button class="attend-btn" type="submit">Save attendees</button>
+                                            </form>
+                                        </details>
                                     }
                                 </div>
 
