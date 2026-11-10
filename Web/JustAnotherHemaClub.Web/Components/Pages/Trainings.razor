@@ -305,8 +305,12 @@ else
 
             if (visibleTrainings.Count > 0)
             {
-                <section class="card">
-                    <h2 class="card-title">@month.Title</h2>
+                var isCurrentMonth = month.Year == DateTime.Today.Year && month.Month == DateTime.Today.Month;
+                <details class="card month-card" open="@isCurrentMonth">
+                    <summary class="month-summary">
+                        <span class="card-title">@month.Title</span>
+                        <span class="month-count">@visibleTrainings.Count</span>
+                    </summary>
                     <ul class="weekly-list">
                         @foreach (var t in visibleTrainings)
                         {
@@ -366,7 +370,7 @@ else
                             </li>
                         }
                     </ul>
-                </section>
+                </details>
             }
         }
     }
@@ -401,7 +405,7 @@ else
     private string? _meId;
     private bool _loading = true;
 
-    private sealed record MonthGroup(string Title, List<TrainingSession> Trainings);
+    private sealed record MonthGroup(string Title, int Year, int Month, List<TrainingSession> Trainings);
 
     protected override async Task OnInitializedAsync()
     {
@@ -423,6 +427,8 @@ else
             {
                 _trainingsByMonth.Add(new MonthGroup(
                     g.Key.ToString("MMMM yyyy", CultureInfo.InvariantCulture),
+                    g.Key.Year,
+                    g.Key.Month,
                     g.OrderByDescending(t => t.Date).ToList()));
             }
 

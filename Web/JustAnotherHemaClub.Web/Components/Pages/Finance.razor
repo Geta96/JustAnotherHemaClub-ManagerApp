@@ -192,9 +192,14 @@ else
         {
             @foreach (var m in _months)
             {
-                <section class="card">
-                    <h2 class="card-title">@m.Title</h2>
-                    <p class="muted">@m.Summary</p>
+                var isCurrentMonth = m.Year == DateTime.Today.Year && m.Month == DateTime.Today.Month;
+                <details class="card month-card" open="@isCurrentMonth">
+                    <summary class="month-summary">
+                        <span class="month-head">
+                            <span class="card-title">@m.Title</span>
+                            <span class="muted month-figures">@m.Summary</span>
+                        </span>
+                    </summary>
 
                     @* --- Dues --- *@
                     @{
@@ -324,7 +329,7 @@ else
                             </form>
                         </details>
                     }
-                </section>
+                </details>
             }
         }
     }

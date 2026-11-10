@@ -590,7 +590,7 @@ html, body {
     font-size: 14px;
 }
 .stat-row .slate { color: var(--slate); }
-.stat-row .wine { color: var(--wine); }
+.stat-row .wine { color: var('--wine'); }
 
 .leaderboard {
     list-style: none;
@@ -1339,4 +1339,39 @@ html, body {
     text-align: center;
     font-size: 12px;
     opacity: 0.6;
+}
+
+.month-card > .month-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    cursor: pointer;
+    list-style: none;          /* hide default triangle (Firefox) */
+}
+
+.month-card > .month-summary::-webkit-details-marker {
+    display: none;             /* hide default triangle (WebKit) */
+}
+
+.month-card > .month-summary::after {
+    content: "\25B8";          /* ▸ caret */
+    margin-left: auto;
+    transition: transform .15s ease;
+}
+
+.month-card[open] > .month-summary::after {
+    transform: rotate(90deg);  /* ▾ when open */
+}
+
+.month-head {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;              /* allow long figure lines to wrap, not overflow */
+}
+
+.month-figures {
+    font-size: .85em;
+    overflow-wrap: anywhere;
 }
