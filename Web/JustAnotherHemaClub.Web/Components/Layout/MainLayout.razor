@@ -1,5 +1,6 @@
 ﻿@inherits LayoutComponentBase
 @implements IDisposable
+@using System.Reflection
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
 @inject UserSession Session
@@ -37,8 +38,13 @@
         </div>
 
         <form method="post" action="/auth/logout" class="logout-form">
-            <button class="logout" type="submit">⎋ Logout</button>
+            <button class="logout" type="submit">
+                <span class="nav-icon">⎋</span>
+                <span class="nav-label">Logout</span>
+            </button>
         </form>
+
+        <div class="flyout-version">Version @AppVersion</div>
     </nav>
 
     <label class="scrim" for="flyout-toggle" aria-hidden="true"></label>
@@ -49,6 +55,21 @@
 </div>
 
 @code {
+    private static readonly string AppVersion = GetAppVersion();
+
+    private static string GetAppVersion()
+    {
+        var raw =
+            Assembly.GetExecutingAssembly()
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
+            ?? "unknown";
+
+        // The SDK appends "+<git-hash>" to InformationalVersion; drop it.
+        var plus = raw.IndexOf('+');
+        return plus >= 0 ? raw[..plus] : raw;
+    }
+
     protected override async Task OnInitializedAsync()
     {
         Session.Changed += StateHasChanged;

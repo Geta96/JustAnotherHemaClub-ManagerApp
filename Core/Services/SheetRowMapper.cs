@@ -11,9 +11,28 @@ namespace JustAnotherHemaClub.Services;
 /// </summary>
 public static class SheetRowMapper
 {
-    /// <summary>Safe cell read: returns "" for missing/short/null cells.</summary>
-    public static string S(IList<object> row, int i) =>
-        i < row.Count ? row[i]?.ToString() ?? "" : "";
+    /// <summary>Safe cell read: returns "" for missing/short/null cells.
+    /// Non-string cells (e.g. a Sheets serial <see cref="double"/> from an
+    /// UNFORMATTED read, or a boxed <see cref="DateTime"/>) are stringified with
+    /// InvariantCulture so a device locale can never reshape the value before
+    /// <see cref="TryParseDate"/> sees it.</summary>
+    public static string S(IList<object> row, int i)
+    {
+        if (i >= row.Count) return "";
+        return row[i] switch
+        {
+            null => "",
+            string s => s,
+            // Newtonsoft (inside Google.Apis) auto-parses date-looking cell text
+            // into a boxed DateTime/DateTimeOffset before we see it. A null format
+            // would then render invariant "MM/dd/yyyy HH:mm:ss", which the STRICT
+            // ISO reader rejects. Round-trip it back to ISO "o" so parsing works.
+            DateTime dt => dt.ToString("o", CultureInfo.InvariantCulture),
+            DateTimeOffset dto => dto.ToString("o", CultureInfo.InvariantCulture),
+            IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
+            var o => o.ToString() ?? ""
+        };
+    }
 
     public static bool ParseBool(string s) =>
         s.Equals("TRUE", StringComparison.OrdinalIgnoreCase) ||
@@ -33,39 +52,36 @@ public static class SheetRowMapper
     };
 
     /// <summary>
-    /// Tolerant date reader. Accepts either an ISO "o" round-trip string (the
-    /// canonical format written by the fixed RAW writer / migration) OR a bare
-    /// Google Sheets serial number (an OLE Automation date) that a stale
-    /// old-client write may still leave behind. Returns false for blank/garbage.
+    /// STRICT ISO-8601 date reader. Accepts ONLY the canonical round-trip shapes
+    /// we write ("o" / yyyy-MM-ddTHH:mm:ss[.fffffff][K] / yyyy-MM-dd) under
+    /// InvariantCulture. There is deliberately NO tolerant fallback and NO
+    /// Sheets-serial fallback: a locale guess or a stray numeric cell is exactly
+    /// how the "October 12 → December 10 on an English (UK) phone" bug slipped
+    /// through, so anything non-ISO must be treated as corrupt, not guessed.
     /// </summary>
     public static bool TryParseDate(string s, out DateTime value)
     {
         value = default;
         if (string.IsNullOrWhiteSpace(s)) return false;
 
-        // Strict ISO 8601 first — unambiguous year/month/day regardless of locale.
-        if (DateTime.TryParseExact(s, Iso8601Formats, CultureInfo.InvariantCulture,
-                                   DateTimeStyles.RoundtripKind, out value))
-            return true;
-
-        // Tolerant fallback (still invariant culture).
-        if (DateTime.TryParse(s, CultureInfo.InvariantCulture,
-                              DateTimeStyles.RoundtripKind, out value))
-            return true;
-
-        // Bare Sheets serial number → OLE Automation date.
-        if (double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var serial))
-        {
-            try { value = DateTime.FromOADate(serial); return true; }
-            catch { return false; }
-        }
-
-        return false;
+        // Strict ISO 8601 ONLY — unambiguous year/month/day regardless of locale.
+        return DateTime.TryParseExact(s, Iso8601Formats, CultureInfo.InvariantCulture,
+                                      DateTimeStyles.RoundtripKind, out value);
     }
 
-    /// <summary>Parses a date cell, falling back to <paramref name="fallback"/> when unparseable.</summary>
-    public static DateTime ParseDateOr(string s, DateTime fallback) =>
-        TryParseDate(s, out var v) ? v : fallback;
+    /// <summary>
+    /// Parses a required date cell, THROWING when the value is not strict ISO-8601.
+    /// Use this on the sheet read path instead of silently falling back to
+    /// "now"/default — a loud failure surfaces corruption instead of hiding it
+    /// behind a wrong date.
+    /// </summary>
+    public static DateTime ParseDate(string s)
+    {
+        if (TryParseDate(s, out var value)) return value;
+        throw new FormatException(
+            $"Date cell '{s}' is not strict ISO-8601 ('o' round-trip). " +
+            "Dates must be stored invariant-culture ISO-8601; refusing to guess a locale.");
+    }
 
     // ---------- Fencer ----------
     public static Fencer MapFencer(IList<object> r) => new()
@@ -110,7 +126,7 @@ public static class SheetRowMapper
     }
 
     // ---------- Payment ----------
-    /// <summary>Returns null for blank-FencerId rows.</summary>
+    /// <summary>Returns null for blank-FencerId rows. Throws on a non-ISO PaidOn cell.</summary>
     public static Payment? MapPayment(IList<object> r)
     {
         if (string.IsNullOrWhiteSpace(S(r, 0))) return null;
@@ -120,19 +136,19 @@ public static class SheetRowMapper
             Year = int.TryParse(S(r, 1), out var y) ? y : 0,
             Month = int.TryParse(S(r, 2), out var mo) ? mo : 0,
             Amount = decimal.TryParse(S(r, 3), NumberStyles.Any, CultureInfo.InvariantCulture, out var a) ? a : 0m,
-            PaidOn = ParseDateOr(S(r, 4), default)
+            PaidOn = ParseDate(S(r, 4))
         };
     }
 
     // ---------- Expense ----------
-    /// <summary>Returns null for blank-Id rows.</summary>
+    /// <summary>Returns null for blank-Id rows. Throws on a non-ISO Date cell.</summary>
     public static Expense? MapExpense(IList<object> r)
     {
         if (string.IsNullOrWhiteSpace(S(r, 0))) return null;
         return new Expense
         {
             Id = S(r, 0),
-            Date = ParseDateOr(S(r, 1), default),
+            Date = ParseDate(S(r, 1)),
             Category = S(r, 2),
             Description = S(r, 3),
             Amount = decimal.TryParse(S(r, 4), NumberStyles.Any, CultureInfo.InvariantCulture, out var a) ? a : 0m
@@ -148,7 +164,7 @@ public static class SheetRowMapper
         if (!Enum.TryParse<DayOfWeek>(S(r, 1), true, out var dow)) return null;
 
         if (!TimeSpan.TryParse(S(r, 2), CultureInfo.InvariantCulture, out var tod)) tod = TimeSpan.Zero;
-        if (!TryParseDate(S(r, 4), out var start)) start = DateTime.Today;
+        var start = ParseDate(S(r, 4));
 
         DateTime? end = null;
         var endStr = S(r, 5);

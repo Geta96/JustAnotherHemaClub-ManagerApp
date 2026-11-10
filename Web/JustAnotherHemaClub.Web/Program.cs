@@ -7,8 +7,21 @@ using JustAnotherHemaClub.Web.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Behind Cloudflare (and Azure's front end), trust the X-Forwarded-* headers so
+// the app sees the ORIGINAL https scheme and host. Without this, UseHttpsRedirection
+// can loop and auth cookies/redirects use the wrong host. Cloudflare's proxy IPs
+// are dynamic, so we clear the known-proxy allowlist and accept the headers.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // Blazor Web App with interactive server rendering. The Google service-account
 // JSON stays server-side (see ICredentialProvider): all Sheets I/O runs here,
@@ -98,8 +111,9 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-// The in-memory test backdoor is only allowed in Development.
-AuthService.TestAccountEnabled = app.Environment.IsDevelopment();
+// Must run before UseHttpsRedirection / auth so downstream middleware sees the
+// real client scheme + host forwarded by Cloudflare / Azure.
+app.UseForwardedHeaders();
 
 if (!app.Environment.IsDevelopment())
 {
@@ -108,28 +122,6 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
-// --- Security headers (defense in depth) ---
-app.Use(async (context, next) =>
-{
-    var headers = context.Response.Headers;
-    headers["X-Content-Type-Options"] = "nosniff";
-    headers["X-Frame-Options"] = "DENY";
-    headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
-    headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()";
-    // Blazor Server needs inline styles and a websocket connection back to origin.
-    headers["Content-Security-Policy"] =
-        "default-src 'self'; " +
-        "img-src 'self' data:; " +
-        "style-src 'self' 'unsafe-inline'; " +
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-        "connect-src 'self' ws: wss:; " +
-        "frame-ancestors 'none'; " +
-        "base-uri 'self'; " +
-        "form-action 'self'";
-    await next();
-});
-
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
@@ -289,7 +281,9 @@ app.MapPost("/home/attend", async (
 
     // Fall back to (or create) the recurring occurrence when we only have a rule.
     if (session is null && !string.IsNullOrWhiteSpace(ruleId) &&
-        DateTime.TryParse(date, out var day))
+        DateTime.TryParse(date, System.Globalization.CultureInfo.InvariantCulture,
+                          System.Globalization.DateTimeStyles.None, out var day))
+
     {
         var rules = await sheets.GetRecurringTrainingsAsync();
         var rule = rules.FirstOrDefault(r => r.Id == ruleId);
@@ -389,8 +383,11 @@ app.MapPost("/weekly/save", async (
     rule.Topic = form["topic"].ToString();
     if (ParseTime(form["startTime"], out var st)) rule.TimeOfDay = st;
     if (ParseTime(form["endTime"], out var et)) rule.EndTimeOfDay = et;
-    if (DateTime.TryParse(form["startDate"], out var sd)) rule.StartDate = sd;
-    rule.EndDate = form["hasEndDate"] == "on" && DateTime.TryParse(form["endDate"], out var ed)
+    if (DateTime.TryParse(form["startDate"], System.Globalization.CultureInfo.InvariantCulture,
+                          System.Globalization.DateTimeStyles.None, out var sd)) rule.StartDate = sd;
+    rule.EndDate = form["hasEndDate"] == "on" &&
+                   DateTime.TryParse(form["endDate"], System.Globalization.CultureInfo.InvariantCulture,
+                                     System.Globalization.DateTimeStyles.None, out var ed)
         ? ed : null;
 
     await sheets.UpsertRecurringTrainingAsync(rule);
@@ -408,8 +405,11 @@ app.MapPost("/weekly/add", async (
     if (!Enum.TryParse<DayOfWeek>(form["dayOfWeek"], out var dow)) dow = DayOfWeek.Tuesday;
     ParseTime(form["startTime"], out var st);
     ParseTime(form["endTime"], out var et);
-    DateTime.TryParse(form["startDate"], out var sd);
+    DateTime.TryParse(form["startDate"], System.Globalization.CultureInfo.InvariantCulture,
+                      System.Globalization.DateTimeStyles.None, out var sd);
     if (sd == default) sd = DateTime.Today;
+    DateTime.TryParse(form["endDate"], System.Globalization.CultureInfo.InvariantCulture,
+                      System.Globalization.DateTimeStyles.None, out var ed);
 
     var rule = new RecurringTrainingRule
     {
@@ -419,7 +419,7 @@ app.MapPost("/weekly/add", async (
         EndTimeOfDay = et == default ? new TimeSpan(20, 0, 0) : et,
         Topic = form["topic"].ToString(),
         StartDate = sd,
-        EndDate = form["hasEndDate"] == "on" && DateTime.TryParse(form["endDate"], out var ed) ? ed : null,
+        EndDate = ed,
         CreatedByFencerId = http.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "",
     };
 
@@ -455,7 +455,8 @@ app.MapPost("/lessons/create", async (
     if (string.IsNullOrWhiteSpace(meId)) return Results.Redirect("/login");
 
     var form = await http.Request.ReadFormAsync();
-    DateTime.TryParse(form["date"], out var d);
+    DateTime.TryParse(form["date"], System.Globalization.CultureInfo.InvariantCulture,
+                      System.Globalization.DateTimeStyles.None, out var d);
     ParseTime(form["time"], out var tt);
     var when = (d == default ? DateTime.Today : d.Date) + tt;
     var topic = form["topic"].ToString();
@@ -737,9 +738,10 @@ app.MapPost("/finance/price/add", async (
     var hasEnd = form["hasEndDate"] == "on";
     if (isCustom && !hasEnd) return Results.Redirect(back);
 
-    DateTime.TryParse(form["startDate"], out var start);
-    if (start == default) start = DateTime.Today;
-    DateTime.TryParse(form["endDate"], out var end);
+    DateTime.TryParse(form["startDate"], System.Globalization.CultureInfo.InvariantCulture,
+                      System.Globalization.DateTimeStyles.None, out var start);
+    DateTime.TryParse(form["endDate"], System.Globalization.CultureInfo.InvariantCulture,
+                      System.Globalization.DateTimeStyles.None, out var end);
 
     await sheets.UpsertPriceRuleAsync(new PriceRule
     {
@@ -769,9 +771,11 @@ app.MapPost("/finance/price/save", async (
             System.Globalization.CultureInfo.InvariantCulture, out var full)) rule.FullPrice = full;
     if (decimal.TryParse(form["studentPrice"], System.Globalization.NumberStyles.Number,
             System.Globalization.CultureInfo.InvariantCulture, out var student)) rule.StudentPrice = student;
-    if (DateTime.TryParse(form["startDate"], out var start)) rule.StartDate = start;
+    if (DateTime.TryParse(form["startDate"], System.Globalization.CultureInfo.InvariantCulture,
+                          System.Globalization.DateTimeStyles.None, out var start)) rule.StartDate = start;
     var hasEnd = form["hasEndDate"] == "on";
-    rule.EndDate = hasEnd && DateTime.TryParse(form["endDate"], out var end) ? end : null;
+    rule.EndDate = hasEnd && DateTime.TryParse(form["endDate"], System.Globalization.CultureInfo.InvariantCulture,
+                                               System.Globalization.DateTimeStyles.None, out var end) ? end : null;
     rule.IsCustomPeriod = form["isCustomPeriod"] == "on";
     if (rule.IsCustomPeriod && rule.EndDate is null) return Results.Redirect(back);
 
@@ -997,11 +1001,10 @@ app.MapPost("/tournaments/pool/auto", async (
             old.Index = int.MaxValue;
             await sheets.UpsertPoolAsync(tournamentId, old);
         }
-        for (int i = 0; i < draft.Count; i++)
-        {
-            draft[i].Index = i;
-            await sheets.UpsertPoolAsync(tournamentId, draft[i]);
-        }
+        for (int i = 0; i < draft.Count; i++) draft[i].Index = i;
+        TournamentEngine.GeneratePoolMatches(draft);
+        foreach (var pool in draft)
+            await sheets.UpsertPoolAsync(tournamentId, pool);
     }
     catch (Exception ex)
     {
@@ -1152,7 +1155,7 @@ app.MapPost("/tournaments/start", async (
     var back = $"/tournaments/{tournamentId}";
     if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
     var t = await sheets.GetTournamentAsync(tournamentId);
-    if (t is null || t.State != TournamentState.Setup) return Results.Redirect(back);
+    if (t is null || t.State == TournamentState.Finished) return Results.Redirect(back);
 
     if (t.Fencers.Count(f => !f.IsWithdrawn) < 4)
         return Results.Redirect($"{back}?error={Uri.EscapeDataString("Need at least 4 active fencers.")}");
@@ -1439,7 +1442,7 @@ app.MapPost("/tournaments/reopen", async (
     var back = $"/tournaments/{tournamentId}";
     if (!IsTournamentOrganiser(http, access, tournamentId)) return Results.Redirect(back);
     var t = await sheets.GetTournamentAsync(tournamentId);
-    if (t is null || t.State != TournamentState.Finished) return Results.Redirect(back);
+    if (t is null || t.State == TournamentState.Finished) return Results.Redirect(back);
 
     t.State = t.Bracket is not null ? TournamentState.EliminationInProgress : TournamentState.PoolsClosed;
     await sheets.UpsertTournamentHeaderAsync(t);

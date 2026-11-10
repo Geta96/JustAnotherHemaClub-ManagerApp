@@ -8,6 +8,15 @@
       <UserSecretsId>bd2f683d-64b0-4afe-a10c-f187535039ae</UserSecretsId>
   </PropertyGroup>
 
+    <PropertyGroup>
+    <Version>1.0.17</Version>
+    <InformationalVersion>1.0.17 (14)</InformationalVersion>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
     <ItemGroup>
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
     </ItemGroup>
@@ -15,12 +24,6 @@
     <ItemGroup>
         <!-- Shared platform-neutral core (models, data layer, dues math, auth, Group A VMs) -->
         <ProjectReference Include="..\..\Core\JustAnotherHemaClub.Core.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <None Update="service-account.json">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
     </ItemGroup>
 
 </Project>

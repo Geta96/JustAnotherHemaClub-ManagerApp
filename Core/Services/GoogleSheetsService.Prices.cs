@@ -1,4 +1,4 @@
-using System.Globalization;
+ï»¿using System.Globalization;
 using Google;
 using JustAnotherHemaClub.Models;
 
@@ -14,7 +14,9 @@ public partial class GoogleSheetsService
         IList<IList<object>> rows;
         try
         {
-            rows = await ReadAsync("Prices!A2:H");
+            // UNFORMATTED + SheetRowMapper.TryParseDate so serial-stored dates can't be
+            // re-read as locale-formatted text and flipped (see GetTrainingsAsync).
+            rows = await ReadUnformattedAsync("Prices!A2:H");
         }
         catch (GoogleApiException)
         {
@@ -30,25 +32,24 @@ public partial class GoogleSheetsService
             if (!decimal.TryParse(PriceS(r, 2), NumberStyles.Number, CultureInfo.InvariantCulture, out var full)) continue;
             if (!decimal.TryParse(PriceS(r, 3), NumberStyles.Number, CultureInfo.InvariantCulture, out var student))
                 student = full;
-            if (!DateTime.TryParse(PriceS(r, 4), CultureInfo.InvariantCulture,
-                                   DateTimeStyles.RoundtripKind, out var start))
+            if (!SheetRowMapper.TryParseDate(PriceS(r, 4), out var start))
                 start = DateTime.Today;
+            start = start.Date;
 
             DateTime? end = null;
             var endStr = PriceS(r, 5);
             if (!string.IsNullOrWhiteSpace(endStr) &&
-                DateTime.TryParse(endStr, CultureInfo.InvariantCulture,
-                                  DateTimeStyles.RoundtripKind, out var e))
-                end = e;
+                SheetRowMapper.TryParseDate(endStr, out var e))
+                end = e.Date;
 
-            // Column G: MonthCount — defaults to 1 for rows written before this column existed.
+            // Column G: MonthCount ï¿½ defaults to 1 for rows written before this column existed.
             int monthCount = 1;
             var monthStr = PriceS(r, 6);
             if (!string.IsNullOrWhiteSpace(monthStr) &&
                 int.TryParse(monthStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var mc) && mc > 0)
                 monthCount = mc;
 
-            // Column H: IsCustomPeriod — defaults to false for rows written before this column existed.
+            // Column H: IsCustomPeriod ï¿½ defaults to false for rows written before this column existed.
             bool isCustomPeriod = ParseBool(PriceS(r, 7));
 
             list.Add(new PriceRule
@@ -105,6 +106,5 @@ public partial class GoogleSheetsService
         await UpdateAsync($"Prices!A{rowIndex + 2}:H{rowIndex + 2}", blanks);
     }
 
-    private static string PriceS(IList<object> row, int i) =>
-        i < row.Count ? row[i]?.ToString() ?? "" : "";
+    private static string PriceS(IList<object> row, int i) => SheetRowMapper.S(row, i);
 }

@@ -17,7 +17,9 @@ public partial class GoogleSheetsService
         IList<IList<object>> rows;
         try
         {
-            rows = await ReadAsync("Incomes!A2:E");
+            // UNFORMATTED + SheetRowMapper.TryParseDate so serial-stored dates can't be
+            // re-read as locale-formatted text and flipped (see GetTrainingsAsync).
+            rows = await ReadUnformattedAsync("Incomes!A2:E");
         }
         catch (GoogleApiException)
         {
@@ -31,8 +33,7 @@ public partial class GoogleSheetsService
         {
             var id = IncomeS(r, 0);
             if (string.IsNullOrWhiteSpace(id)) continue;
-            if (!DateTime.TryParse(IncomeS(r, 1), CultureInfo.InvariantCulture,
-                                   DateTimeStyles.RoundtripKind, out var date)) continue;
+            if (!SheetRowMapper.TryParseDate(IncomeS(r, 1), out var date)) continue;
             if (!decimal.TryParse(IncomeS(r, 4), NumberStyles.Number,
                                   CultureInfo.InvariantCulture, out var amount)) continue;
 
@@ -58,6 +59,9 @@ public partial class GoogleSheetsService
         });
 
     // Local cell-string helper (mirrors the private S() in the main file).
-    private static string IncomeS(IList<object> row, int i) =>
-        i < row.Count ? row[i]?.ToString() ?? "" : "";
+    // Newtonsoft (inside Google.Apis) auto-parses date cells into a boxed
+    // DateTime/DateTimeOffset; a plain ToString() renders locale "MM/dd/yyyy…"
+    // which the strict ISO reader rejects — silently dropping the income row.
+    // Round-trip DateTime back to ISO "o" so TryParseDate accepts it.
+    private static string IncomeS(IList<object> row, int i) => SheetRowMapper.S(row, i);
 }

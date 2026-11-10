@@ -28,6 +28,19 @@
         </Grid>
     </Shell.FlyoutHeader>
 
+    <!-- Flyout footer: app version pinned to the bottom of the menu -->
+    <Shell.FlyoutFooter>
+        <Grid BackgroundColor="{StaticResource Cream}" Padding="16,8">
+            <Label x:Name="VersionLabel"
+                   Text=""
+                   TextColor="{StaticResource Wine}"
+                   Opacity="0.6"
+                   FontSize="12"
+                   HorizontalOptions="Center"
+                   VerticalOptions="Center" />
+        </Grid>
+    </Shell.FlyoutFooter>
+
     <!-- Custom flyout item template for a sharper look -->
     <Shell.ItemTemplate>
         <DataTemplate x:DataType="BaseShellItem">

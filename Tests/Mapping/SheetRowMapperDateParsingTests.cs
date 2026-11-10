@@ -1,14 +1,14 @@
-using System.Globalization;
+﻿using System.Globalization;
 using JustAnotherHemaClub.Services;
 
 namespace JustAnotherHemaClub.Tests.Mapping;
 
 /// <summary>
-/// Tests the tolerant date reading added to <see cref="SheetRowMapper"/> as the
-/// "defense in depth" half of the date-corruption fix. New/migrated rows store
-/// ISO "o" strings, but out-of-date clients can still write bare Google Sheets
-/// serial numbers (OLE Automation dates). The reader must transparently accept
-/// BOTH so a stray old-client write never breaks the UI.
+/// Tests the STRICT ISO-8601 date reading in <see cref="SheetRowMapper"/>. The
+/// reader deliberately accepts ONLY the canonical "o" round-trip shapes we write
+/// under InvariantCulture — no tolerant locale guess and no Sheets-serial
+/// fallback. Non-ISO cells are refused (TryParseDate → false) or throw
+/// (ParseDate) so corruption surfaces loudly instead of showing a wrong date.
 /// </summary>
 public class SheetRowMapperDateParsingTests
 {
@@ -25,82 +25,132 @@ public class SheetRowMapperDateParsingTests
     }
 
     [Fact]
-    public void TryParseDate_SheetsSerialNumber_ParsesAsOleAutomationDate()
+    public void TryParseDate_SheetsSerialNumber_NowRejected()
     {
-        // A Sheets serial number is an OLE Automation date. Round-trip a known
-        // instant through ToOADate and confirm we recover it.
-        var expected = new DateTime(2026, 9, 15, 18, 0, 0);
-        var serial = expected.ToOADate().ToString(CultureInfo.InvariantCulture);
-
-        SheetRowMapper.TryParseDate(serial, out var value).Should().BeTrue();
-        value.Should().BeCloseTo(expected, TimeSpan.FromSeconds(1));
+        // Strict ISO-only: a bare serial number is no longer silently accepted.
+        var serial = new DateTime(2026, 9, 15, 18, 0, 0)
+            .ToOADate().ToString(CultureInfo.InvariantCulture);
+        SheetRowMapper.TryParseDate(serial, out _).Should().BeFalse();
     }
 
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("not-a-date")]
-    public void TryParseDate_BlankOrGarbage_ReturnsFalse(string input)
+    [InlineData("12/10/2026")] // locale guess must be refused, not reinterpreted
+    public void TryParseDate_BlankOrGarbageOrLocale_ReturnsFalse(string input)
     {
         SheetRowMapper.TryParseDate(input, out _).Should().BeFalse();
     }
 
-    // ---------------- ParseDateOr ----------------
+    // ---------------- ParseDate (throwing) ----------------
 
     [Fact]
-    public void ParseDateOr_UnparseableValue_ReturnsFallback()
+    public void ParseDate_NonIso_Throws()
     {
-        var fallback = new DateTime(2000, 1, 1);
-        SheetRowMapper.ParseDateOr("garbage", fallback).Should().Be(fallback);
+        Action act = () => SheetRowMapper.ParseDate("12/10/2026");
+        act.Should().Throw<FormatException>();
     }
 
     [Fact]
-    public void ParseDateOr_ValidIso_ReturnsParsedValue()
+    public void ParseDate_SheetsSerialNumber_Throws()
+    {
+        var serial = new DateTime(2026, 9, 15).ToOADate().ToString(CultureInfo.InvariantCulture);
+        Action act = () => SheetRowMapper.ParseDate(serial);
+        act.Should().Throw<FormatException>();
+    }
+
+    [Fact]
+    public void ParseDate_ValidIso_ReturnsParsedValue()
     {
         var iso = new DateTime(2026, 3, 5).ToString("o", CultureInfo.InvariantCulture);
-        SheetRowMapper.ParseDateOr(iso, DateTime.MinValue).Should().Be(new DateTime(2026, 3, 5));
+        SheetRowMapper.ParseDate(iso).Should().Be(new DateTime(2026, 3, 5));
     }
 
-    // ---------------- Mappers tolerate corrupt serial dates ----------------
+    // ---------------- Mappers reject corrupt serial dates ----------------
 
     [Fact]
-    public void MapTraining_SerialNumberDate_IsRecovered_NotDropped()
+    public void MapTraining_SerialNumberDate_IsDropped()
     {
+        // A non-ISO (serial) date is no longer recovered; the row is skipped.
         var start = new DateTime(2026, 9, 15, 18, 0, 0);
-        var end   = new DateTime(2026, 9, 15, 20, 0, 0);
         var r = Row("t1",
                     start.ToOADate().ToString(CultureInfo.InvariantCulture),
                     "Footwork",
                     "F1",
-                    end.ToOADate().ToString(CultureInfo.InvariantCulture));
+                    "");
 
-        var t = SheetRowMapper.MapTraining(r);
-
-        t.Should().NotBeNull("a serial-number date must be recovered rather than dropping the row");
-        t!.Date.Should().BeCloseTo(start, TimeSpan.FromSeconds(1));
-        t.EndDate.Should().BeCloseTo(end, TimeSpan.FromSeconds(1));
+        SheetRowMapper.MapTraining(r).Should().BeNull(
+            "a non-ISO serial date must be refused rather than guessed");
     }
 
     [Fact]
-    public void MapPayment_SerialNumberPaidOn_IsRecovered()
+    public void MapTraining_IsoDate_IsMapped()
+    {
+        var start = new DateTime(2026, 9, 15, 18, 0, 0);
+        var end   = new DateTime(2026, 9, 15, 20, 0, 0);
+        var r = Row("t1",
+                    start.ToString("o", CultureInfo.InvariantCulture),
+                    "Footwork",
+                    "F1",
+                    end.ToString("o", CultureInfo.InvariantCulture));
+
+        var t = SheetRowMapper.MapTraining(r)!;
+        t.Date.Should().Be(start);
+        t.EndDate.Should().Be(end);
+    }
+
+    [Fact]
+    public void MapPayment_SerialNumberPaidOn_Throws()
     {
         var paidOn = new DateTime(2026, 3, 5);
         var r = Row("F1", "2026", "3", "45.50",
                     paidOn.ToOADate().ToString(CultureInfo.InvariantCulture));
 
-        var p = SheetRowMapper.MapPayment(r)!;
-        p.PaidOn.Should().BeCloseTo(paidOn, TimeSpan.FromSeconds(1));
+        Action act = () => SheetRowMapper.MapPayment(r);
+        act.Should().Throw<FormatException>();
     }
 
     [Fact]
-    public void MapRecurring_SerialNumberStartDate_IsRecovered()
+    public void MapPayment_IsoPaidOn_IsMapped()
+    {
+        var paidOn = new DateTime(2026, 3, 5);
+        var r = Row("F1", "2026", "3", "45.50",
+                    paidOn.ToString("o", CultureInfo.InvariantCulture));
+
+        SheetRowMapper.MapPayment(r)!.PaidOn.Should().Be(paidOn);
+    }
+
+    [Fact]
+    public void MapRecurring_SerialNumberStartDate_Throws()
     {
         var startDate = new DateTime(2026, 2, 1);
         var r = Row("id1", "Wednesday", "17:30", "Longsword",
                     startDate.ToOADate().ToString(CultureInfo.InvariantCulture),
                     "", "coach1", "19:00");
 
-        var rule = SheetRowMapper.MapRecurring(r)!;
-        rule.StartDate.Should().BeCloseTo(startDate, TimeSpan.FromSeconds(1));
+        Action act = () => SheetRowMapper.MapRecurring(r);
+        act.Should().Throw<FormatException>();
+    }
+
+    [Fact]
+    public void MapRecurring_IsoStartDate_IsMapped()
+    {
+        var startDate = new DateTime(2026, 2, 1);
+        var r = Row("id1", "Wednesday", "17:30", "Longsword",
+                    startDate.ToString("o", CultureInfo.InvariantCulture),
+                    "", "coach1", "19:00");
+
+        SheetRowMapper.MapRecurring(r)!.StartDate.Should().Be(startDate);
+    }
+
+    [Fact]
+    public void S_BoxedDateTimeCell_RendersIsoNotLocale()
+    {
+        IList<object> row = new List<object> { new DateTime(2026, 9, 18, 19, 0, 0) };
+        var cell = SheetRowMapper.S(row, 0);
+        SheetRowMapper.TryParseDate(cell, out var v).Should().BeTrue();
+        v.Month.Should().Be(9);
+        v.Day.Should().Be(18);
     }
 }
