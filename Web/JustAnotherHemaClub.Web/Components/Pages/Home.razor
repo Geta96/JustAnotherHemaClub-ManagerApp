@@ -159,9 +159,49 @@
     {
         await Session.EnsureRestoredAsync();
 
+        await LoadWeeklyTrainingsAsync();
         await LoadPendingResetsAsync();
         await LoadNextLessonAsync();
         await LoadPaymentStatusAsync();
+    }
+
+    /// <summary>
+    /// Populates the "Weekly Trainings" card from the active recurring-training
+    /// rules (Monday-first, then by start time). Mirrors the MAUI
+    /// HomeViewModel.LoadAsync weekly logic so both apps show the same schedule.
+    /// </summary>
+    private async Task LoadWeeklyTrainingsAsync()
+    {
+        _loading = true;
+        try
+        {
+            var rules = await Sheets.GetRecurringTrainingsAsync();
+
+            // Active rules only, Monday-first ordering.
+            var ordered = rules
+                .Where(r => !r.EndDate.HasValue || r.EndDate.Value.Date >= DateTime.Today)
+                .OrderBy(r => ((int)r.DayOfWeek + 6) % 7)
+                .ThenBy(r => r.TimeOfDay);
+
+            _weekly.Clear();
+            foreach (var r in ordered)
+            {
+                var end = r.EndTimeOfDay == default
+                    ? r.TimeOfDay.Add(TimeSpan.FromMinutes(90))
+                    : r.EndTimeOfDay;
+
+                _weekly.Add(new WeeklyRow(
+                    DayShort: r.DayOfWeek.ToString().Substring(0, 3),
+                    TimeRange: $"{r.TimeOfDay:hh\\:mm} \u2013 {end:hh\\:mm}",
+                    Topic: r.Topic ?? ""));
+            }
+        }
+        catch
+        {
+            // Never let a bad row tear down the page — show the empty-state text.
+            _weekly.Clear();
+        }
+        finally { _loading = false; }
     }
 
     /// <summary>
