@@ -183,21 +183,42 @@ else
             var expenses = expensesTask.Result;
             var incomes = incomesTask.Result;
 
-            // ---- Monthly breakdown (payments = income proxy is not available here,
-            // so we use one-off incomes; sessions + expenses per month). ----
+            // ---- Monthly breakdown ----
+            // Income MUST mirror the Finance page exactly: dues actually paid
+            // (payments) + one-off incomes, minus expenses. Earlier this only
+            // counted one-off incomes, so the Balance disagreed with Finance.
             var monthKeys = new HashSet<(int Y, int M)>();
             foreach (var t in trainings) monthKeys.Add((t.Date.Year, t.Date.Month));
             foreach (var e in expenses) monthKeys.Add((e.Date.Year, e.Date.Month));
             foreach (var i in incomes) monthKeys.Add((i.Date.Year, i.Date.Month));
+
+            var paymentTasks = monthKeys.ToDictionary(k => k, k => Sheets.GetPaymentsAsync(k.Y, k.M));
+            await Task.WhenAll(paymentTasks.Values);
+
+            // Fold in payment-only months (pre-payments/refunds) that have no
+            // training/expense/income activity, matching Finance's month set.
+            var extraMonths = paymentTasks.Values
+                .SelectMany(t => t.Result)
+                .Select(p => (Y: p.Year, M: p.Month))
+                .Where(k => !monthKeys.Contains(k))
+                .Distinct()
+                .ToList();
+            foreach (var k in extraMonths)
+            {
+                monthKeys.Add(k);
+                paymentTasks[k] = Sheets.GetPaymentsAsync(k.Y, k.M);
+            }
+            await Task.WhenAll(paymentTasks.Values);
 
             foreach (var (y, m) in monthKeys.OrderByDescending(k => k.Y).ThenByDescending(k => k.M))
             {
                 var from = new DateTime(y, m, 1);
                 var to = from.AddMonths(1).AddDays(-1);
                 var sessions = trainings.Count(t => t.Date.Year == y && t.Date.Month == m);
-                var inc = incomes.Where(i => i.Date >= from && i.Date <= to).Sum(i => i.Amount);
+                var paid = paymentTasks[(y, m)].Result.Sum(p => p.Amount);
+                var oneOff = incomes.Where(i => i.Date >= from && i.Date <= to).Sum(i => i.Amount);
                 var exp = expenses.Where(e => e.Date >= from && e.Date <= to).Sum(e => e.Amount);
-                _months.Add(new MonthStat(y, m, sessions, inc, exp));
+                _months.Add(new MonthStat(y, m, sessions, paid + oneOff, exp));
             }
 
             // ---- Leaderboards ----
