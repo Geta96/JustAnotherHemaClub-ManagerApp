@@ -8,6 +8,7 @@ public partial class ProfileViewModel : ObservableObject
 {
     private readonly AuthService _auth;
     private readonly IGoogleSheetsService _sheets;
+    private readonly INotificationSettings? _notifications;
 
     [ObservableProperty] private string name = "";
     [ObservableProperty] private string username = "";
@@ -17,15 +18,20 @@ public partial class ProfileViewModel : ObservableObject
     [ObservableProperty] private bool isActive;
     [ObservableProperty] private bool gdprAccepted;
     [ObservableProperty] private bool liabilityAccepted;
+    [ObservableProperty] private bool notificationsEnabled = true;
     [ObservableProperty] private string? statusMessage;
     [ObservableProperty] private bool isGuest;
 
     public bool IsLoggedInFencer => !IsGuest && _auth.CurrentFencer is not null;
 
-    public ProfileViewModel(AuthService auth, IGoogleSheetsService sheets)
+    public ProfileViewModel(
+        AuthService auth,
+        IGoogleSheetsService sheets,
+        INotificationSettings? notifications = null)
     {
         _auth = auth;
         _sheets = sheets;
+        _notifications = notifications;
     }
 
     [RelayCommand]
@@ -45,6 +51,7 @@ public partial class ProfileViewModel : ObservableObject
             IsActive = false;
             GdprAccepted = false;
             LiabilityAccepted = false;
+            NotificationsEnabled = false;
         }
         else
         {
@@ -56,6 +63,7 @@ public partial class ProfileViewModel : ObservableObject
             IsActive = f.Active;
             GdprAccepted = f.GdprAccepted;
             LiabilityAccepted = f.LiabilityAccepted;
+            NotificationsEnabled = _notifications?.IsEnabled(f.Id) ?? true;
         }
 
         OnPropertyChanged(nameof(IsLoggedInFencer));
@@ -82,6 +90,14 @@ public partial class ProfileViewModel : ObservableObject
             // Username, IsInstructor and Active are not editable from this page.
 
             await _sheets.UpsertFencerAsync(f);
+
+            if (_notifications is not null)
+            {
+                if (NotificationsEnabled)
+                    await _notifications.EnsurePermissionAsync();
+                _notifications.SetEnabled(f.Id, NotificationsEnabled);
+            }
+
             StatusMessage = "Profile saved.";
         }
         catch (Exception ex)

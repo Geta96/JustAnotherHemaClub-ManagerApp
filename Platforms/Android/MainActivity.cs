@@ -1,4 +1,5 @@
 ﻿using Android.App;
+using Android.Content;
 using Android.Content.PM;
 using Android.Graphics.Drawables;
 using Android.OS;
@@ -8,9 +9,11 @@ using Plugin.Fingerprint;
 
 namespace JustAnotherHemaClub;
 
-[Activity(Theme = "@style/Maui.SplashTheme", MainLauncher = true, ConfigurationChanges = ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
+[Activity(Theme = "@style/Maui.SplashTheme", MainLauncher = true, LaunchMode = LaunchMode.SingleTop, ConfigurationChanges = ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
 public class MainActivity : MauiAppCompatActivity
 {
+    public const string NavigateToHomeExtra = "navigate_to_home";
+
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         SetTheme(Resource.Style.Maui_MainTheme_NoActionBar);
@@ -19,6 +22,32 @@ public class MainActivity : MauiAppCompatActivity
         CrossFingerprint.SetCurrentActivityResolver(() => Platform.CurrentActivity!);
 
         ApplyGradientStatusBar();
+        HandleNotificationIntent(Intent);
+    }
+
+    protected override void OnNewIntent(Intent? intent)
+    {
+        base.OnNewIntent(intent);
+        Intent = intent;
+        HandleNotificationIntent(intent);
+    }
+
+    private static void HandleNotificationIntent(Intent? intent)
+    {
+        if (intent?.GetBooleanExtra(NavigateToHomeExtra, false) != true)
+            return;
+
+        intent.RemoveExtra(NavigateToHomeExtra);
+
+        MainThread.BeginInvokeOnMainThread(async () =>
+        {
+            try
+            {
+                if (Shell.Current is not null)
+                    await Shell.Current.GoToAsync("//home");
+            }
+            catch { /* ignore if Shell is not ready yet; LoginPage navigates to AppShell (Home) on sign-in */ }
+        });
     }
 
     /// <summary>

@@ -193,7 +193,8 @@ else
             @foreach (var m in _months)
             {
                 var isCurrentMonth = m.Year == DateTime.Today.Year && m.Month == DateTime.Today.Month;
-                <details class="card month-card" open="@isCurrentMonth">
+                var isSentMonth = RequestSent == "1" && (SentYear.HasValue && SentMonth.HasValue ? (m.Year == SentYear.Value && m.Month == SentMonth.Value) : isCurrentMonth);
+                <details class="card month-card" open="@(isCurrentMonth || isSentMonth)">
                     <summary class="month-summary">
                         <span class="month-head">
                             <span class="card-title">@m.Title</span>
@@ -269,6 +270,44 @@ else
                                             </form>
                                         </details>
                                     }
+
+                                    @* Inline payment request actions (per month, with presets; available for the logged-in user including instructors) *@
+                                    @if (!Auth.IsGuest && Auth.CurrentFencer?.Id == d.Fencer.Id)
+                                    {
+                                        <details class="attendee-editor">
+                                            <summary>Ask to accept payment</summary>
+                                            <div class="pay-options">
+                                                @foreach (var opt in BuildOptions(d, m))
+                                                {
+                                                    <form method="post" action="/finance/request/create" class="pay-option-form">
+                                                        <input type="hidden" name="fencerId" value="@d.Fencer.Id" />
+                                                        <input type="hidden" name="year" value="@m.Year" />
+                                                        <input type="hidden" name="month" value="@m.Month" />
+                                                        <input type="hidden" name="amount" value="@opt.Amount.ToString(CultureInfo.InvariantCulture)" />
+                                                        <input type="hidden" name="note" value="@opt.MenuText" />
+                                                        <button class="pay-btn pay-@opt.Kind" type="submit">@opt.MenuText</button>
+                                                    </form>
+                                                }
+                                            </div>
+                                            <form method="post" action="/finance/request/create" class="stack-form pay-custom-form">
+                                                <input type="hidden" name="fencerId" value="@d.Fencer.Id" />
+                                                <input type="hidden" name="year" value="@m.Year" />
+                                                <input type="hidden" name="month" value="@m.Month" />
+                                                <label>Custom amount (Ft)
+                                                    <input type="number" name="amount" step="any" min="1" required />
+                                                </label>
+                                                <label>Note (optional)
+                                                    <input type="text" name="note" />
+                                                </label>
+                                                <button class="pay-btn pay-custom" type="submit">Ask to accept custom amount</button>
+                                            </form>
+                                        </details>
+
+                                        @if (isSentMonth)
+                                        {
+                                            <div class="alert success">&#10003; Request sent! An instructor will review your payment shortly.</div>
+                                        }
+                                    }
                                 </li>
                             }
                         </ul>
@@ -342,6 +381,15 @@ else
     [SupplyParameterFromQuery(Name = "fencer")]
     private string? FencerFilter { get; set; }
 
+    [SupplyParameterFromQuery(Name = "sent")]
+    private string? RequestSent { get; set; }
+
+    [SupplyParameterFromQuery(Name = "sentYear")]
+    private int? SentYear { get; set; }
+
+    [SupplyParameterFromQuery(Name = "sentMonth")]
+    private int? SentMonth { get; set; }
+    
     private sealed record FencerFilterOption(string Id, string Name);
 
     private readonly List<FencerFilterOption> _fencerFilterOptions = new();
@@ -362,6 +410,11 @@ else
 
     private readonly List<MonthView> _months = new();
     private readonly List<PriceRule> _rules = new();
+
+    private readonly List<PaymentRequest> _pendingRequests = new();
+    private readonly List<PaymentRequest> _myRequests = new();
+    private readonly Dictionary<string, string> _fencerNames = new();
+    private readonly List<Fencer> _activeFencerList = new();
 
     private decimal _personalTotalDue;
     private bool _personalAllPaid = true;
@@ -462,17 +515,39 @@ else
         var expensesTask = Sheets.GetExpensesAsync(rangeFrom, rangeTo);
         var incomesTask = Sheets.GetIncomesAsync(rangeFrom, rangeTo);
         var rulesTask = Sheets.GetPriceRulesAsync();
-        await Task.WhenAll(fencersTask, trainingsTask, expensesTask, incomesTask, rulesTask);
+        var requestsTask = Sheets.GetPaymentRequestsAsync();
+        await Task.WhenAll(fencersTask, trainingsTask, expensesTask, incomesTask, rulesTask, requestsTask);
 
         var fencers = fencersTask.Result;
         var trainings = trainingsTask.Result;
         var expensesAll = expensesTask.Result;
         var incomesAll = incomesTask.Result;
         var allRules = rulesTask.Result;
+        var requests = requestsTask.Result;
 
         _pricingSummary = BuildPricingSummary(allRules);
         _pricingWarning = BuildPricingWarning(allRules, today);
         _activeFencers = fencers.Count(f => f.Active);
+
+        _fencerNames.Clear();
+        foreach (var f in fencers) _fencerNames[f.Id] = f.DisplayName;
+
+        _activeFencerList.Clear();
+        _activeFencerList.AddRange(fencers.Where(f => f.Active).OrderBy(f => f.DisplayName));
+
+        _pendingRequests.Clear();
+        _pendingRequests.AddRange(requests
+            .Where(r => r.Status == PaymentRequestStatus.Pending)
+            .OrderByDescending(r => r.RequestedAtUtc));
+
+        _myRequests.Clear();
+        if (myId is not null)
+        {
+            _myRequests.AddRange(requests
+                .Where(r => r.FencerId == myId || r.RequestedByFencerId == myId)
+                .OrderByDescending(r => r.RequestedAtUtc)
+                .Take(10));
+        }
 
         // Prices tab needs the ordered rules.
         _rules.AddRange(allRules
@@ -546,8 +621,8 @@ else
                 if (!ledger.TryGetValue((f.Id, y, m), out var contribution)) continue;
 
                 var quote = contribution.Quote;
-                var isMineThisMonth = !isInstructor && f.Id == myId && y == today.Year && m == today.Month;
-                if (count == 0 && cashPaid == 0m && contribution.CreditIn == 0m && !isMineThisMonth) continue;
+                var isMine = f.Id == myId;
+                if (count == 0 && cashPaid == 0m && contribution.CreditIn == 0m && !isMine) continue;
 
                 mv.Dues.Add(new DueRow
                 {

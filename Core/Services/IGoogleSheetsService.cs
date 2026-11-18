@@ -71,4 +71,8 @@ public interface IGoogleSheetsService
 
     /// <summary>One HTTP call regardless of how many fencers ? used by Save Tournament for new tournaments.</summary>
     Task AppendTournamentFencersAsync(string tournamentId, IList<TournamentFencer> fencers);
+
+    // ---- Payment requests ----
+    Task<List<PaymentRequest>> GetPaymentRequestsAsync();
+    Task UpsertPaymentRequestAsync(PaymentRequest request);
 }

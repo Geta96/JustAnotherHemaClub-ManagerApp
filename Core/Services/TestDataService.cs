@@ -23,6 +23,7 @@ public sealed class TestDataService : IGoogleSheetsService, ICacheControl
     private readonly List<RecurringTrainingRule> _recurringTrainings;
     private readonly List<PriceRule> _priceRules;
     private readonly List<Tournament> _tournaments;
+    private readonly List<PaymentRequest> _paymentRequests = new();
 
     public TestDataService()
     {
@@ -286,6 +287,17 @@ public sealed class TestDataService : IGoogleSheetsService, ICacheControl
         return Task.CompletedTask;
     }
 
+    public Task<List<PaymentRequest>> GetPaymentRequestsAsync() =>
+        Task.FromResult(new List<PaymentRequest>(_paymentRequests));
+
+    public Task UpsertPaymentRequestAsync(PaymentRequest request)
+    {
+        var idx = _paymentRequests.FindIndex(r => r.Id == request.Id);
+        if (idx >= 0) _paymentRequests[idx] = request;
+        else _paymentRequests.Add(request);
+        return Task.CompletedTask;
+    }
+
     // ======================== ICacheControl (no-op for in-memory) ========================
 
     public Task WarmAsync() => Task.CompletedTask;
@@ -301,6 +313,7 @@ public sealed class TestDataService : IGoogleSheetsService, ICacheControl
     public void InvalidateRecurringTrainings() { }
     public void InvalidatePrices() { }
     public void InvalidateTournaments() { }
+    public void InvalidatePaymentRequests() { }
 
     // ======================== DUMMY DATA BUILDERS ========================
 

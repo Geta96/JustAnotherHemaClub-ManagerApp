@@ -17,6 +17,7 @@ public partial class FinanceViewModel : ObservableObject
     private readonly IGoogleSheetsService _sheets;
     private readonly AuthService _auth;
     private readonly IDialogService _dialogs;
+    private readonly ICacheControl? _cache;
 
     // Cancels any in-flight LoadAsync when the user navigates away mid-refresh.
     private CancellationTokenSource? _loadCts;
@@ -140,12 +141,29 @@ public partial class FinanceViewModel : ObservableObject
     [ObservableProperty] private double yearAvgAttendance;
     [ObservableProperty] private decimal yearUnpaid;
 
-    public FinanceViewModel(IGoogleSheetsService sheets, AuthService auth, PricesViewModel pricesVm, IDialogService dialogs)
+    // --- Payment requests ---
+    public ObservableCollection<PaymentRequestRow> PendingPaymentRequests { get; } = new();
+    public ObservableCollection<PaymentRequestRow> MyPaymentRequests { get; } = new();
+    public ObservableCollection<FencerFilterOption> RequestFencerOptions { get; } = new();
+
+    public bool HasPendingPaymentRequests => IsLoggedInInstructor && PendingPaymentRequests.Count > 0;
+    public bool HasMyPaymentRequests => MyPaymentRequests.Count > 0;
+    public bool CanSendPaymentRequest => _auth.CurrentFencer is not null && !_auth.IsGuest;
+
+    [ObservableProperty] private bool isSendingPaymentRequest;
+    [ObservableProperty] private FencerFilterOption? selectedRequestFencer;
+    [ObservableProperty] private string requestAmountText = "";
+    [ObservableProperty] private string requestNote = "";
+    [ObservableProperty] private int requestYear = DateTime.Today.Year;
+    [ObservableProperty] private int requestMonth = DateTime.Today.Month;
+
+    public FinanceViewModel(IGoogleSheetsService sheets, AuthService auth, PricesViewModel pricesVm, IDialogService dialogs, ICacheControl? cache = null)
     {
         _sheets = sheets;
         _auth = auth;
         PricesVm = pricesVm;
         _dialogs = dialogs;
+        _cache = cache;
 
         Tabs = _auth.IsLoggedInInstructor
             ? new[]
@@ -190,7 +208,8 @@ public partial class FinanceViewModel : ObservableObject
             var expensesTask = _sheets.GetExpensesAsync(rangeFrom, rangeTo);
             var incomesTask = _sheets.GetIncomesAsync(rangeFrom, rangeTo);
             var rulesTask = _sheets.GetPriceRulesAsync();
-            await Task.WhenAll(fencersTask, trainingsTask, expensesTask, incomesTask, rulesTask);
+            var requestsTask = _sheets.GetPaymentRequestsAsync();
+            await Task.WhenAll(fencersTask, trainingsTask, expensesTask, incomesTask, rulesTask, requestsTask);
 
             ct.ThrowIfCancellationRequested();
 
@@ -199,13 +218,47 @@ public partial class FinanceViewModel : ObservableObject
             var expensesAll = expensesTask.Result;
             var incomesAll = incomesTask.Result;
             var allRules = rulesTask.Result;
-
-            PricingSummary = BuildPricingSummary(allRules);
-            PricingWarning = BuildPricingWarning(allRules, DateTime.Today);
+            var requests = requestsTask.Result;
+            var nameMap = fencers.ToDictionary(f => f.Id, f => f.DisplayName);
 
             var today = DateTime.Today;
             var isInstructor = _auth.IsLoggedInInstructor;
             var currentFencerId = _auth.CurrentFencer?.Id;
+
+            PendingPaymentRequests.Clear();
+            if (isInstructor)
+            {
+                foreach (var r in requests
+                    .Where(r => r.Status == PaymentRequestStatus.Pending)
+                    .OrderByDescending(r => r.RequestedAtUtc))
+                {
+                    PendingPaymentRequests.Add(new PaymentRequestRow(
+                        r, nameMap.GetValueOrDefault(r.FencerId, "Unknown")));
+                }
+
+                RequestFencerOptions.Clear();
+                foreach (var f in fencers.Where(f => f.Active).OrderBy(f => f.DisplayName))
+                    RequestFencerOptions.Add(new FencerFilterOption(f.Id, f.DisplayName));
+                SelectedRequestFencer ??= RequestFencerOptions.FirstOrDefault(o => o.Id == currentFencerId)
+                                         ?? RequestFencerOptions.FirstOrDefault();
+            }
+
+            MyPaymentRequests.Clear();
+            if (currentFencerId is not null)
+            {
+                foreach (var r in requests
+                    .Where(r => r.FencerId == currentFencerId || r.RequestedByFencerId == currentFencerId)
+                    .OrderByDescending(r => r.RequestedAtUtc)
+                    .Take(10))
+                {
+                    MyPaymentRequests.Add(new PaymentRequestRow(
+                        r, nameMap.GetValueOrDefault(r.FencerId, "Me")));
+                }
+            }
+
+            OnPropertyChanged(nameof(HasPendingPaymentRequests));
+            OnPropertyChanged(nameof(HasMyPaymentRequests));
+            OnPropertyChanged(nameof(CanSendPaymentRequest));
 
             var monthsSet = new HashSet<(int Y, int M)> { (today.Year, today.Month) };
             foreach (var s in trainings) monthsSet.Add((s.Date.Year, s.Date.Month));
@@ -485,18 +538,16 @@ public partial class FinanceViewModel : ObservableObject
                 var quote = contribution.Quote;
                 var creditIn = contribution.CreditIn;
 
-                var isMineThisMonth = !isInstructor
-                                      && f.Id == currentFencerId
-                                      && y == today.Year && m == today.Month;
+                var isMine = f.Id == currentFencerId;
 
-                if (count == 0 && cashPaid == 0m && creditIn == 0m && !isMineThisMonth)
+                if (count == 0 && cashPaid == 0m && creditIn == 0m && !isMine)
                     continue;
 
                 monthVm.AddDue(new FencerDueRow(f, quote, cashPaid, creditIn)
                 {
                     MarkPaidAction = MarkPaidAsync,
                     BuildOptionsAction = BuildOptionsForRowAsync,
-                    CanMarkPaid = isInstructor,
+                    CanMarkPaid = isInstructor || (f.Id == currentFencerId && !_auth.IsGuest),
                     ActiveRules = monthRules
                 });
             }
@@ -771,25 +822,47 @@ public partial class FinanceViewModel : ObservableObject
     {
         row.PaymentOptions.Clear();
 
-        if (!IsLoggedInInstructor) return Task.CompletedTask;
-
         var month = Months.FirstOrDefault(m => m.Dues.Contains(row));
         if (month is null) return Task.CompletedTask;
 
-        foreach (var opt in BuildPaymentOptions(row, month))
+        if (IsLoggedInInstructor)
         {
-            var amount = opt.Amount;
+            foreach (var opt in BuildPaymentOptions(row, month))
+            {
+                var amount = opt.Amount;
+                row.PaymentOptions.Add(new PaymentOptionVm(
+                    opt.MenuText,
+                    () => RecordPaymentAsync(row, month, amount),
+                    opt.Kind));
+            }
+
+            // "Pay Custom Amount" is always available for safety.
             row.PaymentOptions.Add(new PaymentOptionVm(
-                opt.MenuText,
-                () => RecordPaymentAsync(row, month, amount),
-                opt.Kind));
+                "Pay Custom Amount…",
+                () => PromptCustomAmountAsync(row, month),
+                "primary"));
         }
 
-        // "Pay Custom Amount" is always available for safety.
-        row.PaymentOptions.Add(new PaymentOptionVm(
-            "Pay Custom Amount…",
-            () => PromptCustomAmountAsync(row, month),
-            "primary"));
+        if (CanSendPaymentRequest && row.Fencer.Id == _auth.CurrentFencer?.Id)
+        {
+            foreach (var opt in BuildPaymentOptions(row, month))
+            {
+                var amount = opt.Amount;
+                var note = opt.MenuText;
+                var label = IsLoggedInInstructor
+                    ? $"Ask to accept: {opt.MenuText}"
+                    : opt.MenuText;
+                row.PaymentOptions.Add(new PaymentOptionVm(
+                    label,
+                    () => SubmitPresetPaymentRequestAsync(row, month, amount, note),
+                    opt.Kind));
+            }
+
+            row.PaymentOptions.Add(new PaymentOptionVm(
+                "Ask to accept custom amount…",
+                () => PromptCustomPaymentRequestAsync(row, month),
+                "primary"));
+        }
 
         return Task.CompletedTask;
     }
@@ -811,13 +884,6 @@ public partial class FinanceViewModel : ObservableObject
         await RecordPaymentAsync(row, month, amount);
     }
 
-    /// <summary>
-    /// Builds the enabled payment options for a fencer/month. Every amount is a
-    /// top-up over funds already applied (cash this month + carried credit), so
-    /// no tier can ever be charged twice. Only tiers with an active price rule
-    /// for the month appear; "Pay Custom Amount" is added by the caller and is
-    /// always available.
-    /// </summary>
     private List<PaymentOption> BuildPaymentOptions(FencerDueRow row, MonthFinanceVm month)
     {
         return PaymentOptionBuilder.Build(
@@ -834,7 +900,6 @@ public partial class FinanceViewModel : ObservableObject
 
     private async Task RecordPaymentAsync(FencerDueRow row, MonthFinanceVm month, decimal amount)
     {
-        // Zero is a no-op; negatives are permitted (refund / accounting correction).
         if (amount == 0m) return;
         try
         {
@@ -847,16 +912,163 @@ public partial class FinanceViewModel : ObservableObject
                 PaidOn = DateTime.Now
             });
 
-            // Reload so the credit-carry pre-pass re-derives outstanding /
-            // overpayment / carried credit across all months (ApplyTopUp can't
-            // move a row into the overpaid state — pay-ahead must go through
-            // the full recompute).
             await LoadAsync(showSpinner: true);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[FinanceViewModel.RecordPaymentAsync] {ex}");
             await _dialogs.ShowAsync("Payment failed", ex.Message);
+        }
+    }
+
+    private async Task PromptCustomPaymentRequestAsync(FencerDueRow row, MonthFinanceVm month)
+    {
+        var text = await _dialogs.PromptAsync("Ask to accept payment",
+            $"Enter the amount paid for {month.Title} (Ft):",
+            "Send", "Cancel");
+
+        if ((!decimal.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out var amount) &&
+             !decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out amount)) ||
+            amount <= 0m)
+            return;
+
+        await SubmitPresetPaymentRequestAsync(row, month, amount, "Custom amount");
+    }
+
+    private async Task SubmitPresetPaymentRequestAsync(FencerDueRow row, MonthFinanceVm month, decimal amount, string note)
+    {
+        var me = _auth.CurrentFencer;
+        if (me is null || _auth.IsGuest || amount <= 0m) return;
+
+        try
+        {
+            await _sheets.UpsertPaymentRequestAsync(new PaymentRequest
+            {
+                FencerId = row.Fencer.Id,
+                Year = month.Year,
+                Month = month.Month,
+                Amount = amount,
+                Note = note,
+                Status = PaymentRequestStatus.Pending,
+                RequestedByFencerId = me.Id,
+                RequestedAtUtc = DateTime.UtcNow
+            });
+            _cache?.InvalidatePaymentRequests();
+            await LoadAsync(showSpinner: true);
+            await _dialogs.ShowAsync("Request sent", $"Payment request for {amount:N0} Ft has been sent.");
+        }
+        catch (Exception ex)
+        {
+            await _dialogs.ShowAsync("Request failed", ex.Message);
+        }
+    }
+
+    [RelayCommand] private void BeginSendPaymentRequest() => IsSendingPaymentRequest = true;
+
+    [RelayCommand]
+    private void CancelSendPaymentRequest()
+    {
+        RequestAmountText = "";
+        RequestNote = "";
+        IsSendingPaymentRequest = false;
+    }
+
+    [RelayCommand]
+    private async Task SubmitPaymentRequestAsync()
+    {
+        var me = _auth.CurrentFencer;
+        if (me is null || _auth.IsGuest) return;
+
+        if ((!decimal.TryParse(RequestAmountText, NumberStyles.Number, CultureInfo.CurrentCulture, out var amount) &&
+             !decimal.TryParse(RequestAmountText, NumberStyles.Number, CultureInfo.InvariantCulture, out amount)) ||
+            amount <= 0m)
+        {
+            await _dialogs.ShowAsync("Invalid amount", "Please enter a positive amount in Ft.");
+            return;
+        }
+
+        var targetFencerId = IsLoggedInInstructor && SelectedRequestFencer is not null && !string.IsNullOrWhiteSpace(SelectedRequestFencer.Id)
+            ? SelectedRequestFencer.Id
+            : me.Id;
+
+        try
+        {
+            await _sheets.UpsertPaymentRequestAsync(new PaymentRequest
+            {
+                FencerId = targetFencerId,
+                Year = RequestYear,
+                Month = RequestMonth,
+                Amount = amount,
+                Note = (RequestNote ?? "").Trim(),
+                Status = PaymentRequestStatus.Pending,
+                RequestedByFencerId = me.Id,
+                RequestedAtUtc = DateTime.UtcNow
+            });
+            _cache?.InvalidatePaymentRequests();
+
+            RequestAmountText = "";
+            RequestNote = "";
+            IsSendingPaymentRequest = false;
+            await LoadAsync(showSpinner: true);
+            await _dialogs.ShowAsync("Request sent", $"Payment request for {amount:N0} Ft has been sent.");
+        }
+        catch (Exception ex)
+        {
+            await _dialogs.ShowAsync("Request failed", ex.Message);
+        }
+    }
+
+    [RelayCommand]
+    private Task AcceptPaymentRequestAsync(PaymentRequestRow row) => ReviewPaymentRequestAsync(row, accept: true);
+
+    [RelayCommand]
+    private Task RejectPaymentRequestAsync(PaymentRequestRow row) => ReviewPaymentRequestAsync(row, accept: false);
+
+    private async Task ReviewPaymentRequestAsync(PaymentRequestRow row, bool accept)
+    {
+        if (row is null || !IsLoggedInInstructor) return;
+        var meId = _auth.CurrentFencer?.Id ?? "";
+
+        try
+        {
+            _cache?.InvalidatePaymentRequests();
+            var fresh = (await _sheets.GetPaymentRequestsAsync())
+                .FirstOrDefault(r => r.Id == row.Request.Id);
+
+            if (fresh is null || fresh.Status != PaymentRequestStatus.Pending)
+            {
+                await _dialogs.ShowAsync("Already handled", "This payment request was already reviewed.");
+                await LoadAsync(showSpinner: true);
+                return;
+            }
+
+            if (accept)
+            {
+                await _sheets.MarkPaidAsync(new Payment
+                {
+                    FencerId = fresh.FencerId,
+                    Year = fresh.Year,
+                    Month = fresh.Month,
+                    Amount = fresh.Amount,
+                    PaidOn = DateTime.Now
+                });
+                fresh.Status = PaymentRequestStatus.Accepted;
+            }
+            else
+            {
+                fresh.Status = PaymentRequestStatus.Rejected;
+            }
+
+            fresh.ReviewedByInstructorId = meId;
+            fresh.ReviewedAtUtc = DateTime.UtcNow;
+            await _sheets.UpsertPaymentRequestAsync(fresh);
+            _cache?.InvalidatePaymentRequests();
+
+            await LoadAsync(showSpinner: true);
+        }
+        catch (Exception ex)
+        {
+            await _dialogs.ShowAsync("Review failed", ex.Message);
         }
     }
 }

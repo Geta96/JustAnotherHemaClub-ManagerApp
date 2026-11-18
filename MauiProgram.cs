@@ -93,6 +93,11 @@ public static class MauiProgram
         builder.Services.AddSingleton<TournamentSession>();
         builder.Services.AddSingleton<TournamentRefreshService>();
         builder.Services.AddSingleton<IDialogService, DialogService>();
+        builder.Services.AddSingleton<INotificationSettings, MauiNotificationSettings>();
+        builder.Services.AddSingleton<NotificationSyncService>();
+#if ANDROID
+        builder.Services.AddSingleton<INotificationService, Platforms.Android.AndroidNotificationService>();
+#endif
 #if DEBUG
         builder.Logging.AddDebug();
 #endif

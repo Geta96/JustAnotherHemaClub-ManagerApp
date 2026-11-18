@@ -1495,82 +1495,87 @@ app.MapPost("/tournaments/restart", async (
     return Results.Redirect(back);
 }).RequireAuthorization().DisableAntiforgery();
 
-// ================= PASSWORD RESET (instructor-mediated) =================
-// The fencer proves identity (username + email) AND supplies the new password up
-// front. We park the new password's PBKDF2 hash in Fencer.PendingPasswordHash
-// (live PasswordHash untouched) until an instructor approves. Stored on the
-// shared sheet, so a request filed in either the web or MAUI app is visible to
-// instructors in both, and approval takes effect everywhere.
-app.MapPost("/auth/forgot-password", async (
-    IGoogleSheetsService sheets,
-    ICacheControl cache,
-    [Microsoft.AspNetCore.Mvc.FromForm] string? username,
-    [Microsoft.AspNetCore.Mvc.FromForm] string? email,
-    [Microsoft.AspNetCore.Mvc.FromForm] string? newPassword,
-    [Microsoft.AspNetCore.Mvc.FromForm] string? confirmPassword) =>
+// ================= PAYMENT REQUESTS =================
+// Mirrors FinanceViewModel.SubmitPaymentRequestAsync / ReviewPaymentRequestAsync
+// (MAUI) so the Web Finance page's "Send payment request" and instructor
+// accept/reject forms actually do something.
+app.MapPost("/finance/request/create", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, AuthService auth,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? fencerId,
+    [Microsoft.AspNetCore.Mvc.FromForm] int year,
+    [Microsoft.AspNetCore.Mvc.FromForm] int month,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? amount,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? note) =>
 {
-    if (!RegistrationValidator.IsStrongPassword(newPassword))
-        return Results.Redirect($"/forgot-password?error={Uri.EscapeDataString("Password must be at least 8 characters and include a letter and a number.")}");
-    if (newPassword != confirmPassword)
-        return Results.Redirect($"/forgot-password?error={Uri.EscapeDataString("Passwords do not match.")}");
+    const string back = "/finance?tab=monthly";
+    var meId = http.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    if (string.IsNullOrWhiteSpace(meId)) return Results.Redirect("/login");
 
-    var user = (username ?? "").Trim();
-    var mail = (email ?? "").Trim();
+    if (!decimal.TryParse(amount, System.Globalization.NumberStyles.Number,
+            System.Globalization.CultureInfo.InvariantCulture, out var value) || value <= 0m)
+        return Results.Redirect(back);
 
-    var fencers = await sheets.GetFencersAsync();
-    var match = fencers.FirstOrDefault(f =>
-        !string.IsNullOrWhiteSpace(f.Username) &&
-        string.Equals(f.Username.Trim(), user, StringComparison.OrdinalIgnoreCase) &&
-        !string.IsNullOrWhiteSpace(f.Email) &&
-        string.Equals(f.Email.Trim(), mail, StringComparison.OrdinalIgnoreCase));
+    var targetFencerId = http.User.IsInRole("Instructor") && !string.IsNullOrWhiteSpace(fencerId)
+        ? fencerId
+        : meId;
 
-    if (match is not null)
+    await sheets.UpsertPaymentRequestAsync(new PaymentRequest
     {
-        // Park the requested password; live PasswordHash stays until approval.
-        match.PendingPasswordHash = PasswordHasher.Hash(AuthService.Hash(newPassword!));
-        match.PasswordResetRequestedAtUtc = DateTime.UtcNow;
-        await sheets.UpsertFencerAsync(match);
-        cache.InvalidateFencers();
+        FencerId = targetFencerId,
+        Year = year,
+        Month = month,
+        Amount = value,
+        Note = (note ?? "").Trim(),
+        Status = PaymentRequestStatus.Pending,
+        RequestedByFencerId = meId,
+        RequestedAtUtc = DateTime.UtcNow
+    });
+    cache.InvalidatePaymentRequests();
+
+    return Results.Redirect($"/finance?tab=monthly&sent=1&sentYear={year}&sentMonth={month}");
+}).RequireAuthorization().DisableAntiforgery();
+
+app.MapPost("/finance/request/review", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache, AuthService auth,
+    [Microsoft.AspNetCore.Mvc.FromForm] string requestId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string decision,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? returnUrl) =>
+{
+    var back = !string.IsNullOrWhiteSpace(returnUrl) && returnUrl.StartsWith('/')
+        ? returnUrl
+        : "/";
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
+    var meId = http.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+
+    cache.InvalidatePaymentRequests();
+    var fresh = (await sheets.GetPaymentRequestsAsync()).FirstOrDefault(r => r.Id == requestId);
+    if (fresh is null || fresh.Status != PaymentRequestStatus.Pending)
+        return Results.Redirect(back);
+
+    if (decision == "accept")
+    {
+        await sheets.MarkPaidAsync(new Payment
+        {
+            FencerId = fresh.FencerId,
+            Year = fresh.Year,
+            Month = fresh.Month,
+            Amount = fresh.Amount,
+            PaidOn = DateTime.Now
+        });
+        fresh.Status = PaymentRequestStatus.Accepted;
+    }
+    else
+    {
+        fresh.Status = PaymentRequestStatus.Rejected;
     }
 
-    // Uniform response whether or not the identity matched (no enumeration).
-    return Results.Redirect("/forgot-password?requested=1");
-})
-.RequireRateLimiting("auth");
+    fresh.ReviewedByInstructorId = meId;
+    fresh.ReviewedAtUtc = DateTime.UtcNow;
+    await sheets.UpsertPaymentRequestAsync(fresh);
+    cache.InvalidatePaymentRequests();
 
-// --- Instructor: approve / reject a pending password reset. Approve promotes the
-//     parked hash to the live password; reject just clears the pending fields. ---
-app.MapPost("/instructor/reset/review", async (
-    HttpContext http,
-    IGoogleSheetsService sheets,
-    ICacheControl cache,
-    [Microsoft.AspNetCore.Mvc.FromForm] string fencerId,
-    [Microsoft.AspNetCore.Mvc.FromForm] string decision) =>
-{
-    const string back = "/fencers";
-    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
-    if (string.IsNullOrWhiteSpace(fencerId)) return Results.Redirect(back);
-
-    // Re-read so a request filed from the MAUI app is seen.
-    cache.InvalidateFencers();
-    var fencers = await sheets.GetFencersAsync();
-    var target = fencers.FirstOrDefault(f => f.Id == fencerId);
-    if (target is null || !target.HasPendingPasswordReset)
-        return Results.Redirect($"{back}?reset=handled");
-
-    var approve = decision == "approve";
-    if (approve)
-        target.PasswordHash = target.PendingPasswordHash;   // promote the parked hash
-
-    // Both approve and reject clear the pending request.
-    target.PendingPasswordHash = null;
-    target.PasswordResetRequestedAtUtc = null;
-
-    await sheets.UpsertFencerAsync(target);
-    cache.InvalidateFencers();
-
-    return Results.Redirect($"{back}?reset={(approve ? "approved" : "rejected")}");
-}).RequireAuthorization();
+    return Results.Redirect(back);
+}).RequireAuthorization().DisableAntiforgery();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
@@ -1597,3 +1602,21 @@ static Match? FindTournamentMatch(Tournament t, string id)
     }
     return null;
 }
+
+// ================= TEST / DEV =================
+// Disconnect accounts from Azure AD and internal roles; make all users admins.
+app.MapGet("/test/dev", async (HttpContext http, AuthService auth, IGoogleSheetsService sheets) =>
+{
+    http.Response.Headers["Content-Type"] = "text/plain; charset=utf-8";
+
+    var fencers = await sheets.GetFencersAsync();
+    foreach (var fencer in fencers)
+    {
+        fencer.IsInstructor = true;
+        await sheets.UpsertFencerAsync(fencer);
+        await auth.LoginAsync(fencer.Username ?? "", "Test1234!");
+        Console.WriteLine($"Now logged in as: {fencer.Username}, Instructor={fencer.IsInstructor}");
+    }
+
+    return "All done!";
+});

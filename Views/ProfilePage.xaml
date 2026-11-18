@@ -117,6 +117,12 @@
                         </Label>
                     </Grid>
 
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                        <CheckBox Grid.Column="0" IsChecked="{Binding NotificationsEnabled}" />
+                        <Label   Grid.Column="1" VerticalOptions="Center"
+                                 Text="Enable notifications" />
+                    </Grid>
+
                     <Button Text="Save" Command="{Binding SaveCommand}" />
                     <Label Text="{Binding StatusMessage}" Style="{StaticResource Caption}" />
                 </VerticalStackLayout>

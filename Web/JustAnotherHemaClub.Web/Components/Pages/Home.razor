@@ -39,6 +39,40 @@
     </section>
 }
 
+@if (Auth.IsLoggedInInstructor && _pendingPaymentRequests.Count > 0)
+{
+    <section class="card">
+        <h2 class="card-title">Pending payment requests</h2>
+        <ul class="weekly-list">
+            @foreach (var r in _pendingPaymentRequests)
+            {
+                <li class="weekly-row training-row-outer">
+                    <div class="training-row">
+                        <div class="training-main">
+                            <span class="day wine">@(_fencerNames.GetValueOrDefault(r.FencerId, "Unknown"))</span>
+                            <span class="topic">@r.Year-@r.Month.ToString("00") · @r.Amount.ToString("N0") Ft@(string.IsNullOrWhiteSpace(r.Note) ? "" : $" — {r.Note}")</span>
+                        </div>
+                        <div class="field-row">
+                            <form method="post" action="/finance/request/review" class="inline-form">
+                                <input type="hidden" name="requestId" value="@r.Id" />
+                                <input type="hidden" name="decision" value="accept" />
+                                <input type="hidden" name="returnUrl" value="/" />
+                                <button class="accept-btn" type="submit">Accept</button>
+                            </form>
+                            <form method="post" action="/finance/request/review" class="inline-form">
+                                <input type="hidden" name="requestId" value="@r.Id" />
+                                <input type="hidden" name="decision" value="reject" />
+                                <input type="hidden" name="returnUrl" value="/" />
+                                <button class="danger-btn" type="submit">Reject</button>
+                            </form>
+                        </div>
+                    </div>
+                </li>
+            }
+        </ul>
+    </section>
+}
+
 @if (_hasNextLesson)
 {
     <section class="card next-lesson @(_isAttending ? "attending" : "")">
@@ -155,12 +189,17 @@
     // --- Pending password resets (instructors only) ---
     private readonly List<Fencer> _pendingResets = new();
 
+    // --- Pending payment requests (instructors only) ---
+    private readonly List<PaymentRequest> _pendingPaymentRequests = new();
+    private readonly Dictionary<string, string> _fencerNames = new();
+
     protected override async Task OnInitializedAsync()
     {
         await Session.EnsureRestoredAsync();
 
         await LoadWeeklyTrainingsAsync();
         await LoadPendingResetsAsync();
+        await LoadPendingPaymentRequestsAsync();
         await LoadNextLessonAsync();
         await LoadPaymentStatusAsync();
     }
@@ -476,15 +515,33 @@
     private async Task LoadPendingResetsAsync()
     {
         _pendingResets.Clear();
+        _fencerNames.Clear();
         if (!Auth.IsLoggedInInstructor) return;
         try
         {
             // Requests can be filed from either app after the cache was filled.
             Cache.InvalidateFencers();
             var fencers = await Sheets.GetFencersAsync();
+            foreach (var f in fencers)
+                _fencerNames[f.Id] = f.DisplayName;
             _pendingResets.AddRange(fencers
                 .Where(f => f.HasPendingPasswordReset)
                 .OrderBy(f => f.PasswordResetRequestedAtUtc ?? DateTime.MaxValue));
+        }
+        catch { /* best-effort */ }
+    }
+
+    private async Task LoadPendingPaymentRequestsAsync()
+    {
+        _pendingPaymentRequests.Clear();
+        if (!Auth.IsLoggedInInstructor) return;
+        try
+        {
+            Cache.InvalidatePaymentRequests();
+            var requests = await Sheets.GetPaymentRequestsAsync();
+            _pendingPaymentRequests.AddRange(requests
+                .Where(r => r.Status == PaymentRequestStatus.Pending)
+                .OrderByDescending(r => r.RequestedAtUtc));
         }
         catch { /* best-effort */ }
     }

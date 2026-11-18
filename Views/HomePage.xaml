@@ -2,6 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:JustAnotherHemaClub.ViewModels"
+             xmlns:corevm="clr-namespace:JustAnotherHemaClub.ViewModels;assembly=JustAnotherHemaClub.Core"
              x:Class="JustAnotherHemaClub.Views.HomePage"
              x:DataType="vm:HomeViewModel"
              Title="Home">
@@ -75,6 +76,46 @@
                                 TextColor="{StaticResource Cream}"
                                 HeightRequest="48"
                                 Command="{Binding OpenPendingResetsCommand}" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Pending payment requests (instructors only) -->
+                <Border Style="{StaticResource Card}" IsVisible="{Binding HasPendingPaymentRequests}">
+                    <VerticalStackLayout Spacing="8">
+                        <Label Text="Pending payment requests" Style="{StaticResource H2}" FontSize="16" />
+                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding PendingPaymentRequests}" Spacing="8">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="corevm:PaymentRequestRow">
+                                    <Border Style="{StaticResource Card}">
+                                        <VerticalStackLayout Spacing="6">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                <Label Grid.Column="0" Text="{Binding FencerName}"
+                                                       FontAttributes="Bold" TextColor="{StaticResource Wine}" />
+                                                <Label Grid.Column="1" Text="{Binding AmountText}"
+                                                       FontAttributes="Bold" TextColor="{StaticResource Slate}" />
+                                            </Grid>
+                                            <Label Text="{Binding PeriodText, StringFormat='For {0}'}"
+                                                   Style="{StaticResource Caption}" />
+                                            <Label Text="{Binding Request.Note}"
+                                                   IsVisible="{Binding HasNote}"
+                                                   Style="{StaticResource Caption}" />
+                                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                                <Button Grid.Column="0" Text="Accept"
+                                                        BackgroundColor="#1F8A2E"
+                                                        TextColor="{StaticResource Cream}"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:HomeViewModel}}, Path=AcceptPaymentRequestCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                                <Button Grid.Column="1" Text="Reject"
+                                                        BackgroundColor="{StaticResource DangerRed}"
+                                                        TextColor="{StaticResource Cream}"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:HomeViewModel}}, Path=RejectPaymentRequestCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                            </Grid>
+                                        </VerticalStackLayout>
+                                    </Border>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
                     </VerticalStackLayout>
                 </Border>
 

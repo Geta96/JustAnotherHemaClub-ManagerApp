@@ -68,7 +68,6 @@ public partial class FencerDueRow : ObservableObject
     [RelayCommand]
     private async Task ToggleExpand()
     {
-        // Members have no payment options to show, so keep their cards inert.
         if (!CanMarkPaid) return;
 
         IsExpanded = !IsExpanded;

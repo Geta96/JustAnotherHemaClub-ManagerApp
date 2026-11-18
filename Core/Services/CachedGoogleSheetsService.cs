@@ -22,6 +22,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
     private List<IndividualLesson>? _individualLessons;
     private List<RecurringTrainingRule>? _recurringTrainings;
     private List<PriceRule>? _prices;
+    private List<PaymentRequest>? _paymentRequests;
 
     public CachedGoogleSheetsService(GoogleSheetsService inner) => _inner = inner;
 
@@ -309,6 +310,32 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
         _prices?.RemoveAll(r => r.Id == ruleId);
     }
 
+    // ---------- Payment requests ----------
+    public async Task<List<PaymentRequest>> GetPaymentRequestsAsync()
+    {
+        if (ServiceSwap.IsActive) return await ServiceSwap.CurrentSheets!.GetPaymentRequestsAsync();
+        if (_paymentRequests is not null) return Clone(_paymentRequests);
+        await _gate.WaitAsync();
+        try
+        {
+            _paymentRequests ??= await _inner.GetPaymentRequestsAsync();
+            return Clone(_paymentRequests);
+        }
+        finally { _gate.Release(); }
+    }
+
+    public async Task UpsertPaymentRequestAsync(PaymentRequest request)
+    {
+        if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.UpsertPaymentRequestAsync(request); return; }
+        await _inner.UpsertPaymentRequestAsync(request);
+        if (_paymentRequests is not null)
+        {
+            var idx = _paymentRequests.FindIndex(r => r.Id == request.Id);
+            if (idx >= 0) _paymentRequests[idx] = request;
+            else _paymentRequests.Add(request);
+        }
+    }
+
     // ---------- ICacheControl ----------
     public async Task WarmAsync()
     {
@@ -454,6 +481,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
         _individualLessons = null;
         _recurringTrainings = null;
         _prices = null;
+        _paymentRequests = null;
     }
 
     public void InvalidateFencers() => _fencers = null;
@@ -464,6 +492,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
     public void InvalidateIndividualLessons() => _individualLessons = null;
     public void InvalidateRecurringTrainings() => _recurringTrainings = null;
     public void InvalidatePrices() => _prices = null;
+    public void InvalidatePaymentRequests() => _paymentRequests = null;
 
     public void InvalidatePayments(int? year = null, int? month = null)
     {

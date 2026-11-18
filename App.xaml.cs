@@ -70,4 +70,17 @@ public partial class App : Application
             }
         };
     }
+
+    protected override void OnResume()
+    {
+        base.OnResume();
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _services.GetRequiredService<NotificationSyncService>().CheckAndNotifyAsync();
+            }
+            catch { /* best-effort notification check */ }
+        });
+    }
 }

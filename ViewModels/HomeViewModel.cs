@@ -30,6 +30,8 @@ public partial class HomeViewModel : ObservableObject
     private readonly ICacheControl _cache;
     private readonly AuthService _auth;
     private readonly RecurringTrainingMaterializer _materializer;
+    private readonly NotificationSyncService? _notificationSync;
+    private readonly IDialogService? _dialogs;
 
     public ObservableCollection<HomeWeeklyRow> WeeklyTrainings { get; } = new();
 
@@ -66,6 +68,10 @@ public partial class HomeViewModel : ObservableObject
     // --- Pending password resets (instructors only) ---
     [ObservableProperty] private bool hasPendingResets;
     [ObservableProperty] private string pendingResetsText = "";
+
+    // --- Pending payment requests (instructors only) ---
+    public ObservableCollection<PaymentRequestRow> PendingPaymentRequests { get; } = new();
+    public bool HasPendingPaymentRequests => _auth.IsLoggedInInstructor && PendingPaymentRequests.Count > 0;
 
     // --- Next lesson card ---
     private TrainingSession? _nextLesson;
@@ -115,12 +121,14 @@ public partial class HomeViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowUndoAttend));
     }
 
-    public HomeViewModel(IGoogleSheetsService sheets, ICacheControl cache, AuthService auth, RecurringTrainingMaterializer materializer)
+    public HomeViewModel(IGoogleSheetsService sheets, ICacheControl cache, AuthService auth, RecurringTrainingMaterializer materializer, NotificationSyncService? notificationSync = null, IDialogService? dialogs = null)
     {
         _sheets = sheets;
         _cache = cache;
         _auth = auth;
         _materializer = materializer;
+        _notificationSync = notificationSync;
+        _dialogs = dialogs;
         WeeklyTrainings.CollectionChanged += (_, __) =>
         {
             HasWeeklyTrainings = WeeklyTrainings.Count > 0;
@@ -172,8 +180,9 @@ public partial class HomeViewModel : ObservableObject
         // Payment status card for the logged-in fencer.
         await LoadPaymentStatusAsync();
 
-        // Instructors: surface pending password-reset requests.
+        // Instructors: surface pending password-reset requests and payment requests.
         await LoadPendingResetsAsync();
+        await LoadPendingPaymentRequestsAsync();
 
         // Use the user's idle time on the home page to warm the datasets the
         // other tabs need (tournaments, individual lessons, recurring trainings,
@@ -185,6 +194,15 @@ public partial class HomeViewModel : ObservableObject
             try { await _cache.PrefetchAsync(); }
             catch { /* best-effort background warm-up */ }
         });
+
+        if (_notificationSync is not null)
+        {
+            _ = Task.Run(async () =>
+            {
+                try { await _notificationSync.CheckAndNotifyAsync(); }
+                catch { /* best-effort notification check */ }
+            });
+        }
     }
 
     /// <summary>
@@ -532,7 +550,6 @@ public partial class HomeViewModel : ObservableObject
     private static Task OpenDiscord() =>
         Launcher.Default.OpenAsync(DiscordUrl);
 
-
     private async Task LoadPendingResetsAsync()
     {
         try
@@ -543,7 +560,6 @@ public partial class HomeViewModel : ObservableObject
                 return;
             }
 
-            // Requests can be filed (from either app) after the cache was warmed.
             _cache.InvalidateFencers();
             var fencers = await _sheets.GetFencersAsync();
             var pending = fencers
@@ -572,4 +588,94 @@ public partial class HomeViewModel : ObservableObject
 
     [RelayCommand]
     private static Task OpenPendingResets() => Shell.Current.GoToAsync("//fencers");
+
+    private async Task LoadPendingPaymentRequestsAsync()
+    {
+        PendingPaymentRequests.Clear();
+        if (!_auth.IsLoggedInInstructor)
+        {
+            OnPropertyChanged(nameof(HasPendingPaymentRequests));
+            return;
+        }
+
+        try
+        {
+            _cache.InvalidatePaymentRequests();
+            var fencersTask = _sheets.GetFencersAsync();
+            var requestsTask = _sheets.GetPaymentRequestsAsync();
+            await Task.WhenAll(fencersTask, requestsTask);
+
+            var nameMap = fencersTask.Result.ToDictionary(f => f.Id, f => f.DisplayName);
+            foreach (var r in requestsTask.Result
+                .Where(r => r.Status == PaymentRequestStatus.Pending)
+                .OrderByDescending(r => r.RequestedAtUtc))
+            {
+                PendingPaymentRequests.Add(new PaymentRequestRow(
+                    r, nameMap.GetValueOrDefault(r.FencerId, "Unknown")));
+            }
+        }
+        catch
+        {
+            PendingPaymentRequests.Clear();
+        }
+
+        OnPropertyChanged(nameof(HasPendingPaymentRequests));
+    }
+
+    [RelayCommand]
+    private Task AcceptPaymentRequestAsync(PaymentRequestRow row) => ReviewPaymentRequestAsync(row, accept: true);
+
+    [RelayCommand]
+    private Task RejectPaymentRequestAsync(PaymentRequestRow row) => ReviewPaymentRequestAsync(row, accept: false);
+
+    private async Task ReviewPaymentRequestAsync(PaymentRequestRow row, bool accept)
+    {
+        if (row is null || !_auth.IsLoggedInInstructor) return;
+        var meId = _auth.CurrentFencer?.Id ?? "";
+
+        try
+        {
+            _cache.InvalidatePaymentRequests();
+            var fresh = (await _sheets.GetPaymentRequestsAsync())
+                .FirstOrDefault(r => r.Id == row.Request.Id);
+
+            if (fresh is null || fresh.Status != PaymentRequestStatus.Pending)
+            {
+                if (_dialogs is not null)
+                    await _dialogs.ShowAsync("Already handled", "This payment request was already reviewed.");
+                await LoadPendingPaymentRequestsAsync();
+                return;
+            }
+
+            if (accept)
+            {
+                await _sheets.MarkPaidAsync(new Payment
+                {
+                    FencerId = fresh.FencerId,
+                    Year = fresh.Year,
+                    Month = fresh.Month,
+                    Amount = fresh.Amount,
+                    PaidOn = DateTime.Now
+                });
+                fresh.Status = PaymentRequestStatus.Accepted;
+            }
+            else
+            {
+                fresh.Status = PaymentRequestStatus.Rejected;
+            }
+
+            fresh.ReviewedByInstructorId = meId;
+            fresh.ReviewedAtUtc = DateTime.UtcNow;
+            await _sheets.UpsertPaymentRequestAsync(fresh);
+            _cache.InvalidatePaymentRequests();
+
+            await LoadPendingPaymentRequestsAsync();
+            await LoadPaymentStatusAsync();
+        }
+        catch (Exception ex)
+        {
+            if (_dialogs is not null)
+                await _dialogs.ShowAsync("Review failed", ex.Message);
+        }
+    }
 }
