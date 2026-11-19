@@ -15,6 +15,39 @@ public class HomeWeeklyRow
     public bool HasTopic => !string.IsNullOrWhiteSpace(Topic);
 }
 
+public class HomePaymentMonthRow : ObservableObject
+{
+    public int Year { get; }
+    public int Month { get; }
+    public string MonthTitle => new DateTime(Year, Month, 1).ToString("yyyy MMMM", CultureInfo.InvariantCulture);
+    public FencerDueRow Due { get; }
+    public ObservableCollection<PaymentOptionVm> PaymentOptions { get; } = new();
+
+    private bool _isOptionsExpanded;
+    public bool IsOptionsExpanded
+    {
+        get => _isOptionsExpanded;
+        set
+        {
+            if (SetProperty(ref _isOptionsExpanded, value))
+                OnPropertyChanged(nameof(OptionsExpandGlyph));
+        }
+    }
+
+    public string OptionsExpandGlyph => IsOptionsExpanded ? "\u25BE" : "\u25B8";
+
+    private IRelayCommand? _toggleOptionsCommand;
+    public IRelayCommand ToggleOptionsCommand =>
+        _toggleOptionsCommand ??= new RelayCommand(() => IsOptionsExpanded = !IsOptionsExpanded);
+
+    public HomePaymentMonthRow(int year, int month, FencerDueRow due)
+    {
+        Year = year;
+        Month = month;
+        Due = due;
+    }
+}
+
 public partial class HomeViewModel : ObservableObject
 {
     public const string InstagramUrl =
@@ -67,6 +100,25 @@ public partial class HomeViewModel : ObservableObject
         get => _paymentStatusColor;
         set => SetProperty(ref _paymentStatusColor, value);
     }
+
+    public ObservableCollection<HomePaymentMonthRow> PaymentMonths { get; } = new();
+
+    private bool _isPaymentStatusExpanded;
+    public bool IsPaymentStatusExpanded
+    {
+        get => _isPaymentStatusExpanded;
+        set
+        {
+            if (SetProperty(ref _isPaymentStatusExpanded, value))
+                OnPropertyChanged(nameof(PaymentStatusExpandGlyph));
+        }
+    }
+
+    public string PaymentStatusExpandGlyph => IsPaymentStatusExpanded ? "\u25BE" : "\u25B8";
+
+    private IRelayCommand? _togglePaymentStatusCommand;
+    public IRelayCommand TogglePaymentStatusCommand =>
+        _togglePaymentStatusCommand ??= new RelayCommand(() => IsPaymentStatusExpanded = !IsPaymentStatusExpanded);
 
     // --- Pending password resets (instructors only) ---
     [ObservableProperty] private bool hasPendingResets;
@@ -345,6 +397,7 @@ public partial class HomeViewModel : ObservableObject
     {
         try
         {
+            PaymentMonths.Clear();
             var me = _auth.CurrentFencer;
             if (me is null || _auth.IsGuest)
             {
@@ -360,6 +413,7 @@ public partial class HomeViewModel : ObservableObject
 
             var trainings = trainingsTask.Result;
             var allRules = rulesTask.Result;
+            var currentMonthRules = FencerDuesLedger.RulesForMonth(allRules, today.Year, today.Month);
 
             // Months (up to the current one) in which this fencer attended
             // anything, in chronological order.
@@ -371,24 +425,12 @@ public partial class HomeViewModel : ObservableObject
                 .OrderBy(t => t.Year).ThenBy(t => t.Month)
                 .ToList();
 
-            if (attendedMonths.Count == 0)
-            {
-                // Nothing was ever owed ? treat as fully paid.
-                PaymentStatusText = "All payed up";
-                PaymentStatusColor = PaymentGreen;
-                HasPaymentStatus = true;
-                return;
-            }
+            // Always include the current month in the span so the user can see/request
+            // payments for this month even if they haven't attended yet.
+            var firstYm = attendedMonths.Count > 0
+                ? attendedMonths[0]
+                : (Year: today.Year, Month: today.Month);
 
-            // Walk a CONTIGUOUS range of months from the fencer's first attendance
-            // through the current month — not just the months they attended. A
-            // payment can land in a month with no attendance (a pre-payment, or a
-            // negative refund/correction); those payment-only months MUST stay in
-            // the credit-carry chain or their funds silently vanish and Home would
-            // disagree with Finance (which seeds payment-only months for exactly
-            // this reason). Querying the whole span also captures corrections made
-            // in gap months between attended ones.
-            var firstYm = attendedMonths[0];
             var allMonths = new List<(int Year, int Month)>();
             for (var d = new DateTime(firstYm.Year, firstYm.Month, 1);
                  d <= new DateTime(today.Year, today.Month, 1);
@@ -427,12 +469,35 @@ public partial class HomeViewModel : ObservableObject
             var results = FencerDuesLedger.Compute(me.IsStudent, monthInputs, allRules);
             var summary = FencerDuesLedger.Summarize(results, today.Year, today.Month);
 
+            // Build per-month rows (newest first): only show the current month + months behind on payment.
+            for (int i = results.Count - 1; i >= 0; i--)
+            {
+                var r = results[i];
+                var contribution = r.Contribution;
+                var quote = contribution.Quote;
+                var isCurrent = r.Year == today.Year && r.Month == today.Month;
+
+                if (!isCurrent && quote.Outstanding <= 0m)
+                    continue;
+
+                var monthRules = FencerDuesLedger.RulesForMonth(allRules, r.Year, r.Month);
+                var dueRow = new FencerDueRow(me, quote, contribution.CashPaid, contribution.CreditIn)
+                {
+                    ActiveRules = monthRules,
+                    CanMarkPaid = true
+                };
+
+                var monthRow = new HomePaymentMonthRow(r.Year, r.Month, dueRow);
+                PopulateMonthPaymentOptions(monthRow);
+                PaymentMonths.Add(monthRow);
+            }
+
             switch (summary.Status)
             {
                 case FencerDuesLedger.DuesStatus.Overpaid:
                     PaymentStatusText = DuesCalculator.DescribeOverpayment(
                         summary.ThisMonthEffectivePaid, summary.FinalCredit, me.IsStudent,
-                        FencerDuesLedger.RulesForMonth(allRules, today.Year, today.Month));
+                        currentMonthRules);
                     PaymentStatusColor = PaymentGreen;
                     break;
 
@@ -458,6 +523,83 @@ public partial class HomeViewModel : ObservableObject
         catch
         {
             HasPaymentStatus = false;
+        }
+    }
+
+    private void PopulateMonthPaymentOptions(HomePaymentMonthRow monthRow)
+    {
+        monthRow.PaymentOptions.Clear();
+        var d = monthRow.Due;
+        var year = monthRow.Year;
+        var month = monthRow.Month;
+
+        foreach (var opt in PaymentOptionBuilder.Build(
+            d.Fencer.IsStudent,
+            d.AlreadyPaid,
+            d.CreditIn,
+            d.SessionsAttended,
+            d.TotalCost,
+            d.AmountDue,
+            d.ActiveRules))
+        {
+            var amount = opt.Amount;
+            var note = opt.MenuText;
+            monthRow.PaymentOptions.Add(new PaymentOptionVm(
+                opt.MenuText,
+                () => SubmitHomePaymentRequestAsync(monthRow, year, month, amount, note),
+                opt.Kind));
+        }
+
+        monthRow.PaymentOptions.Add(new PaymentOptionVm(
+            "Ask to accept custom amount…",
+            () => PromptHomeCustomPaymentRequestAsync(monthRow, year, month),
+            "primary"));
+    }
+
+    private async Task PromptHomeCustomPaymentRequestAsync(HomePaymentMonthRow monthRow, int year, int month)
+    {
+        if (_dialogs is null) return;
+        var monthTitle = new DateTime(year, month, 1).ToString("yyyy MMMM", CultureInfo.InvariantCulture);
+        var text = await _dialogs.PromptAsync("Ask to accept payment",
+            $"Enter the amount paid for {monthTitle} (Ft):",
+            "Send", "Cancel");
+
+        if ((!decimal.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out var amount) &&
+             !decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out amount)) ||
+            amount <= 0m)
+            return;
+
+        await SubmitHomePaymentRequestAsync(monthRow, year, month, amount, "Custom amount");
+    }
+
+    private async Task SubmitHomePaymentRequestAsync(HomePaymentMonthRow monthRow, int year, int month, decimal amount, string note)
+    {
+        var me = _auth.CurrentFencer;
+        if (me is null || _auth.IsGuest || amount <= 0m) return;
+
+        try
+        {
+            await _sheets.UpsertPaymentRequestAsync(new PaymentRequest
+            {
+                FencerId = me.Id,
+                Year = year,
+                Month = month,
+                Amount = amount,
+                Note = note,
+                Status = PaymentRequestStatus.Pending,
+                RequestedByFencerId = me.Id,
+                RequestedAtUtc = DateTime.UtcNow
+            });
+            _cache.InvalidatePaymentRequests();
+            monthRow.IsOptionsExpanded = false;
+            await LoadPendingPaymentRequestsAsync();
+            if (_dialogs is not null)
+                await _dialogs.ShowAsync("Request sent", $"Payment request for {amount:N0} Ft has been sent.");
+        }
+        catch (Exception ex)
+        {
+            if (_dialogs is not null)
+                await _dialogs.ShowAsync("Request failed", ex.Message);
         }
     }
 

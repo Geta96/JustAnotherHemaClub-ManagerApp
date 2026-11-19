@@ -1505,9 +1505,12 @@ app.MapPost("/finance/request/create", async (
     [Microsoft.AspNetCore.Mvc.FromForm] int year,
     [Microsoft.AspNetCore.Mvc.FromForm] int month,
     [Microsoft.AspNetCore.Mvc.FromForm] string? amount,
-    [Microsoft.AspNetCore.Mvc.FromForm] string? note) =>
+    [Microsoft.AspNetCore.Mvc.FromForm] string? note,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? returnUrl) =>
 {
-    const string back = "/finance?tab=monthly";
+    var back = !string.IsNullOrWhiteSpace(returnUrl) && returnUrl.StartsWith('/')
+        ? returnUrl
+        : "/finance?tab=monthly";
     var meId = http.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
     if (string.IsNullOrWhiteSpace(meId)) return Results.Redirect("/login");
 
@@ -1532,7 +1535,8 @@ app.MapPost("/finance/request/create", async (
     });
     cache.InvalidatePaymentRequests();
 
-    return Results.Redirect($"/finance?tab=monthly&sent=1&sentYear={year}&sentMonth={month}");
+    var sep = back.Contains('?') ? "&" : "?";
+    return Results.Redirect($"{back}{sep}sent=1&sentYear={year}&sentMonth={month}");
 }).RequireAuthorization().DisableAntiforgery();
 
 app.MapPost("/finance/request/review", async (

@@ -43,8 +43,9 @@ public static class PaymentOptionBuilder
         int sessionsAttended,
         decimal totalCost,
         decimal amountDue,
-        IReadOnlyList<PriceRule> activeRules)
+        IReadOnlyList<PriceRule>? activeRules)
     {
+        var effectiveRules = DuesCalculator.EffectiveRules(activeRules);
         var applied = alreadyPaid + creditIn;
         var options = new List<PaymentOptionSpec>();
 
@@ -64,7 +65,7 @@ public static class PaymentOptionBuilder
         }
 
         // One enabled option per active per-month tier (newest rule wins).
-        var tiers = activeRules
+        var tiers = effectiveRules
             .Where(r => !r.IsCustomPeriod && r.SessionCount != 1) // single tickets = "attended"
             .GroupBy(r => (r.SessionCount, r.MonthCount))
             .Select(g => g.OrderByDescending(r => r.StartDate.Date)
@@ -88,7 +89,7 @@ public static class PaymentOptionBuilder
         }
 
         // Pay Custom period — one-off pass covering the month.
-        var period = activeRules.FirstOrDefault(r => r.IsCustomPeriod);
+        var period = effectiveRules.FirstOrDefault(r => r.IsCustomPeriod);
         if (period is not null)
         {
             var price = DuesCalculator.PriceFor(period, isStudent);

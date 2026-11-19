@@ -256,14 +256,143 @@
                     </VerticalStackLayout>
                 </Border>
 
-                <!-- Payment status (logged-in fencer only) -->
+                <!-- Payment status (logged-in fencer only, expandable and collapsed by default) -->
                 <Border Style="{StaticResource Card}" IsVisible="{Binding HasPaymentStatus}">
-                    <VerticalStackLayout Spacing="6">
-                        <Label Text="Payment status" Style="{StaticResource H2}" FontSize="16"/>
-                        <Label Text="{Binding PaymentStatusText}"
-                               TextColor="{Binding PaymentStatusColor}"
-                               FontSize="18" FontAttributes="Bold"
-                               LineBreakMode="WordWrap" />
+                    <VerticalStackLayout Spacing="10">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding TogglePaymentStatusCommand}" />
+                            </Grid.GestureRecognizers>
+                            <Label Grid.Column="0"
+                                   Text="{Binding PaymentStatusExpandGlyph}"
+                                   FontSize="20" FontAttributes="Bold"
+                                   TextColor="{StaticResource Wine}"
+                                   VerticalOptions="Center" />
+                            <VerticalStackLayout Grid.Column="1" Spacing="4">
+                                <Label Text="Payment status" Style="{StaticResource H2}" FontSize="16" />
+                                <Label Text="{Binding PaymentStatusText}"
+                                       TextColor="{Binding PaymentStatusColor}"
+                                       FontSize="18" FontAttributes="Bold"
+                                       LineBreakMode="WordWrap" />
+                            </VerticalStackLayout>
+                        </Grid>
+
+                        <VerticalStackLayout IsVisible="{Binding IsPaymentStatusExpanded}" Spacing="8">
+                            <BoxView HeightRequest="1" Color="{StaticResource Muted}" Opacity="0.3" Margin="0,2" />
+
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding PaymentMonths}" Spacing="8">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:HomePaymentMonthRow">
+                                        <Border Style="{StaticResource Card}">
+                                            <VerticalStackLayout Spacing="8">
+                                                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12">
+                                                    <Grid.GestureRecognizers>
+                                                        <TapGestureRecognizer Command="{Binding ToggleOptionsCommand}" />
+                                                    </Grid.GestureRecognizers>
+                                                    <Label Grid.Row="0" Grid.Column="0"
+                                                           Text="{Binding MonthTitle}"
+                                                           FontAttributes="Bold"
+                                                           TextColor="{StaticResource Wine}" />
+                                                    <Label Grid.Row="1" Grid.Column="0"
+                                                           Text="{Binding Due.Summary}"
+                                                           Style="{StaticResource Caption}" />
+
+                                                    <HorizontalStackLayout Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                                                                           Spacing="6"
+                                                                           VerticalOptions="Center"
+                                                                           IsVisible="{Binding Due.IsNotPaid}">
+                                                        <Label Text="{Binding Due.AmountDue, StringFormat='Owes {0:N0} Ft'}"
+                                                               TextColor="{StaticResource DangerRed}"
+                                                               FontAttributes="Bold"
+                                                               FontSize="16"
+                                                               HorizontalTextAlignment="End"
+                                                               VerticalOptions="Center" />
+                                                    </HorizontalStackLayout>
+
+                                                    <Label Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                                                           Text="✓ Paid"
+                                                           IsVisible="{Binding Due.IsExactlyPaid}"
+                                                           TextColor="#1F8A2E" FontAttributes="Bold" FontSize="16"
+                                                           VerticalOptions="Center" />
+
+                                                    <VerticalStackLayout Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                                                                         IsVisible="{Binding Due.IsOverpaid}"
+                                                                         Spacing="0"
+                                                                         MaximumWidthRequest="150"
+                                                                         HorizontalOptions="End"
+                                                                         VerticalOptions="Center">
+                                                        <Label Text="{Binding Due.OverpaymentPrimary, StringFormat='✓ {0}'}"
+                                                               TextColor="#1F8A2E" FontAttributes="Bold" FontSize="14"
+                                                               LineBreakMode="WordWrap"
+                                                               HorizontalTextAlignment="End" />
+                                                        <Label Text="{Binding Due.OverpaymentOverpay}"
+                                                               IsVisible="{Binding Due.HasOverpaymentOverpay}"
+                                                               TextColor="#1F8A2E" FontAttributes="Bold" FontSize="14"
+                                                               LineBreakMode="WordWrap"
+                                                               HorizontalTextAlignment="End" />
+                                                    </VerticalStackLayout>
+                                                </Grid>
+
+                                                <BoxView HeightRequest="1" Color="{StaticResource Muted}" Opacity="0.2" />
+
+                                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                                    <Grid.GestureRecognizers>
+                                                        <TapGestureRecognizer Command="{Binding ToggleOptionsCommand}" />
+                                                    </Grid.GestureRecognizers>
+                                                    <Label Grid.Column="0"
+                                                           Text="{Binding OptionsExpandGlyph}"
+                                                           FontSize="16" FontAttributes="Bold"
+                                                           TextColor="{StaticResource Wine}"
+                                                           VerticalOptions="Center" />
+                                                    <Label Grid.Column="1"
+                                                           Text="Ask to accept payment"
+                                                           FontAttributes="Bold"
+                                                           TextColor="{StaticResource Wine}"
+                                                           VerticalOptions="Center" />
+                                                </Grid>
+
+                                                <VerticalStackLayout IsVisible="{Binding IsOptionsExpanded}" Spacing="8">
+                                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding PaymentOptions}" Spacing="8">
+                                                        <BindableLayout.ItemTemplate>
+                                                            <DataTemplate x:DataType="corevm:PaymentOptionVm">
+                                                                <Button Text="{Binding Text}"
+                                                                        HeightRequest="48"
+                                                                        FontAttributes="Bold"
+                                                                        CornerRadius="10"
+                                                                        BackgroundColor="{StaticResource CreamSoft}"
+                                                                        TextColor="{StaticResource Wine}"
+                                                                        BorderColor="{StaticResource Wine}"
+                                                                        BorderWidth="1.5"
+                                                                        Command="{Binding ChooseCommand}">
+                                                                    <Button.Triggers>
+                                                                        <DataTrigger TargetType="Button"
+                                                                                     Binding="{Binding IsPrimary}"
+                                                                                     Value="True">
+                                                                            <Setter Property="BackgroundColor" Value="{StaticResource Wine}" />
+                                                                            <Setter Property="TextColor" Value="{StaticResource Cream}" />
+                                                                            <Setter Property="BorderWidth" Value="0" />
+                                                                            <Setter Property="FontSize" Value="16" />
+                                                                        </DataTrigger>
+                                                                        <DataTrigger TargetType="Button"
+                                                                                     Binding="{Binding IsRemaining}"
+                                                                                     Value="True">
+                                                                            <Setter Property="BackgroundColor" Value="#476FB5" />
+                                                                            <Setter Property="TextColor" Value="{StaticResource Cream}" />
+                                                                            <Setter Property="BorderWidth" Value="0" />
+                                                                            <Setter Property="FontSize" Value="16" />
+                                                                        </DataTrigger>
+                                                                    </Button.Triggers>
+                                                                </Button>
+                                                            </DataTemplate>
+                                                        </BindableLayout.ItemTemplate>
+                                                    </VerticalStackLayout>
+                                                </VerticalStackLayout>
+                                            </VerticalStackLayout>
+                                        </Border>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
                     </VerticalStackLayout>
                 </Border>
 

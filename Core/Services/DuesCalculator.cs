@@ -68,6 +68,9 @@ public static class DuesCalculator
                 StudentPrice = SuggestStudentPrice(FullPassPrice) },
     };
 
+    public static IReadOnlyList<PriceRule> EffectiveRules(IReadOnlyList<PriceRule>? rules) =>
+        rules is null || rules.Count == 0 ? DefaultRules : rules;
+
     public static DuesQuote Calculate(
         int sessionsAttended,
         bool isStudent,
