@@ -636,6 +636,34 @@ app.MapPost("/fencers/promote", async (
     return Results.Redirect(back);
 }).RequireAuthorization().DisableAntiforgery();
 
+// --- Instructor: approve or reject a fencer's pending password reset ---
+app.MapPost("/instructor/reset/review", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? fencerId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? decision) =>
+{
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect("/fencers");
+    if (string.IsNullOrWhiteSpace(fencerId)) return Results.Redirect("/fencers");
+
+    cache.InvalidateFencers();
+    var fresh = (await sheets.GetFencersAsync()).FirstOrDefault(f => f.Id == fencerId);
+    if (fresh is null || !fresh.HasPendingPasswordReset)
+        return Results.Redirect("/fencers?reset=handled");
+
+    var approve = string.Equals(decision, "approve", StringComparison.OrdinalIgnoreCase);
+    if (approve)
+        fresh.PasswordHash = fresh.PendingPasswordHash;
+
+    fresh.PendingPasswordHash = null;
+    fresh.PasswordResetRequestedAtUtc = null;
+    fresh.LastPasswordResetStatus = approve ? "Approved" : "Rejected";
+    fresh.LastPasswordResetReviewedAtUtc = DateTime.UtcNow;
+    await sheets.UpsertFencerAsync(fresh);
+    cache.InvalidateFencers();
+
+    return Results.Redirect($"/fencers?reset={(approve ? "approved" : "rejected")}");
+}).RequireAuthorization().DisableAntiforgery();
+
 // ================= FINANCE =================
 // Instructor-only money actions. Members never reach these (buttons are hidden),
 // but the endpoints re-check the role server-side.

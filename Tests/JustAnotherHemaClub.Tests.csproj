@@ -31,6 +31,8 @@
     <Compile Include="..\ViewModels\TournamentEditorVm.cs" Link="Shared\ViewModels\TournamentEditorVm.cs" />
     <Compile Include="..\ViewModels\TournamentFencerRow.cs" Link="Shared\ViewModels\TournamentFencerRow.cs" />
     <Compile Include="..\Services\RecurringTrainingMaterializer.cs" Link="Shared\Services\RecurringTrainingMaterializer.cs" />
+    <Compile Include="..\Services\INotificationService.cs" Link="Shared\Services\INotificationService.cs" />
+    <Compile Include="..\Services\NotificationSyncService.cs" Link="Shared\Services\NotificationSyncService.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -38,6 +40,7 @@
     <Using Include="FluentAssertions" />
     <Using Include="Microsoft.Maui.ApplicationModel" />
     <Using Include="Microsoft.Maui.Controls" />
+    <Using Include="Microsoft.Maui.Storage" />
   </ItemGroup>
 
 </Project>

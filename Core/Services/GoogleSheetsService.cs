@@ -94,12 +94,13 @@ public partial class GoogleSheetsService : IGoogleSheetsService
     // --- Fencers ---
     // Columns: A=Id, B=Username, C=PasswordHash, D=Name, E=Email,
     //          F=Active, G=IsStudent, H=GdprAccepted, I=LiabilityAccepted, J=IsInstructor,
-    //          K=PendingPasswordHash, L=PasswordResetRequestedAtUtc (ISO-8601 UTC)
+    //          K=PendingPasswordHash, L=PasswordResetRequestedAtUtc (ISO-8601 UTC),
+    //          M=LastPasswordResetStatus, N=LastPasswordResetReviewedAtUtc (ISO-8601 UTC)
     public async Task<List<Fencer>> GetFencersAsync()
     {
         // UNFORMATTED so the ISO/serial reset timestamp can't be re-read as
         // locale-formatted text and flipped (see GetTrainingsAsync).
-        var rows = await ReadUnformattedAsync("Fencers!A2:L");
+        var rows = await ReadUnformattedAsync("Fencers!A2:N");
         return rows.Select(r => new Fencer
         {
             Id = S(r, 0),
@@ -118,6 +119,11 @@ public partial class GoogleSheetsService : IGoogleSheetsService
             PasswordResetRequestedAtUtc =
                 SheetRowMapper.TryParseDate(S(r, 11), out var reqAt)
                     ? DateTime.SpecifyKind(reqAt, DateTimeKind.Utc)
+                    : null,
+            LastPasswordResetStatus = string.IsNullOrWhiteSpace(S(r, 12)) ? null : S(r, 12),
+            LastPasswordResetReviewedAtUtc =
+                SheetRowMapper.TryParseDate(S(r, 13), out var revAt)
+                    ? DateTime.SpecifyKind(revAt, DateTimeKind.Utc)
                     : null
         }).ToList();
     }
@@ -129,12 +135,14 @@ public partial class GoogleSheetsService : IGoogleSheetsService
             f.Name, f.Email ?? "",
             B(f.Active), B(f.IsStudent), B(f.GdprAccepted), B(f.LiabilityAccepted), B(f.IsInstructor),
             f.PendingPasswordHash ?? "",
-            f.PasswordResetRequestedAtUtc?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) ?? ""
+            f.PasswordResetRequestedAtUtc?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) ?? "",
+            f.LastPasswordResetStatus ?? "",
+            f.LastPasswordResetReviewedAtUtc?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) ?? ""
         });
 
     public async Task UpsertFencerAsync(Fencer f)
     {
-        var rows = await ReadAsync("Fencers!A2:L");
+        var rows = await ReadAsync("Fencers!A2:N");
         int rowIndex = -1;
         for (int i = 0; i < rows.Count; i++)
             if (S(rows[i], 0) == f.Id) { rowIndex = i; break; }
@@ -145,11 +153,13 @@ public partial class GoogleSheetsService : IGoogleSheetsService
             f.Name, f.Email ?? "",
             B(f.Active), B(f.IsStudent), B(f.GdprAccepted), B(f.LiabilityAccepted), B(f.IsInstructor),
             f.PendingPasswordHash ?? "",
-            f.PasswordResetRequestedAtUtc?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) ?? ""
+            f.PasswordResetRequestedAtUtc?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) ?? "",
+            f.LastPasswordResetStatus ?? "",
+            f.LastPasswordResetReviewedAtUtc?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) ?? ""
         };
 
         if (rowIndex >= 0)
-            await UpdateAsync($"Fencers!A{rowIndex + 2}:L{rowIndex + 2}", values);
+            await UpdateAsync($"Fencers!A{rowIndex + 2}:N{rowIndex + 2}", values);
         else
             await AppendAsync("Fencers!A1", values);
     }

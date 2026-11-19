@@ -89,10 +89,10 @@ public sealed class NotificationSyncService
         }
         SaveSet($"seen_news_{me.Id}", seenNews);
 
-        // 3. Fencer notifications: payment request accepted OR money accounted to profile
+        // 3. Fencer notifications: payment request accepted/rejected OR money accounted to profile
         var seenAccepted = LoadSet($"seen_acc_reqs_{me.Id}");
         var acceptedForMe = requests
-            .Where(r => r.FencerId == me.Id && r.Status == PaymentRequestStatus.Accepted)
+            .Where(r => (r.FencerId == me.Id || r.RequestedByFencerId == me.Id) && r.Status == PaymentRequestStatus.Accepted)
             .ToList();
 
         foreach (var r in acceptedForMe)
@@ -104,6 +104,41 @@ public sealed class NotificationSyncService
                 $"Your payment of {r.Amount:N0} Ft for {r.Year}-{r.Month:00} was accepted.");
         }
         SaveSet($"seen_acc_reqs_{me.Id}", seenAccepted);
+
+        var seenRejected = LoadSet($"seen_rej_reqs_{me.Id}");
+        var rejectedForMe = requests
+            .Where(r => (r.FencerId == me.Id || r.RequestedByFencerId == me.Id) && r.Status == PaymentRequestStatus.Rejected)
+            .ToList();
+
+        foreach (var r in rejectedForMe)
+        {
+            if (!seenRejected.Add(r.Id)) continue;
+            _notifications.Show(
+                r.Id.GetHashCode(),
+                "Payment request rejected",
+                $"Your payment request of {r.Amount:N0} Ft for {r.Year}-{r.Month:00} was rejected.");
+        }
+        SaveSet($"seen_rej_reqs_{me.Id}", seenRejected);
+
+        // Password reset review notifications (approved / rejected) for the user who requested it
+        var meFresh = fencers.FirstOrDefault(f => f.Id == me.Id) ?? me;
+        if (!string.IsNullOrWhiteSpace(meFresh.LastPasswordResetStatus))
+        {
+            var seenPwReviews = LoadSet($"seen_pw_reviews_{me.Id}");
+            var reviewKey = $"{meFresh.Id}_{meFresh.LastPasswordResetStatus}_{meFresh.LastPasswordResetReviewedAtUtc?.Ticks ?? 0}";
+            if (seenPwReviews.Add(reviewKey))
+            {
+                var isApproved = string.Equals(meFresh.LastPasswordResetStatus, "Approved", StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(meFresh.LastPasswordResetStatus, "Accepted", StringComparison.OrdinalIgnoreCase);
+                _notifications.Show(
+                    reviewKey.GetHashCode(),
+                    isApproved ? "Password reset approved" : "Password reset rejected",
+                    isApproved
+                        ? "Your password reset request was approved."
+                        : "Your password reset request was rejected.");
+                SaveSet($"seen_pw_reviews_{me.Id}", seenPwReviews);
+            }
+        }
 
         var seenPayments = LoadSet($"seen_payments_{me.Id}");
         foreach (var p in paymentsThisMonth.Where(p => p.FencerId == me.Id && p.Amount > 0))

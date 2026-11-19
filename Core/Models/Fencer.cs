@@ -43,6 +43,12 @@ public class Fencer
     /// <summary>UTC time the pending reset was requested (null when none is pending).</summary>
     public DateTime? PasswordResetRequestedAtUtc { get; set; }
 
+    /// <summary>Result of the most recent password reset review ("Approved" or "Rejected"), or null if none.</summary>
+    public string? LastPasswordResetStatus { get; set; }
+
+    /// <summary>UTC time the most recent password reset was reviewed.</summary>
+    public DateTime? LastPasswordResetReviewedAtUtc { get; set; }
+
     /// <summary>True when this fencer has a reset awaiting instructor review.</summary>
     public bool HasPendingPasswordReset => !string.IsNullOrEmpty(PendingPasswordHash);
 

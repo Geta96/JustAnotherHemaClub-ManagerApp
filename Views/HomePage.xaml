@@ -84,7 +84,7 @@
                                       IndicatorView="newsIndicator"
                                       Loop="False"
                                       IsSwipeEnabled="True"
-                                      HeightRequest="110"
+                                      HeightRequest="155"
                                       IsVisible="{Binding HasNews}">
                             <CarouselView.ItemTemplate>
                                 <DataTemplate x:DataType="corevm:NewsRow">

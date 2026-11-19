@@ -243,6 +243,8 @@ public partial class FencersViewModel : ObservableObject
 
                 fresh.PendingPasswordHash = null;
                 fresh.PasswordResetRequestedAtUtc = null;
+                fresh.LastPasswordResetStatus = approve ? "Approved" : "Rejected";
+                fresh.LastPasswordResetReviewedAtUtc = DateTime.UtcNow;
                 await _sheets.UpsertFencerAsync(fresh);
 
                 var idx = Fencers.IndexOf(Fencers.FirstOrDefault(f => f.Id == fresh.Id)!);
