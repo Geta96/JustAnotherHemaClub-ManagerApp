@@ -23,6 +23,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
     private List<RecurringTrainingRule>? _recurringTrainings;
     private List<PriceRule>? _prices;
     private List<PaymentRequest>? _paymentRequests;
+    private List<NewsItem>? _news;
 
     public CachedGoogleSheetsService(GoogleSheetsService inner) => _inner = inner;
 
@@ -336,6 +337,46 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
         }
     }
 
+    // ---------- News ----------
+    public async Task<List<NewsItem>> GetNewsAsync()
+    {
+        if (ServiceSwap.IsActive) return await ServiceSwap.CurrentSheets!.GetNewsAsync();
+        if (_news is not null) return Clone(_news);
+        await _gate.WaitAsync();
+        try
+        {
+            _news ??= await _inner.GetNewsAsync();
+            return Clone(_news);
+        }
+        finally { _gate.Release(); }
+    }
+
+    public async Task AddNewsAsync(NewsItem news)
+    {
+        if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.AddNewsAsync(news); return; }
+        await _inner.AddNewsAsync(news);
+        _news?.Add(news);
+    }
+
+    public async Task UpsertNewsAsync(NewsItem news)
+    {
+        if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.UpsertNewsAsync(news); return; }
+        await _inner.UpsertNewsAsync(news);
+        if (_news is not null)
+        {
+            var idx = _news.FindIndex(n => n.Id == news.Id);
+            if (idx >= 0) _news[idx] = news;
+            else _news.Add(news);
+        }
+    }
+
+    public async Task DeleteNewsAsync(string newsId)
+    {
+        if (ServiceSwap.IsActive) { await ServiceSwap.CurrentSheets!.DeleteNewsAsync(newsId); return; }
+        await _inner.DeleteNewsAsync(newsId);
+        _news?.RemoveAll(n => n.Id == newsId);
+    }
+
     // ---------- ICacheControl ----------
     public async Task WarmAsync()
     {
@@ -482,6 +523,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
         _recurringTrainings = null;
         _prices = null;
         _paymentRequests = null;
+        _news = null;
     }
 
     public void InvalidateFencers() => _fencers = null;
@@ -493,6 +535,7 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
     public void InvalidateRecurringTrainings() => _recurringTrainings = null;
     public void InvalidatePrices() => _prices = null;
     public void InvalidatePaymentRequests() => _paymentRequests = null;
+    public void InvalidateNews() => _news = null;
 
     public void InvalidatePayments(int? year = null, int? month = null)
     {

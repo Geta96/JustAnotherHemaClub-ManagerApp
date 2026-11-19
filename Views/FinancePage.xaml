@@ -56,14 +56,18 @@
                 <!-- Instructor-only: filter the month breakdown to a single fencer -->
                 <Border Grid.Row="1"
                         Style="{StaticResource Card}"
+                        Padding="12,6"
                         Margin="16,8,16,0"
                         IsVisible="{Binding Vm.ShowFencerFilter}">
-                    <VerticalStackLayout Spacing="4">
-                        <Label Text="Show fencer" Style="{StaticResource Caption}" />
-                        <Picker ItemsSource="{Binding Vm.FencerFilterOptions}"
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" VerticalOptions="Center">
+                        <Label Grid.Column="0" Text="Show fencer:" FontAttributes="Bold"
+                               TextColor="{StaticResource Wine}" VerticalOptions="Center" />
+                        <Picker Grid.Column="1"
+                                ItemsSource="{Binding Vm.FencerFilterOptions}"
                                 ItemDisplayBinding="{Binding Name, x:DataType=vm:FencerFilterOption}"
-                                SelectedItem="{Binding Vm.SelectedFencerFilter, Mode=TwoWay}" />
-                    </VerticalStackLayout>
+                                SelectedItem="{Binding Vm.SelectedFencerFilter, Mode=TwoWay}"
+                                VerticalOptions="Center" />
+                    </Grid>
                 </Border>
 
                 <!-- Monthly breakdown — VIRTUALIZED -->

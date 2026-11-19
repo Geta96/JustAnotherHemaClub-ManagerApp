@@ -24,22 +24,30 @@ public sealed class NotificationSyncService
     public async Task CheckAndNotifyAsync()
     {
         var me = _auth.CurrentFencer;
-        if (me is null || _auth.IsGuest || !_settings.IsEnabled(me.Id))
+        if (me is null || _auth.IsGuest)
+            return;
+
+        var normalEnabled = _settings.IsEnabled(me.Id);
+        var instructorEnabled = me.IsInstructor && _settings.IsInstructorEnabled(me.Id);
+
+        if (!normalEnabled && !instructorEnabled)
             return;
 
         var today = DateTime.Today;
         var fencersTask = _sheets.GetFencersAsync();
         var requestsTask = _sheets.GetPaymentRequestsAsync();
         var paymentsTask = _sheets.GetPaymentsAsync(today.Year, today.Month);
-        await Task.WhenAll(fencersTask, requestsTask, paymentsTask);
+        var newsTask = _sheets.GetNewsAsync();
+        await Task.WhenAll(fencersTask, requestsTask, paymentsTask, newsTask);
 
         var fencers = fencersTask.Result;
         var requests = requestsTask.Result;
         var paymentsThisMonth = paymentsTask.Result;
+        var newsList = newsTask.Result;
         var names = fencers.ToDictionary(f => f.Id, f => f.DisplayName);
 
         // 1. Instructor notifications: pending payment requests + password reset requests
-        if (me.IsInstructor)
+        if (instructorEnabled)
         {
             var seenPayReqs = LoadSet($"seen_pay_reqs_{me.Id}");
             foreach (var r in requests.Where(r => r.Status == PaymentRequestStatus.Pending))
@@ -66,7 +74,22 @@ public sealed class NotificationSyncService
             SaveSet($"seen_pw_resets_{me.Id}", seenResets);
         }
 
-        // 2. Fencer notifications: payment request accepted OR money accounted to profile
+        if (!normalEnabled)
+            return;
+
+        // 2. News notifications (normal notifications for all users)
+        var seenNews = LoadSet($"seen_news_{me.Id}");
+        foreach (var n in newsList.OrderBy(n => n.CreatedAtUtc))
+        {
+            if (!seenNews.Add(n.Id)) continue;
+            _notifications.Show(
+                n.Id.GetHashCode(),
+                string.IsNullOrWhiteSpace(n.Title) ? "New club news" : n.Title,
+                n.Body);
+        }
+        SaveSet($"seen_news_{me.Id}", seenNews);
+
+        // 3. Fencer notifications: payment request accepted OR money accounted to profile
         var seenAccepted = LoadSet($"seen_acc_reqs_{me.Id}");
         var acceptedForMe = requests
             .Where(r => r.FencerId == me.Id && r.Status == PaymentRequestStatus.Accepted)
@@ -102,7 +125,7 @@ public sealed class NotificationSyncService
         }
         SaveSet($"seen_payments_{me.Id}", seenPayments);
 
-        // 3. End-of-month unpaid fees reminder (all users, last 3 days of the month, once per month)
+        // 4. End-of-month unpaid fees reminder (all users, last 3 days of the month, once per month)
         var daysInMonth = DateTime.DaysInMonth(today.Year, today.Month);
         if (today.Day >= daysInMonth - 2)
         {

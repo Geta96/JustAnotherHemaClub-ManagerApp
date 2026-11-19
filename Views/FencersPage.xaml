@@ -77,14 +77,16 @@
                     </Border>
 
                     <!-- Picker -->
-                    <Border Style="{StaticResource Card}">
-                        <VerticalStackLayout Spacing="8">
-                            <Label Text="Select a fencer" Style="{StaticResource H2}" />
-                            <Picker Title="Pick a fencer..."
+                    <Border Style="{StaticResource Card}" Padding="12,6">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" VerticalOptions="Center">
+                            <Label Grid.Column="0" Text="Fencer:" FontAttributes="Bold"
+                                   TextColor="{StaticResource Wine}" VerticalOptions="Center" />
+                            <Picker Grid.Column="1"
                                     ItemsSource="{Binding Fencers}"
                                     ItemDisplayBinding="{Binding Name, x:DataType=m:Fencer}"
-                                    SelectedItem="{Binding SelectedFencer, Mode=TwoWay}" />
-                        </VerticalStackLayout>
+                                    SelectedItem="{Binding SelectedFencer, Mode=TwoWay}"
+                                    VerticalOptions="Center" />
+                        </Grid>
                     </Border>
 
                     <!-- HERO PROFILE CARD -->

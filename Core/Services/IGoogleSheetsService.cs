@@ -75,4 +75,10 @@ public interface IGoogleSheetsService
     // ---- Payment requests ----
     Task<List<PaymentRequest>> GetPaymentRequestsAsync();
     Task UpsertPaymentRequestAsync(PaymentRequest request);
+
+    // ---- News ----
+    Task<List<NewsItem>> GetNewsAsync();
+    Task AddNewsAsync(NewsItem news);
+    Task UpsertNewsAsync(NewsItem news);
+    Task DeleteNewsAsync(string newsId);
 }

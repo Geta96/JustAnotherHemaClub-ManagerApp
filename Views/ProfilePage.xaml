@@ -120,7 +120,14 @@
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
                         <CheckBox Grid.Column="0" IsChecked="{Binding NotificationsEnabled}" />
                         <Label   Grid.Column="1" VerticalOptions="Center"
-                                 Text="Enable notifications" />
+                                 Text="Enable normal notifications" />
+                    </Grid>
+
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8"
+                          IsVisible="{Binding IsInstructor}">
+                        <CheckBox Grid.Column="0" IsChecked="{Binding InstructorNotificationsEnabled}" />
+                        <Label   Grid.Column="1" VerticalOptions="Center"
+                                 Text="Enable instructor notifications" />
                     </Grid>
 
                     <Button Text="Save" Command="{Binding SaveCommand}" />

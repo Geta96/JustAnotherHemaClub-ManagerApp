@@ -19,6 +19,12 @@ public partial class ProfileViewModel : ObservableObject
     [ObservableProperty] private bool gdprAccepted;
     [ObservableProperty] private bool liabilityAccepted;
     [ObservableProperty] private bool notificationsEnabled = true;
+    private bool _instructorNotificationsEnabled = true;
+    public bool InstructorNotificationsEnabled
+    {
+        get => _instructorNotificationsEnabled;
+        set => SetProperty(ref _instructorNotificationsEnabled, value);
+    }
     [ObservableProperty] private string? statusMessage;
     [ObservableProperty] private bool isGuest;
 
@@ -52,6 +58,7 @@ public partial class ProfileViewModel : ObservableObject
             GdprAccepted = false;
             LiabilityAccepted = false;
             NotificationsEnabled = false;
+            InstructorNotificationsEnabled = false;
         }
         else
         {
@@ -64,6 +71,7 @@ public partial class ProfileViewModel : ObservableObject
             GdprAccepted = f.GdprAccepted;
             LiabilityAccepted = f.LiabilityAccepted;
             NotificationsEnabled = _notifications?.IsEnabled(f.Id) ?? true;
+            InstructorNotificationsEnabled = _notifications?.IsInstructorEnabled(f.Id) ?? true;
         }
 
         OnPropertyChanged(nameof(IsLoggedInFencer));
@@ -93,9 +101,11 @@ public partial class ProfileViewModel : ObservableObject
 
             if (_notifications is not null)
             {
-                if (NotificationsEnabled)
+                if (NotificationsEnabled || (f.IsInstructor && InstructorNotificationsEnabled))
                     await _notifications.EnsurePermissionAsync();
                 _notifications.SetEnabled(f.Id, NotificationsEnabled);
+                if (f.IsInstructor)
+                    _notifications.SetInstructorEnabled(f.Id, InstructorNotificationsEnabled);
             }
 
             StatusMessage = "Profile saved.";

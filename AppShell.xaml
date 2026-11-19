@@ -57,6 +57,9 @@
                         <DataTrigger TargetType="Label" Binding="{Binding Title}" Value="Home">
                             <Setter Property="Text" Value="⌂" />
                         </DataTrigger>
+                        <DataTrigger TargetType="Label" Binding="{Binding Title}" Value="News">
+                            <Setter Property="Text" Value="✉" />
+                        </DataTrigger>
                         <DataTrigger TargetType="Label" Binding="{Binding Title}" Value="Trainings">
                             <Setter Property="Text" Value="⚔" />
                         </DataTrigger>
@@ -118,6 +121,10 @@
 
     <FlyoutItem Title="Home" Route="home">
         <ShellContent ContentTemplate="{DataTemplate views:HomePage}" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="News" Route="news">
+        <ShellContent ContentTemplate="{DataTemplate views:NewsPage}" />
     </FlyoutItem>
 
     <FlyoutItem Title="Trainings" Route="trainings">

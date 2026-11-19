@@ -5,6 +5,7 @@ namespace JustAnotherHemaClub.Services;
 public sealed class MauiNotificationSettings : INotificationSettings
 {
     private static string Key(string fencerId) => $"notif_enabled_{fencerId}";
+    private static string InstructorKey(string fencerId) => $"notif_instructor_enabled_{fencerId}";
 
     public bool IsEnabled(string fencerId) =>
         !string.IsNullOrWhiteSpace(fencerId) && Preferences.Default.Get(Key(fencerId), true);
@@ -13,6 +14,15 @@ public sealed class MauiNotificationSettings : INotificationSettings
     {
         if (!string.IsNullOrWhiteSpace(fencerId))
             Preferences.Default.Set(Key(fencerId), enabled);
+    }
+
+    public bool IsInstructorEnabled(string fencerId) =>
+        !string.IsNullOrWhiteSpace(fencerId) && Preferences.Default.Get(InstructorKey(fencerId), true);
+
+    public void SetInstructorEnabled(string fencerId, bool enabled)
+    {
+        if (!string.IsNullOrWhiteSpace(fencerId))
+            Preferences.Default.Set(InstructorKey(fencerId), enabled);
     }
 
     public async Task<bool> EnsurePermissionAsync()

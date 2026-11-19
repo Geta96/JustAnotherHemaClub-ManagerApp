@@ -167,21 +167,17 @@ else
         @* Instructor-only: filter the monthly breakdown to a single fencer *@
         @if (Auth.IsLoggedInInstructor && _fencerFilterOptions.Count > 1)
         {
-            <section class="card">
-                <h2 class="card-title">Show fencer</h2>
-                <form method="get" action="/finance" class="stack-form">
-                    <input type="hidden" name="tab" value="monthly" />
-                    <label>Pick a fencer
-                        <select name="fencer" onchange="this.form.submit()">
-                            @foreach (var opt in _fencerFilterOptions)
-                            {
-                                <option value="@opt.Id" selected="@(opt.Id == (FencerFilter ?? ""))">@opt.Name</option>
-                            }
-                        </select>
-                    </label>
-                    <noscript><button class="attend-btn" type="submit">Filter</button></noscript>
-                </form>
-            </section>
+            <form method="get" action="/finance" class="fencer-picker-bar">
+                <input type="hidden" name="tab" value="monthly" />
+                <label class="fencer-picker-label" for="finance-fencer-select">Show fencer:</label>
+                <select id="finance-fencer-select" name="fencer" onchange="this.form.submit()">
+                    @foreach (var opt in _fencerFilterOptions)
+                    {
+                        <option value="@opt.Id" selected="@(opt.Id == (FencerFilter ?? ""))">@opt.Name</option>
+                    }
+                </select>
+                <noscript><button class="attend-btn" type="submit">Filter</button></noscript>
+            </form>
         }
 
         @if (_months.Count == 0)

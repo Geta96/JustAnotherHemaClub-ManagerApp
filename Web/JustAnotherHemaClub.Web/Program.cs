@@ -1577,6 +1577,75 @@ app.MapPost("/finance/request/review", async (
     return Results.Redirect(back);
 }).RequireAuthorization().DisableAntiforgery();
 
+// ================= NEWS =================
+app.MapPost("/news/create", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? title,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? body) =>
+{
+    const string back = "/news";
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
+    var meId = http.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+
+    var t = (title ?? "").Trim();
+    var b = (body ?? "").Trim();
+    if (string.IsNullOrWhiteSpace(t) || string.IsNullOrWhiteSpace(b))
+        return Results.Redirect($"/news?error={Uri.EscapeDataString("Title and body are required.")}");
+
+    await sheets.AddNewsAsync(new NewsItem
+    {
+        Title = t,
+        Body = b,
+        CreatedByFencerId = meId,
+        CreatedAtUtc = DateTime.UtcNow
+    });
+    cache.InvalidateNews();
+
+    return Results.Redirect("/news?created=1");
+}).RequireAuthorization().DisableAntiforgery();
+
+app.MapPost("/news/save", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? newsId,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? title,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? body) =>
+{
+    const string back = "/news";
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
+    if (string.IsNullOrWhiteSpace(newsId)) return Results.Redirect(back);
+
+    var t = (title ?? "").Trim();
+    var b = (body ?? "").Trim();
+    if (string.IsNullOrWhiteSpace(t) || string.IsNullOrWhiteSpace(b))
+        return Results.Redirect($"/news?error={Uri.EscapeDataString("Title and body are required.")}");
+
+    var all = await sheets.GetNewsAsync();
+    var item = all.FirstOrDefault(n => n.Id == newsId);
+    if (item is null) return Results.Redirect(back);
+
+    item.Title = t;
+    item.Body = b;
+    await sheets.UpsertNewsAsync(item);
+    cache.InvalidateNews();
+
+    return Results.Redirect("/news?saved=1");
+}).RequireAuthorization().DisableAntiforgery();
+
+app.MapPost("/news/delete", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? newsId) =>
+{
+    const string back = "/news";
+    if (!http.User.IsInRole("Instructor")) return Results.Redirect(back);
+
+    if (!string.IsNullOrWhiteSpace(newsId))
+    {
+        await sheets.DeleteNewsAsync(newsId);
+        cache.InvalidateNews();
+    }
+    return Results.Redirect("/news?deleted=1");
+}).RequireAuthorization().DisableAntiforgery();
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

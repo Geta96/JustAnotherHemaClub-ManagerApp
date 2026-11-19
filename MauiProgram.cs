@@ -44,6 +44,12 @@ public static class MauiProgram
         builder.Services.AddTransient<LoginViewModel>();
         builder.Services.AddTransient<RegisterViewModel>();
         builder.Services.AddTransient<HomeViewModel>();
+        builder.Services.AddTransient<NewsViewModel>(sp =>
+            new NewsViewModel(
+                sp.GetRequiredService<IGoogleSheetsService>(),
+                sp.GetRequiredService<ICacheControl>(),
+                sp.GetRequiredService<AuthService>(),
+                () => sp.GetRequiredService<NotificationSyncService>().CheckAndNotifyAsync()));
         builder.Services.AddTransient<TrainingsViewModel>();
         builder.Services.AddTransient<FinanceViewModel>();
         builder.Services.AddTransient<PricesViewModel>();
@@ -69,6 +75,7 @@ public static class MauiProgram
         builder.Services.AddTransient<LoginPage>();
         builder.Services.AddTransient<RegisterPage>();
         builder.Services.AddTransient<HomePage>();
+        builder.Services.AddTransient<NewsPage>();
         builder.Services.AddTransient<NewTrainingPage>();
         builder.Services.AddTransient<FinancePage>();
         builder.Services.AddTransient<StatisticsPage>();

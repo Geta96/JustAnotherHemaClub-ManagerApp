@@ -17,9 +17,42 @@
 </section>
 
 <section class="card">
-    <h2 class="card-title">About us</h2>
-    <p>We're a HEMA (Historical European Martial Arts) club located in Budapest focused on
-       longsword, footwork drills and free sparring.</p>
+    <h2 class="card-title">News</h2>
+    @if (_news.Count == 0)
+    {
+        <a href="/news" class="news-home-item weekly-row">
+            <span class="muted">No news yet.</span>
+        </a>
+    }
+    else
+    {
+        var currentNews = _news[Math.Clamp(_newsIndex, 0, _news.Count - 1)];
+        <div class="news-carousel-row">
+            @if (_news.Count > 1)
+            {
+                <a class="news-side-arrow @(_newsIndex <= 0 ? "disabled" : "")"
+                   href="/?newsIdx=@Math.Max(0, _newsIndex - 1)"
+                   aria-label="Newer news">&#10094;</a>
+            }
+            <a href="/news" class="news-home-item weekly-row">
+                <div class="training-row">
+                    <strong class="wine">@currentNews.Title</strong>
+                    <span class="muted" style="font-size:13px;">@currentNews.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                </div>
+                <p style="white-space:pre-wrap; margin:6px 0 0;">@currentNews.Body</p>
+            </a>
+            @if (_news.Count > 1)
+            {
+                <a class="news-side-arrow @(_newsIndex >= _news.Count - 1 ? "disabled" : "")"
+                   href="/?newsIdx=@Math.Min(_news.Count - 1, _newsIndex + 1)"
+                   aria-label="Older news">&#10095;</a>
+            }
+        </div>
+        @if (_news.Count > 1)
+        {
+            <div class="news-counter muted">@(_newsIndex + 1) / @_news.Count</div>
+        }
+    }
 </section>
 
 @if (_pendingResets.Count > 0)
@@ -147,6 +180,12 @@
 }
 
 <section class="card">
+    <h2 class="card-title">About us</h2>
+    <p>We're a HEMA (Historical European Martial Arts) club located in Budapest focused on
+       longsword, footwork drills and free sparring.</p>
+</section>
+
+<section class="card">
     <h2 class="card-title">Follow or Contact us</h2>
     <div class="social-grid">
         <a class="social-btn instagram" href="@InstagramUrl" target="_blank" rel="noopener">Instagram</a>
@@ -157,6 +196,9 @@
 
 
 @code {
+    [SupplyParameterFromQuery(Name = "newsIdx")]
+    private int? NewsIdxParam { get; set; }
+
     private const string InstagramUrl =
         "https://www.instagram.com/just.another.hema.club?igsh=MXZudjI3MDJ4eWw1aA==";
     private const string FacebookUrl = "https://www.facebook.com/share/18VtVUQPW5/";
@@ -193,15 +235,41 @@
     private readonly List<PaymentRequest> _pendingPaymentRequests = new();
     private readonly Dictionary<string, string> _fencerNames = new();
 
+    // --- News ---
+    private readonly List<NewsItem> _news = new();
+    private int _newsIndex;
+
     protected override async Task OnInitializedAsync()
     {
         await Session.EnsureRestoredAsync();
 
+        await LoadNewsAsync();
         await LoadWeeklyTrainingsAsync();
         await LoadPendingResetsAsync();
         await LoadPendingPaymentRequestsAsync();
         await LoadNextLessonAsync();
         await LoadPaymentStatusAsync();
+    }
+
+    protected override void OnParametersSet()
+    {
+        _newsIndex = NewsIdxParam.HasValue && _news.Count > 0
+            ? Math.Clamp(NewsIdxParam.Value, 0, _news.Count - 1)
+            : 0;
+    }
+
+    private async Task LoadNewsAsync()
+    {
+        _news.Clear();
+        try
+        {
+            var items = await Sheets.GetNewsAsync();
+            _news.AddRange(items.OrderByDescending(n => n.CreatedAtUtc));
+            _newsIndex = NewsIdxParam.HasValue && _news.Count > 0
+                ? Math.Clamp(NewsIdxParam.Value, 0, _news.Count - 1)
+                : 0;
+        }
+        catch { /* best-effort */ }
     }
 
     /// <summary>

@@ -1,0 +1,150 @@
+@page "/news"
+@using Microsoft.AspNetCore.Authorization
+@using JustAnotherHemaClub.Models
+@using JustAnotherHemaClub.Services
+@attribute [Authorize]
+@inject IGoogleSheetsService Sheets
+@inject ICacheControl Cache
+@inject AuthService Auth
+@inject UserSession Session
+
+<PageTitle>News · JAHC Manager</PageTitle>
+
+<h1 class="page-title">News</h1>
+
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <section class="card"><p class="pay-due">@_error</p></section>
+}
+@if (_created)
+{
+    <section class="card"><p class="pay-ok">&#10003; News published.</p></section>
+}
+@if (_saved)
+{
+    <section class="card"><p class="pay-ok">&#10003; News updated.</p></section>
+}
+@if (_deleted)
+{
+    <section class="card"><p class="pay-ok">&#10003; News deleted.</p></section>
+}
+
+@if (Auth.IsLoggedInInstructor)
+{
+    <details class="card month-card">
+        <summary class="month-summary">
+            <span class="card-title" style="margin:0;">Create news</span>
+        </summary>
+        <form method="post" action="/news/create" class="stack-form">
+            <label>Title
+                <input type="text" name="title" placeholder="News title" required />
+            </label>
+            <label>Body
+                <textarea name="body" rows="4" placeholder="Write announcement..." required></textarea>
+            </label>
+            <button class="attend-btn" type="submit">Publish</button>
+        </form>
+    </details>
+}
+
+@if (_loading)
+{
+    <section class="card"><p class="muted">Loading…</p></section>
+}
+else if (_news.Count == 0)
+{
+    <section class="card"><p class="muted">No news yet.</p></section>
+}
+else
+{
+    @foreach (var item in _news)
+    {
+        <section class="card">
+            <div class="training-row">
+                <h2 class="card-title" style="margin:0;">@item.Title</h2>
+                <span class="muted" style="font-size:13px;">@item.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+            </div>
+            <p style="white-space:pre-wrap; line-height:1.4; margin:10px 0;">@item.Body</p>
+            <div class="training-row">
+                <span class="muted" style="font-size:13px;">Posted by @(_fencerNames.GetValueOrDefault(item.CreatedByFencerId, "Instructor"))</span>
+                @if (Auth.IsLoggedInInstructor)
+                {
+                    <form method="post" action="/news/delete" class="inline-form">
+                        <input type="hidden" name="newsId" value="@item.Id" />
+                        <button class="danger-btn" type="submit">Delete</button>
+                    </form>
+                }
+            </div>
+
+            @if (Auth.IsLoggedInInstructor)
+            {
+                <details class="attendee-editor" style="margin-top:10px;">
+                    <summary>Edit news</summary>
+                    <form method="post" action="/news/save" class="stack-form">
+                        <input type="hidden" name="newsId" value="@item.Id" />
+                        <label>Title
+                            <input type="text" name="title" value="@item.Title" required />
+                        </label>
+                        <label>Body
+                            <textarea name="body" rows="4" required>@item.Body</textarea>
+                        </label>
+                        <button class="attend-btn" type="submit">Save changes</button>
+                    </form>
+                </details>
+            }
+        </section>
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "created")]
+    private string? CreatedParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "saved")]
+    private string? SavedParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "deleted")]
+    private string? DeletedParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? ErrorParam { get; set; }
+
+    private readonly List<NewsItem> _news = new();
+    private readonly Dictionary<string, string> _fencerNames = new();
+    private bool _loading = true;
+    private bool _created;
+    private bool _saved;
+    private bool _deleted;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureRestoredAsync();
+
+        _created = CreatedParam == "1";
+        _saved = SavedParam == "1";
+        _deleted = DeletedParam == "1";
+        _error = ErrorParam;
+
+        try
+        {
+            Cache.InvalidateNews();
+            var newsTask = Sheets.GetNewsAsync();
+            var fencersTask = Sheets.GetFencersAsync();
+            await Task.WhenAll(newsTask, fencersTask);
+
+            foreach (var f in fencersTask.Result)
+                _fencerNames[f.Id] = f.DisplayName;
+
+            _news.AddRange(newsTask.Result.OrderByDescending(n => n.CreatedAtUtc));
+        }
+        catch
+        {
+            _news.Clear();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

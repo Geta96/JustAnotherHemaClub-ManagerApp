@@ -34,10 +34,13 @@ public partial class HomeViewModel : ObservableObject
     private readonly IDialogService? _dialogs;
 
     public ObservableCollection<HomeWeeklyRow> WeeklyTrainings { get; } = new();
+    public ObservableCollection<NewsRow> News { get; } = new();
 
     [ObservableProperty] private bool isLoadingWeekly;
     [ObservableProperty] private bool hasWeeklyTrainings;
     public bool HasNoWeeklyTrainings => !HasWeeklyTrainings && !IsLoadingWeekly;
+    public bool HasNews => News.Count > 0;
+    public bool HasNoNews => News.Count == 0;
 
     // --- Payment status card (logged-in fencer only) ---
     private static readonly Color PaymentGreen = Color.FromArgb("#1F8A2E");
@@ -134,6 +137,11 @@ public partial class HomeViewModel : ObservableObject
             HasWeeklyTrainings = WeeklyTrainings.Count > 0;
             OnPropertyChanged(nameof(HasNoWeeklyTrainings));
         };
+        News.CollectionChanged += (_, __) =>
+        {
+            OnPropertyChanged(nameof(HasNews));
+            OnPropertyChanged(nameof(HasNoNews));
+        };
     }
 
     partial void OnIsLoadingWeeklyChanged(bool value)
@@ -173,6 +181,9 @@ public partial class HomeViewModel : ObservableObject
             WeeklyTrainings.Clear();
         }
         finally { IsLoadingWeekly = false; }
+
+        // Load club news for the Home news card.
+        await LoadNewsAsync();
 
         // Load the "Next lesson" card (best-effort; a failure just hides it).
         await LoadNextLessonAsync();
@@ -549,6 +560,33 @@ public partial class HomeViewModel : ObservableObject
     [RelayCommand]
     private static Task OpenDiscord() =>
         Launcher.Default.OpenAsync(DiscordUrl);
+
+    private IAsyncRelayCommand? _openAllNewsCommand;
+    public IAsyncRelayCommand OpenAllNewsCommand => _openAllNewsCommand ??= new AsyncRelayCommand(OpenAllNews);
+
+    private static Task OpenAllNews() => Shell.Current.GoToAsync("//news");
+
+    private async Task LoadNewsAsync()
+    {
+        try
+        {
+            var newsTask = _sheets.GetNewsAsync();
+            var fencersTask = _sheets.GetFencersAsync();
+            await Task.WhenAll(newsTask, fencersTask);
+
+            var names = fencersTask.Result.ToDictionary(f => f.Id, f => f.DisplayName);
+
+            News.Clear();
+            foreach (var n in newsTask.Result.OrderByDescending(x => x.CreatedAtUtc))
+            {
+                News.Add(new NewsRow(n, names.GetValueOrDefault(n.CreatedByFencerId, "Instructor")));
+            }
+        }
+        catch
+        {
+            News.Clear();
+        }
+    }
 
     private async Task LoadPendingResetsAsync()
     {

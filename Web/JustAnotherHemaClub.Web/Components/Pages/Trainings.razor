@@ -280,21 +280,17 @@ else
         @* Instructor-only: filter the trainings list to a single fencer *@
         @if (Auth.IsLoggedInInstructor && _fencerFilterOptions.Count > 1)
         {
-            <section class="card">
-                <h2 class="card-title">Show fencer</h2>
-                <form method="get" action="/trainings" class="stack-form">
-                    <input type="hidden" name="tab" value="trainings" />
-                    <label>Pick a fencer
-                        <select name="fencer" onchange="this.form.submit()">
-                            @foreach (var opt in _fencerFilterOptions)
-                            {
-                                <option value="@opt.Id" selected="@(opt.Id == (FencerFilter ?? ""))">@opt.Name</option>
-                            }
-                        </select>
-                    </label>
-                    <noscript><button class="attend-btn" type="submit">Filter</button></noscript>
-                </form>
-            </section>
+            <form method="get" action="/trainings" class="fencer-picker-bar">
+                <input type="hidden" name="tab" value="trainings" />
+                <label class="fencer-picker-label" for="trainings-fencer-select">Show fencer:</label>
+                <select id="trainings-fencer-select" name="fencer" onchange="this.form.submit()">
+                    @foreach (var opt in _fencerFilterOptions)
+                    {
+                        <option value="@opt.Id" selected="@(opt.Id == (FencerFilter ?? ""))">@opt.Name</option>
+                    }
+                </select>
+                <noscript><button class="attend-btn" type="submit">Filter</button></noscript>
+            </form>
         }
 
         @foreach (var month in _trainingsByMonth)

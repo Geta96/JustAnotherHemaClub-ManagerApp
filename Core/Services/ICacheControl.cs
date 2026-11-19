@@ -27,4 +27,5 @@ public interface ICacheControl
     void InvalidatePrices();
     void InvalidateTournaments();
     void InvalidatePaymentRequests();
+    void InvalidateNews();
 }

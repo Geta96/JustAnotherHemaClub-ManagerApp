@@ -68,24 +68,20 @@
 
 @if (_loading)
 {
-    <section class="card"><p class="muted">Loading…</p></section>
+    <section class="card"><p class="muted">Loading</p></section>
 }
 else
 {
-    <section class="card">
-        <h2 class="card-title">Select a fencer</h2>
-        <form method="get" action="/fencers" class="stack-form">
-            <label>Pick a fencer…
-                <select name="fencer" onchange="this.form.submit()">
-                    @foreach (var f in _fencers)
-                    {
-                        <option value="@f.Id" selected="@(f.Id == _selectedId)">@f.Name</option>
-                    }
-                </select>
-            </label>
-            <noscript><button class="attend-btn" type="submit">View</button></noscript>
-        </form>
-    </section>
+    <form method="get" action="/fencers" class="fencer-picker-bar">
+        <label class="fencer-picker-label" for="fencers-select">Fencer:</label>
+        <select id="fencers-select" name="fencer" onchange="this.form.submit()">
+            @foreach (var f in _fencers)
+            {
+                <option value="@f.Id" selected="@(f.Id == _selectedId)">@f.Name</option>
+            }
+        </select>
+        <noscript><button class="attend-btn" type="submit">View</button></noscript>
+    </form>
 
     @if (_selected is { } sel)
     {

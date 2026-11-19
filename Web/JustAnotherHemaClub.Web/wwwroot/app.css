@@ -1419,3 +1419,71 @@ html, body {
 /* --- Trainings: attend button "attending" (on) state --- */
 .attend-btn-on { background: #1F8A2E; }   /* green = already attending */
 .training-row .attend-form .attend-btn { min-width: 128px; }
+
+/* --- Compact fencer filter / picker bar --- */
+.fencer-picker-bar {
+    max-width: 860px;
+    margin: 0 auto 12px;
+    padding: 8px 14px;
+    background: var(--cream-soft);
+    border: 1px solid rgba(140,90,89,.35);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 2px 8px rgba(63,11,10,.06);
+}
+.fencer-picker-bar .fencer-picker-label {
+    color: var(--wine);
+    font-weight: 700;
+    font-size: 14px;
+    white-space: nowrap;
+}
+.fencer-picker-bar select {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 10px;
+    border: 1px solid var(--muted);
+    border-radius: 8px;
+    font-size: 15px;
+    background: #fff;
+    color: var(--ink);
+}
+
+/* --- Home News card --- */
+.news-carousel-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.news-home-item {
+    flex: 1;
+    min-width: 0;
+    text-decoration: none;
+    color: inherit;
+    transition: filter .15s ease;
+}
+.news-home-item:hover {
+    filter: brightness(.98);
+}
+.news-side-arrow {
+    color: var(--muted);
+    font-size: 28px;
+    line-height: 1;
+    text-decoration: none;
+    padding: 4px 2px;
+    user-select: none;
+    transition: color .15s ease, opacity .15s ease;
+}
+.news-side-arrow:hover {
+    color: var(--wine);
+}
+.news-side-arrow.disabled {
+    opacity: .35;
+    pointer-events: none;
+}
+.news-counter {
+    text-align: center;
+    font-size: 13px;
+    margin-top: 8px;
+}

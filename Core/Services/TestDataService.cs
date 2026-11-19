@@ -24,6 +24,7 @@ public sealed class TestDataService : IGoogleSheetsService, ICacheControl
     private readonly List<PriceRule> _priceRules;
     private readonly List<Tournament> _tournaments;
     private readonly List<PaymentRequest> _paymentRequests = new();
+    private readonly List<NewsItem> _news;
 
     public TestDataService()
     {
@@ -37,6 +38,7 @@ public sealed class TestDataService : IGoogleSheetsService, ICacheControl
         _recurringTrainings = BuildRecurringTrainings();
         _priceRules = BuildPriceRules();
         _tournaments = new List<Tournament>();
+        _news = BuildNews();
     }
 
     // ======================== IGoogleSheetsService ========================
@@ -298,6 +300,29 @@ public sealed class TestDataService : IGoogleSheetsService, ICacheControl
         return Task.CompletedTask;
     }
 
+    public Task<List<NewsItem>> GetNewsAsync() =>
+        Task.FromResult(new List<NewsItem>(_news));
+
+    public Task AddNewsAsync(NewsItem news)
+    {
+        _news.Add(news);
+        return Task.CompletedTask;
+    }
+
+    public Task UpsertNewsAsync(NewsItem news)
+    {
+        var idx = _news.FindIndex(n => n.Id == news.Id);
+        if (idx >= 0) _news[idx] = news;
+        else _news.Add(news);
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteNewsAsync(string newsId)
+    {
+        _news.RemoveAll(n => n.Id == newsId);
+        return Task.CompletedTask;
+    }
+
     // ======================== ICacheControl (no-op for in-memory) ========================
 
     public Task WarmAsync() => Task.CompletedTask;
@@ -314,6 +339,7 @@ public sealed class TestDataService : IGoogleSheetsService, ICacheControl
     public void InvalidatePrices() { }
     public void InvalidateTournaments() { }
     public void InvalidatePaymentRequests() { }
+    public void InvalidateNews() { }
 
     // ======================== DUMMY DATA BUILDERS ========================
 
@@ -506,6 +532,29 @@ public sealed class TestDataService : IGoogleSheetsService, ICacheControl
             new() { Id = "pr-2", SessionCount = 4, MonthCount = 1, FullPrice = 9000,  StudentPrice = 5500,  StartDate = start },
             new() { Id = "pr-3", SessionCount = 0, MonthCount = 1, FullPrice = 12000, StudentPrice = 7000,  StartDate = start },
             new() { Id = "pr-4", SessionCount = 0, MonthCount = 2, FullPrice = 20000, StudentPrice = 12000, StartDate = start },
+        };
+    }
+
+    private static List<NewsItem> BuildNews()
+    {
+        return new List<NewsItem>
+        {
+            new()
+            {
+                Id = "news-1",
+                Title = "Welcome to JAHC!",
+                Body = "Check here for the latest club announcements, schedule updates and upcoming events.",
+                CreatedByFencerId = "test-001",
+                CreatedAtUtc = DateTime.UtcNow.AddDays(-7)
+            },
+            new()
+            {
+                Id = "news-2",
+                Title = "Upcoming Sparring Night",
+                Body = "Join us this Friday for extended free sparring and tournament prep!",
+                CreatedByFencerId = "test-001",
+                CreatedAtUtc = DateTime.UtcNow.AddDays(-1)
+            }
         };
     }
 }
