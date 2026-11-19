@@ -59,6 +59,16 @@ public partial class HomeViewModel : ObservableObject
     public const string DiscordUrl =
         "https://discord.gg/tEcynS94d";
 
+    private static readonly string[] CandidateHeroImages = BuildCandidateHeroImages();
+
+    private static string[] BuildCandidateHeroImages()
+    {
+        var list = new List<string> { "home_bg_3.jpg" };
+        for (int i = 4; i <= 50; i++)
+            list.Add($"home_bg_{i}.jpg");
+        return list.ToArray();
+    }
+
     private readonly IGoogleSheetsService _sheets;
     private readonly ICacheControl _cache;
     private readonly AuthService _auth;
@@ -66,9 +76,11 @@ public partial class HomeViewModel : ObservableObject
     private readonly NotificationSyncService? _notificationSync;
     private readonly IDialogService? _dialogs;
 
+    public ObservableCollection<string> HeroImages { get; } = new();
     public ObservableCollection<HomeWeeklyRow> WeeklyTrainings { get; } = new();
     public ObservableCollection<NewsRow> News { get; } = new();
 
+    [ObservableProperty] private int currentHeroImageIndex;
     [ObservableProperty] private bool isLoadingWeekly;
     [ObservableProperty] private bool hasWeeklyTrainings;
     public bool HasNoWeeklyTrainings => !HasWeeklyTrainings && !IsLoadingWeekly;
@@ -194,6 +206,37 @@ public partial class HomeViewModel : ObservableObject
             OnPropertyChanged(nameof(HasNews));
             OnPropertyChanged(nameof(HasNoNews));
         };
+
+        ShuffleHeroImages();
+    }
+
+    private void ShuffleHeroImages()
+    {
+        var available = CandidateHeroImages
+            .Where(ImageResourceExists)
+            .OrderBy(_ => Random.Shared.Next())
+            .ToList();
+
+        if (available.Count == 0)
+            available.Add("home_bg_3.jpg");
+
+        HeroImages.Clear();
+        foreach (var img in available)
+            HeroImages.Add(img);
+
+        CurrentHeroImageIndex = 0;
+    }
+
+    private static bool ImageResourceExists(string fileName)
+    {
+#if ANDROID
+        var context = Android.App.Application.Context;
+        var resName = Path.GetFileNameWithoutExtension(fileName).ToLowerInvariant();
+        var id = context.Resources?.GetIdentifier(resName, "drawable", context.PackageName) ?? 0;
+        return id != 0;
+#else
+        return true;
+#endif
     }
 
     partial void OnIsLoadingWeeklyChanged(bool value)
@@ -202,6 +245,7 @@ public partial class HomeViewModel : ObservableObject
     [RelayCommand]
     public async Task LoadAsync()
     {
+        ShuffleHeroImages();
         IsLoadingWeekly = true;
         try
         {

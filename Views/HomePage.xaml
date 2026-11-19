@@ -9,21 +9,32 @@
     <ScrollView>
         <VerticalStackLayout Spacing="0">
 
-            <!-- Hero -->
+            <!-- Hero (swipeable background carousel) -->
             <Grid Padding="0" HeightRequest="320">
-                <!-- Background image -->
-                <Image Source="home_bg_3.jpg"
-                       Aspect="AspectFill"
-                       HorizontalOptions="Fill"
-                       VerticalOptions="Fill" />
+                <CarouselView ItemsSource="{Binding HeroImages}"
+                              Position="{Binding CurrentHeroImageIndex, Mode=TwoWay}"
+                              Loop="True"
+                              IsSwipeEnabled="True"
+                              HorizontalOptions="Fill"
+                              VerticalOptions="Fill">
+                    <CarouselView.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <Image Source="{Binding .}"
+                                   Aspect="AspectFill"
+                                   HorizontalOptions="Fill"
+                                   VerticalOptions="Fill" />
+                        </DataTemplate>
+                    </CarouselView.ItemTemplate>
+                </CarouselView>
+
                 <!-- Wine tint for legibility -->
                 <BoxView Color="{StaticResource Wine}" Opacity="0.10"
+                         InputTransparent="True"
                          HorizontalOptions="Fill" VerticalOptions="Fill" />
-                <!-- Foreground content. HorizontalOptions=Fill so the subtitle
-                     gets the full hero width and doesn't wrap to "…Budapest"
-                     where the bottom would clip it. Children that should stay
-                     centred set HorizontalOptions=Center themselves. -->
+
+                <!-- Foreground content -->
                 <VerticalStackLayout Spacing="6" Padding="20,28,20,24"
+                                     InputTransparent="True"
                                      HorizontalOptions="Fill" VerticalOptions="Center">
                     <Image Source="jahclogo.png"
                            HeightRequest="180"

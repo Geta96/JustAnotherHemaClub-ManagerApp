@@ -6,15 +6,38 @@
 @inject ICacheControl Cache
 @inject AuthService Auth
 @inject UserSession Session
+@inject IWebHostEnvironment Env
 
 <PageTitle>Home · JAHC Manager</PageTitle>
 
 <h1 class="page-title">Home</h1>
 
-<section class="home-hero">
-    <img class="home-hero-bg" src="images/home_bg_web.jpg" alt="" aria-hidden="true" />
-    <div class="home-hero-tint"></div>
-</section>
+@if (_heroImages.Count > 0)
+{
+    var currentHero = _heroImages[Math.Clamp(_imgIndex, 0, _heroImages.Count - 1)];
+    var prevImgIdx = (_imgIndex - 1 + _heroImages.Count) % _heroImages.Count;
+    var nextImgIdx = (_imgIndex + 1) % _heroImages.Count;
+    <div class="hero-carousel-wrap">
+        <div class="news-carousel-row">
+            @if (_heroImages.Count > 1)
+            {
+                <a class="news-side-arrow"
+                   href="/?imgSeed=@_imgSeed&imgIdx=@prevImgIdx&newsIdx=@_newsIndex"
+                   aria-label="Previous photo">&#10094;</a>
+            }
+            <section class="home-hero" style="flex:1; margin:0;">
+                <img class="home-hero-bg" src="@currentHero" alt="" aria-hidden="true" />
+                <div class="home-hero-tint"></div>
+            </section>
+            @if (_heroImages.Count > 1)
+            {
+                <a class="news-side-arrow"
+                   href="/?imgSeed=@_imgSeed&imgIdx=@nextImgIdx&newsIdx=@_newsIndex"
+                   aria-label="Next photo">&#10095;</a>
+            }
+        </div>
+    </div>
+}
 
 <section class="card">
     <h2 class="card-title">News</h2>
@@ -286,6 +309,12 @@
     [SupplyParameterFromQuery(Name = "sentMonth")]
     private int? SentMonth { get; set; }
 
+    [SupplyParameterFromQuery(Name = "imgIdx")]
+    private int? ImgIdxParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "imgSeed")]
+    private int? ImgSeedParam { get; set; }
+
     private const string InstagramUrl =
         "https://www.instagram.com/just.another.hema.club?igsh=MXZudjI3MDJ4eWw1aA==";
     private const string FacebookUrl = "https://www.facebook.com/share/18VtVUQPW5/";
@@ -378,10 +407,16 @@
     private readonly List<NewsItem> _news = new();
     private int _newsIndex;
 
+    // --- Hero image rotation ---
+    private int _imgIndex;
+    private int _imgSeed;
+    private readonly List<string> _heroImages = new();
+
     protected override async Task OnInitializedAsync()
     {
         await Session.EnsureRestoredAsync();
 
+        LoadHeroImages();
         await LoadNewsAsync();
         await LoadWeeklyTrainingsAsync();
         await LoadPendingResetsAsync();
@@ -394,6 +429,41 @@
     {
         _newsIndex = NewsIdxParam.HasValue && _news.Count > 0
             ? Math.Clamp(NewsIdxParam.Value, 0, _news.Count - 1)
+            : 0;
+    }
+
+    private void LoadHeroImages()
+    {
+        _imgSeed = ImgSeedParam ?? Random.Shared.Next(1, int.MaxValue);
+
+        var imagesDir = Path.Combine(Env.WebRootPath, "images");
+        var candidates = new List<string>
+        {
+            "home_bg_web.jpg",
+            "home_bg_web_2.jpg",
+            "home_bg_3.jpg"
+        };
+        for (int i = 4; i <= 50; i++)
+        {
+            candidates.Add($"home_bg_{i}.jpg");
+            candidates.Add($"home_bg_web_{i}.jpg");
+        }
+
+        var existing = candidates
+            .Where(file => File.Exists(Path.Combine(imagesDir, file)))
+            .Select(file => $"images/{file}")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (existing.Count == 0)
+            existing.Add("images/home_bg_web.jpg");
+
+        var rng = new Random(_imgSeed);
+        _heroImages.Clear();
+        _heroImages.AddRange(existing.OrderBy(_ => rng.Next()));
+
+        _imgIndex = ImgIdxParam.HasValue && _heroImages.Count > 0
+            ? ((ImgIdxParam.Value % _heroImages.Count) + _heroImages.Count) % _heroImages.Count
             : 0;
     }
 
