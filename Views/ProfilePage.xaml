@@ -18,6 +18,12 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- Status / error banner (shared across all the instant-save actions below) -->
+            <Border Style="{StaticResource Card}"
+                    IsVisible="{Binding HasStatusMessage}">
+                <Label Text="{Binding StatusMessage}" Style="{StaticResource Caption}" />
+            </Border>
+
             <!-- Read-only identity card -->
             <Border Style="{StaticResource Card}" IsVisible="{Binding IsLoggedInFencer}">
                 <VerticalStackLayout Spacing="10">
@@ -58,80 +64,150 @@
                                    FontSize="12" FontAttributes="Bold" />
                         </Border>
                     </HorizontalStackLayout>
+
+                    <Button Text="Open HEMA Ratings profile"
+                            Margin="0,8,0,0"
+                            BackgroundColor="{StaticResource HemaRatingsBg}"
+                            TextColor="{StaticResource HemaRatingsText}"
+                            IsEnabled="{Binding HasSavedHemaRatingsLink}"
+                            Clicked="OnOpenHemaRatingsTapped" />
                 </VerticalStackLayout>
             </Border>
 
-            <!-- Editable profile -->
+            <!-- Statements (expanded by default): GDPR + liability.
+                 Checkboxes save immediately on toggle — no shared Save button. -->
             <Border Style="{StaticResource Card}" IsVisible="{Binding IsLoggedInFencer}">
                 <VerticalStackLayout Spacing="10">
-                    <Label Text="Edit my profile" Style="{StaticResource H2}" />
-
-                    <Label Text="Full name" Style="{StaticResource Caption}" />
-                    <Entry Placeholder="Full name" Text="{Binding Name}" />
-
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Padding="0,8,0,0">
-                        <CheckBox Grid.Column="0" IsChecked="{Binding IsStudent}" />
-                        <Label   Grid.Column="1" VerticalOptions="Center"
-                                 Text="I am a student (pays 60% of every fee)." />
-                    </Grid>
-
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                        <CheckBox Grid.Column="0" IsChecked="{Binding GdprAccepted}" />
-                        <Label   Grid.Column="1" VerticalOptions="Center"
-                                 LineBreakMode="WordWrap">
-                            <Label.FormattedText>
-                                <FormattedString>
-                                    <Span Text="I have read and agree to the " />
-                                    <Span Text="GDPR statement"
-                                          TextColor="{StaticResource Wine}"
-                                          TextDecorations="Underline"
-                                          FontAttributes="Bold">
-                                        <Span.GestureRecognizers>
-                                            <TapGestureRecognizer Tapped="OnOpenGdprTapped" />
-                                        </Span.GestureRecognizers>
-                                    </Span>
-                                    <Span Text="." />
-                                </FormattedString>
-                            </Label.FormattedText>
-                        </Label>
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding ToggleStatementsCommand}" />
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Column="0"
+                               Text="{Binding StatementsExpandGlyph}"
+                               FontSize="20" FontAttributes="Bold"
+                               TextColor="{StaticResource Wine}"
+                               VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="Statements" Style="{StaticResource H2}"
+                               VerticalOptions="Center" />
                     </Grid>
 
+                    <VerticalStackLayout IsVisible="{Binding IsStatementsExpanded}" Spacing="10">
+                        <BoxView HeightRequest="1" Color="{StaticResource Muted}" Opacity="0.3" Margin="0,2" />
+
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                            <CheckBox Grid.Column="0" IsChecked="{Binding GdprAccepted}" />
+                            <Label   Grid.Column="1" VerticalOptions="Center"
+                                     LineBreakMode="WordWrap">
+                                <Label.FormattedText>
+                                    <FormattedString>
+                                        <Span Text="I have read and agree to the " />
+                                        <Span Text="GDPR statement"
+                                              TextColor="{StaticResource Wine}"
+                                              TextDecorations="Underline"
+                                              FontAttributes="Bold">
+                                            <Span.GestureRecognizers>
+                                                <TapGestureRecognizer Tapped="OnOpenGdprTapped" />
+                                            </Span.GestureRecognizers>
+                                        </Span>
+                                        <Span Text="." />
+                                    </FormattedString>
+                                </Label.FormattedText>
+                            </Label>
+                        </Grid>
+
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                            <CheckBox Grid.Column="0" IsChecked="{Binding LiabilityAccepted}" />
+                            <Label   Grid.Column="1" VerticalOptions="Center"
+                                     LineBreakMode="WordWrap">
+                                <Label.FormattedText>
+                                    <FormattedString>
+                                        <Span Text="I have read and agree to the " />
+                                        <Span Text="liability statement"
+                                              TextColor="{StaticResource Wine}"
+                                              TextDecorations="Underline"
+                                              FontAttributes="Bold">
+                                            <Span.GestureRecognizers>
+                                                <TapGestureRecognizer Tapped="OnOpenLiabilityTapped" />
+                                            </Span.GestureRecognizers>
+                                        </Span>
+                                        <Span Text="." />
+                                    </FormattedString>
+                                </Label.FormattedText>
+                            </Label>
+                        </Grid>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Settings (expanded by default): user settings (incl. full name) + app settings.
+                 The student / notification checkboxes save immediately; the name field has its
+                 own explicit Save button, placed right next to the input. -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding IsLoggedInFencer}">
+                <VerticalStackLayout Spacing="10">
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                        <CheckBox Grid.Column="0" IsChecked="{Binding LiabilityAccepted}" />
-                        <Label   Grid.Column="1" VerticalOptions="Center"
-                                 LineBreakMode="WordWrap">
-                            <Label.FormattedText>
-                                <FormattedString>
-                                    <Span Text="I have read and agree to the " />
-                                    <Span Text="liability statement"
-                                          TextColor="{StaticResource Wine}"
-                                          TextDecorations="Underline"
-                                          FontAttributes="Bold">
-                                        <Span.GestureRecognizers>
-                                            <TapGestureRecognizer Tapped="OnOpenLiabilityTapped" />
-                                        </Span.GestureRecognizers>
-                                    </Span>
-                                    <Span Text="." />
-                                </FormattedString>
-                            </Label.FormattedText>
-                        </Label>
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding ToggleSettingsCommand}" />
+                        </Grid.GestureRecognizers>
+                        <Label Grid.Column="0"
+                               Text="{Binding SettingsExpandGlyph}"
+                               FontSize="20" FontAttributes="Bold"
+                               TextColor="{StaticResource Wine}"
+                               VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="Settings" Style="{StaticResource H2}"
+                               VerticalOptions="Center" />
                     </Grid>
 
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                        <CheckBox Grid.Column="0" IsChecked="{Binding NotificationsEnabled}" />
-                        <Label   Grid.Column="1" VerticalOptions="Center"
-                                 Text="Enable normal notifications" />
-                    </Grid>
+                    <VerticalStackLayout IsVisible="{Binding IsSettingsExpanded}" Spacing="10">
+                        <BoxView HeightRequest="1" Color="{StaticResource Muted}" Opacity="0.3" Margin="0,2" />
 
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8"
-                          IsVisible="{Binding IsInstructor}">
-                        <CheckBox Grid.Column="0" IsChecked="{Binding InstructorNotificationsEnabled}" />
-                        <Label   Grid.Column="1" VerticalOptions="Center"
-                                 Text="Enable instructor notifications" />
-                    </Grid>
+                        <!-- User settings -->
+                        <Label Text="User settings" Style="{StaticResource Caption}" FontAttributes="Bold" />
 
-                    <Button Text="Save" Command="{Binding SaveCommand}" />
-                    <Label Text="{Binding StatusMessage}" Style="{StaticResource Caption}" />
+                        <Label Text="Full name" Style="{StaticResource Caption}" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <Entry Grid.Column="0" Placeholder="Full name" Text="{Binding Name}" />
+                            <Button Grid.Column="1" Text="Save" Command="{Binding SaveNameCommand}" />
+                        </Grid>
+
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                            <CheckBox Grid.Column="0" IsChecked="{Binding IsStudent}" />
+                            <Label   Grid.Column="1" VerticalOptions="Center"
+                                     Text="I am a student (pays 60% of every fee)." />
+                        </Grid>
+
+                        <BoxView HeightRequest="1" Color="{StaticResource Muted}" Opacity="0.3" Margin="0,4" />
+
+                        <!-- HEMA Ratings profile link -->
+                        <Label Text="HEMA Ratings profile" Style="{StaticResource Caption}" FontAttributes="Bold" />
+                        <Label Text="Paste your HEMA Ratings fighter number (e.g. 9343 from hemaratings.com/fighters/details/9343/)."
+                               Style="{StaticResource Caption}" />
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                            <Label Grid.Column="0" Text="hemaratings.com/fighters/details/"
+                                   VerticalOptions="Center" FontSize="12"
+                                   TextColor="{StaticResource Muted}" />
+                            <Entry Grid.Column="1" Placeholder="9343" Keyboard="Numeric"
+                                   Text="{Binding HemaRatingsId}" />
+                            <Button Grid.Column="2" Text="Save"
+                                    Command="{Binding SaveHemaRatingsCommand}" />
+                        </Grid>
+
+                        <BoxView HeightRequest="1" Color="{StaticResource Muted}" Opacity="0.3" Margin="0,4" />
+
+                        <!-- App settings -->
+                        <Label Text="App settings" Style="{StaticResource Caption}" FontAttributes="Bold" />
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                            <CheckBox Grid.Column="0" IsChecked="{Binding NotificationsEnabled}" />
+                            <Label   Grid.Column="1" VerticalOptions="Center"
+                                     Text="Enable normal notifications" />
+                        </Grid>
+
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8"
+                              IsVisible="{Binding IsInstructor}">
+                            <CheckBox Grid.Column="0" IsChecked="{Binding InstructorNotificationsEnabled}" />
+                            <Label   Grid.Column="1" VerticalOptions="Center"
+                                     Text="Enable instructor notifications" />
+                        </Grid>
+                    </VerticalStackLayout>
                 </VerticalStackLayout>
             </Border>
 

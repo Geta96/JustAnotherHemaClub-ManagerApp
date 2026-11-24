@@ -4,28 +4,55 @@ namespace JustAnotherHemaClub.Services;
 
 public sealed class NotificationSyncService
 {
+    public const string LastLoggedInFencerIdKey = "notif_last_fencer_id";
+    public const string LastLoggedInIsInstructorKey = "notif_last_is_instructor";
+    public const string LastLoggedInIsStudentKey = "notif_last_is_student";
+
     private readonly IGoogleSheetsService _sheets;
     private readonly AuthService _auth;
     private readonly INotificationSettings _settings;
     private readonly INotificationService _notifications;
+    private readonly ICacheControl? _cache;
 
     public NotificationSyncService(
         IGoogleSheetsService sheets,
         AuthService auth,
         INotificationSettings settings,
-        INotificationService notifications)
+        INotificationService notifications,
+        ICacheControl? cache = null)
     {
         _sheets = sheets;
         _auth = auth;
         _settings = settings;
         _notifications = notifications;
+        _cache = cache ?? sheets as ICacheControl;
     }
 
     public async Task CheckAndNotifyAsync()
     {
-        var me = _auth.CurrentFencer;
-        if (me is null || _auth.IsGuest)
+        if (_auth.IsGuest)
             return;
+
+        var me = _auth.CurrentFencer;
+        if (me is not null)
+        {
+            Preferences.Default.Set(LastLoggedInFencerIdKey, me.Id);
+            Preferences.Default.Set(LastLoggedInIsInstructorKey, me.IsInstructor);
+            Preferences.Default.Set(LastLoggedInIsStudentKey, me.IsStudent);
+        }
+        else
+        {
+            var savedId = Preferences.Default.Get(LastLoggedInFencerIdKey, "");
+            if (string.IsNullOrWhiteSpace(savedId))
+                return;
+
+            me = new Fencer
+            {
+                Id = savedId,
+                IsInstructor = Preferences.Default.Get(LastLoggedInIsInstructorKey, false),
+                IsStudent = Preferences.Default.Get(LastLoggedInIsStudentKey, false)
+            };
+        }
 
         var normalEnabled = _settings.IsEnabled(me.Id);
         var instructorEnabled = me.IsInstructor && _settings.IsInstructorEnabled(me.Id);
@@ -34,19 +61,29 @@ public sealed class NotificationSyncService
             return;
 
         var today = DateTime.Today;
+
+        // Invalidate cached slices so background/resume sync always sees fresh remote changes
+        _cache?.InvalidateFencers();
+        _cache?.InvalidatePaymentRequests();
+        _cache?.InvalidatePayments(today.Year, today.Month);
+        _cache?.InvalidateNews();
+        _cache?.InvalidateIndividualLessons();
+
         var fencersTask = _sheets.GetFencersAsync();
         var requestsTask = _sheets.GetPaymentRequestsAsync();
         var paymentsTask = _sheets.GetPaymentsAsync(today.Year, today.Month);
         var newsTask = _sheets.GetNewsAsync();
-        await Task.WhenAll(fencersTask, requestsTask, paymentsTask, newsTask);
+        var lessonsTask = _sheets.GetIndividualLessonsAsync();
+        await Task.WhenAll(fencersTask, requestsTask, paymentsTask, newsTask, lessonsTask);
 
         var fencers = fencersTask.Result;
         var requests = requestsTask.Result;
         var paymentsThisMonth = paymentsTask.Result;
         var newsList = newsTask.Result;
+        var lessons = lessonsTask.Result ?? new List<IndividualLesson>();
         var names = fencers.ToDictionary(f => f.Id, f => f.DisplayName);
 
-        // 1. Instructor notifications: pending payment requests + password reset requests
+        // 1. Instructor notifications: pending payment requests + password reset requests + targeted 1-on-1 lesson requests
         if (instructorEnabled)
         {
             var seenPayReqs = LoadSet($"seen_pay_reqs_{me.Id}");
@@ -72,6 +109,22 @@ public sealed class NotificationSyncService
                     $"{f.DisplayName} requested a password reset.");
             }
             SaveSet($"seen_pw_resets_{me.Id}", seenResets);
+
+            var seenLessonReqs = LoadSet($"seen_lesson_reqs_{me.Id}");
+            foreach (var l in lessons.Where(l =>
+                l.Status == IndividualLessonStatus.Requested &&
+                l.RequestedInstructorIds != null &&
+                l.RequestedInstructorIds.Contains(me.Id)))
+            {
+                if (!seenLessonReqs.Add(l.Id)) continue;
+                var studentName = names.GetValueOrDefault(l.StudentId, "A fencer");
+                var topicSuffix = string.IsNullOrWhiteSpace(l.Topic) ? "" : $" ({l.Topic})";
+                _notifications.Show(
+                    $"lesson_req_{l.Id}".GetHashCode(),
+                    "New 1 on 1 lesson request",
+                    $"{studentName} requested a 1 on 1 lesson on {l.Date:yyyy-MM-dd HH:mm}{topicSuffix}.");
+            }
+            SaveSet($"seen_lesson_reqs_{me.Id}", seenLessonReqs);
         }
 
         if (!normalEnabled)
@@ -160,7 +213,37 @@ public sealed class NotificationSyncService
         }
         SaveSet($"seen_payments_{me.Id}", seenPayments);
 
-        // 4. End-of-month unpaid fees reminder (all users, last 3 days of the month, once per month)
+        // 4. 1-on-1 lesson notifications for the targeted student (accepted / rejected)
+        var seenAcceptedLessons = LoadSet($"seen_acc_lessons_{me.Id}");
+        foreach (var l in lessons.Where(l =>
+            l.StudentId == me.Id &&
+            l.Status == IndividualLessonStatus.Accepted))
+        {
+            if (!seenAcceptedLessons.Add(l.Id)) continue;
+            var coachName = names.GetValueOrDefault(l.InstructorId, "An instructor");
+            var topicSuffix = string.IsNullOrWhiteSpace(l.Topic) ? "" : $" ({l.Topic})";
+            _notifications.Show(
+                $"lesson_acc_{l.Id}".GetHashCode(),
+                "1 on 1 lesson scheduled",
+                $"{coachName} accepted your 1 on 1 lesson on {l.Date:yyyy-MM-dd HH:mm}{topicSuffix}.");
+        }
+        SaveSet($"seen_acc_lessons_{me.Id}", seenAcceptedLessons);
+
+        var seenRejectedLessons = LoadSet($"seen_rej_lessons_{me.Id}");
+        foreach (var l in lessons.Where(l =>
+            l.StudentId == me.Id &&
+            l.Status == IndividualLessonStatus.Rejected))
+        {
+            if (!seenRejectedLessons.Add(l.Id)) continue;
+            var topicSuffix = string.IsNullOrWhiteSpace(l.Topic) ? "" : $" ({l.Topic})";
+            _notifications.Show(
+                $"lesson_rej_{l.Id}".GetHashCode(),
+                "1 on 1 lesson rejected",
+                $"Your 1 on 1 lesson on {l.Date:yyyy-MM-dd HH:mm}{topicSuffix} was rejected.");
+        }
+        SaveSet($"seen_rej_lessons_{me.Id}", seenRejectedLessons);
+
+        // 5. End-of-month unpaid fees reminder (all users, last 3 days of the month, once per month)
         var daysInMonth = DateTime.DaysInMonth(today.Year, today.Month);
         if (today.Day >= daysInMonth - 2)
         {

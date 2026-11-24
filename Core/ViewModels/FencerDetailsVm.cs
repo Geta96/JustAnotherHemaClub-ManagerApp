@@ -118,6 +118,9 @@ public partial class FencerDetailsVm : ObservableObject
     public bool GdprAccepted => Fencer.GdprAccepted;
     public bool LiabilityAccepted => Fencer.LiabilityAccepted;
 
+    public bool HasHemaRatingsProfile => Fencer.HasHemaRatingsProfile;
+    public string? HemaRatingsUrl => Fencer.HemaRatingsUrl;
+
     public int SessionsThisMonth { get; }
 
     /// <summary>Cumulative outstanding across every month (not just the current one).</summary>

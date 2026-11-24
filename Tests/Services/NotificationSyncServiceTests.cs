@@ -27,6 +27,7 @@ public class NotificationSyncServiceTests
         _sheets.Setup(s => s.GetPaymentRequestsAsync()).ReturnsAsync(new List<PaymentRequest>());
         _sheets.Setup(s => s.GetPaymentsAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(new List<Payment>());
         _sheets.Setup(s => s.GetNewsAsync()).ReturnsAsync(new List<NewsItem>());
+        _sheets.Setup(s => s.GetIndividualLessonsAsync()).ReturnsAsync(new List<IndividualLesson>());
         _sheets.Setup(s => s.GetTrainingsAsync()).ReturnsAsync(new List<TrainingSession>());
         _sheets.Setup(s => s.GetPriceRulesAsync()).ReturnsAsync(new List<PriceRule>());
     }
@@ -287,13 +288,331 @@ public class NotificationSyncServiceTests
         vm.NotificationsEnabled.Should().BeTrue();
         vm.InstructorNotificationsEnabled.Should().BeFalse();
 
+        // Notification toggles now save immediately on change (no shared Save button).
         vm.NotificationsEnabled = false;
         vm.InstructorNotificationsEnabled = true;
-        await vm.SaveAsync();
 
-        _settings.Verify(s => s.EnsurePermissionAsync(), Times.Once);
-        _settings.Verify(s => s.SetEnabled("inst-prof", false), Times.Once);
-        _settings.Verify(s => s.SetInstructorEnabled("inst-prof", true), Times.Once);
-        vm.StatusMessage.Should().Be("Profile saved.");
+        // The save is fired-and-forgotten from the property setter; give it a tick to complete.
+        await Task.Delay(10);
+
+        _settings.Verify(s => s.EnsurePermissionAsync(), Times.AtLeastOnce);
+        _settings.Verify(s => s.SetEnabled("inst-prof", false), Times.AtLeastOnce);
+        _settings.Verify(s => s.SetInstructorEnabled("inst-prof", true), Times.AtLeastOnce);
+        vm.StatusMessage.Should().Be("Saved.");
+    }
+
+    [Fact]
+    public async Task CheckAndNotifyAsync_RequestedLesson_NotifiesOnlyTargetedInstructors()
+    {
+        var inst1 = new Fencer { Id = "inst-1", Name = "Coach A", IsInstructor = true };
+        var inst2 = new Fencer { Id = "inst-2", Name = "Coach B", IsInstructor = true };
+        var inst3 = new Fencer { Id = "inst-3", Name = "Coach C", IsInstructor = true };
+        var student = new Fencer { Id = "stu-1", Name = "Alice", IsInstructor = false };
+
+        var lessonReq = new IndividualLesson
+        {
+            Id = "lesson-req-1",
+            StudentId = "stu-1",
+            Date = new DateTime(2026, 5, 10, 18, 0, 0),
+            Topic = "Longsword cuts",
+            Status = IndividualLessonStatus.Requested,
+            RequestedInstructorIds = new List<string> { "inst-1", "inst-2" }
+        };
+
+        _sheets.Setup(s => s.GetFencersAsync()).ReturnsAsync(new List<Fencer> { inst1, inst2, inst3, student });
+        _sheets.Setup(s => s.GetIndividualLessonsAsync()).ReturnsAsync(new List<IndividualLesson> { lessonReq });
+
+        var sut = CreateSut();
+
+        // 1. Targeted instructor 1 receives notification once
+        _auth.RestoreSession(inst1);
+        _settings.Setup(s => s.IsEnabled("inst-1")).Returns(false);
+        _settings.Setup(s => s.IsInstructorEnabled("inst-1")).Returns(true);
+        await sut.CheckAndNotifyAsync();
+
+        _notifications.Verify(n => n.Show(
+            It.IsAny<int>(),
+            "New 1 on 1 lesson request",
+            It.Is<string>(msg => msg.Contains("Alice") && msg.Contains("Longsword cuts"))), Times.Once);
+
+        // Second check for inst-1 does not duplicate
+        await sut.CheckAndNotifyAsync();
+        _notifications.Verify(n => n.Show(
+            It.IsAny<int>(),
+            "New 1 on 1 lesson request",
+            It.IsAny<string>()), Times.Once);
+
+        // 2. Targeted instructor 2 also receives notification
+        _notifications.Invocations.Clear();
+        _auth.RestoreSession(inst2);
+        _settings.Setup(s => s.IsEnabled("inst-2")).Returns(false);
+        _settings.Setup(s => s.IsInstructorEnabled("inst-2")).Returns(true);
+        await sut.CheckAndNotifyAsync();
+
+        _notifications.Verify(n => n.Show(
+            It.IsAny<int>(),
+            "New 1 on 1 lesson request",
+            It.Is<string>(msg => msg.Contains("Alice") && msg.Contains("Longsword cuts"))), Times.Once);
+
+        // 3. Non-targeted instructor 3 does NOT receive notification
+        _notifications.Invocations.Clear();
+        _auth.RestoreSession(inst3);
+        _settings.Setup(s => s.IsEnabled("inst-3")).Returns(false);
+        _settings.Setup(s => s.IsInstructorEnabled("inst-3")).Returns(true);
+        await sut.CheckAndNotifyAsync();
+
+        _notifications.Verify(n => n.Show(
+            It.IsAny<int>(),
+            "New 1 on 1 lesson request",
+            It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CheckAndNotifyAsync_AcceptedLesson_NotifiesOnlyTargetedStudent()
+    {
+        var inst = new Fencer { Id = "inst-1", Name = "Coach A", IsInstructor = true };
+        var student1 = new Fencer { Id = "stu-1", Name = "Alice" };
+        var student2 = new Fencer { Id = "stu-2", Name = "Bob" };
+
+        var acceptedLesson = new IndividualLesson
+        {
+            Id = "lesson-acc-1",
+            StudentId = "stu-1",
+            InstructorId = "inst-1",
+            Date = new DateTime(2026, 5, 12, 17, 30, 0),
+            Topic = "Messer",
+            Status = IndividualLessonStatus.Accepted
+        };
+
+        _sheets.Setup(s => s.GetFencersAsync()).ReturnsAsync(new List<Fencer> { inst, student1, student2 });
+        _sheets.Setup(s => s.GetIndividualLessonsAsync()).ReturnsAsync(new List<IndividualLesson> { acceptedLesson });
+
+        var sut = CreateSut();
+
+        // Other student (Bob) does NOT get notified
+        _auth.RestoreSession(student2);
+        _settings.Setup(s => s.IsEnabled("stu-2")).Returns(true);
+        await sut.CheckAndNotifyAsync();
+        _notifications.Verify(n => n.Show(
+            It.IsAny<int>(),
+            "1 on 1 lesson scheduled",
+            It.IsAny<string>()), Times.Never);
+
+        // Targeted student (Alice) gets notified once
+        _auth.RestoreSession(student1);
+        _settings.Setup(s => s.IsEnabled("stu-1")).Returns(true);
+        await sut.CheckAndNotifyAsync();
+        _notifications.Verify(n => n.Show(
+            It.IsAny<int>(),
+            "1 on 1 lesson scheduled",
+            It.Is<string>(msg => msg.Contains("Coach A") && msg.Contains("Messer"))), Times.Once);
+
+        // Second check does not duplicate
+        await sut.CheckAndNotifyAsync();
+        _notifications.Verify(n => n.Show(
+            It.IsAny<int>(),
+            "1 on 1 lesson scheduled",
+            It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CheckAndNotifyAsync_RejectedLesson_NotifiesOnlyTargetedStudent()
+    {
+        var student1 = new Fencer { Id = "stu-1", Name = "Alice" };
+        var student2 = new Fencer { Id = "stu-2", Name = "Bob" };
+
+        var rejectedLesson = new IndividualLesson
+        {
+            Id = "lesson-rej-1",
+            StudentId = "stu-1",
+            Date = new DateTime(2026, 5, 15, 19, 0, 0),
+            Topic = "Sabre",
+            Status = IndividualLessonStatus.Rejected
+        };
+
+        _sheets.Setup(s => s.GetFencersAsync()).ReturnsAsync(new List<Fencer> { student1, student2 });
+        _sheets.Setup(s => s.GetIndividualLessonsAsync()).ReturnsAsync(new List<IndividualLesson> { rejectedLesson });
+
+        var sut = CreateSut();
+
+        // Other student (Bob) does NOT get notified
+        _auth.RestoreSession(student2);
+        _settings.Setup(s => s.IsEnabled("stu-2")).Returns(true);
+        await sut.CheckAndNotifyAsync();
+        _notifications.Verify(n => n.Show(
+            It.IsAny<int>(),
+            "1 on 1 lesson rejected",
+            It.IsAny<string>()), Times.Never);
+
+        // Targeted student (Alice) gets notified once
+        _auth.RestoreSession(student1);
+        _settings.Setup(s => s.IsEnabled("stu-1")).Returns(true);
+        await sut.CheckAndNotifyAsync();
+        _notifications.Verify(n => n.Show(
+            It.IsAny<int>(),
+            "1 on 1 lesson rejected",
+            It.Is<string>(msg => msg.Contains("Sabre") && msg.Contains("2026-05-15 19:00"))), Times.Once);
+
+        // Second check does not duplicate
+        await sut.CheckAndNotifyAsync();
+        _notifications.Verify(n => n.Show(
+            It.IsAny<int>(),
+            "1 on 1 lesson rejected",
+            It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CheckAndNotifyAsync_PartialReject_StillNotifiesRemainingTargetedInstructor_AndDoesNotNotifyStudentUntilAllReject()
+    {
+        var inst1 = new Fencer { Id = "inst-1", Name = "Coach A", IsInstructor = true };
+        var inst2 = new Fencer { Id = "inst-2", Name = "Coach B", IsInstructor = true };
+        var student = new Fencer { Id = "stu-1", Name = "Alice" };
+
+        // Coach A already rejected, so only Coach B remains in RequestedInstructorIds; status is still Requested
+        var lesson = new IndividualLesson
+        {
+            Id = "lesson-partial-1",
+            StudentId = "stu-1",
+            Date = new DateTime(2026, 5, 20, 18, 0, 0),
+            Topic = "Dagger",
+            Status = IndividualLessonStatus.Requested,
+            RequestedInstructorIds = new List<string> { "inst-2" }
+        };
+
+        _sheets.Setup(s => s.GetFencersAsync()).ReturnsAsync(new List<Fencer> { inst1, inst2, student });
+        _sheets.Setup(s => s.GetIndividualLessonsAsync()).ReturnsAsync(new List<IndividualLesson> { lesson });
+
+        var sut = CreateSut();
+
+        // Coach A is no longer in RequestedInstructorIds -> no notification
+        _auth.RestoreSession(inst1);
+        _settings.Setup(s => s.IsEnabled("inst-1")).Returns(true);
+        _settings.Setup(s => s.IsInstructorEnabled("inst-1")).Returns(true);
+        await sut.CheckAndNotifyAsync();
+        _notifications.Verify(n => n.Show(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+
+        // Student does not receive a rejection notification while Coach B can still accept
+        _auth.RestoreSession(student);
+        _settings.Setup(s => s.IsEnabled("stu-1")).Returns(true);
+        await sut.CheckAndNotifyAsync();
+        _notifications.Verify(n => n.Show(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+
+        // Coach B is still targeted -> receives the request notification
+        _auth.RestoreSession(inst2);
+        _settings.Setup(s => s.IsEnabled("inst-2")).Returns(false);
+        _settings.Setup(s => s.IsInstructorEnabled("inst-2")).Returns(true);
+        await sut.CheckAndNotifyAsync();
+        _notifications.Verify(n => n.Show(
+            It.IsAny<int>(),
+            "New 1 on 1 lesson request",
+            It.Is<string>(msg => msg.Contains("Alice") && msg.Contains("Dagger"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task CheckAndNotifyAsync_InstructorRequestsFromOtherInstructors_NotifiesAskedInstructorsAndRequesterOnAccept()
+    {
+        var instRequester = new Fencer { Id = "inst-req", Name = "Coach Requester", IsInstructor = true };
+        var instTarget1 = new Fencer { Id = "inst-t1", Name = "Coach Target 1", IsInstructor = true };
+        var instTarget2 = new Fencer { Id = "inst-t2", Name = "Coach Target 2", IsInstructor = true };
+
+        var lesson = new IndividualLesson
+        {
+            Id = "lesson-peer-1",
+            StudentId = "inst-req",
+            Date = new DateTime(2026, 6, 1, 16, 0, 0),
+            Topic = "Ringen",
+            Status = IndividualLessonStatus.Requested,
+            RequestedInstructorIds = new List<string> { "inst-t1", "inst-t2" }
+        };
+
+        _sheets.Setup(s => s.GetFencersAsync()).ReturnsAsync(new List<Fencer> { instRequester, instTarget1, instTarget2 });
+        _sheets.Setup(s => s.GetIndividualLessonsAsync()).ReturnsAsync(new List<IndividualLesson> { lesson });
+
+        var sut = CreateSut();
+
+        // Requesting instructor is not in RequestedInstructorIds, so does not get "New 1 on 1 lesson request"
+        _auth.RestoreSession(instRequester);
+        _settings.Setup(s => s.IsEnabled("inst-req")).Returns(true);
+        _settings.Setup(s => s.IsInstructorEnabled("inst-req")).Returns(true);
+        await sut.CheckAndNotifyAsync();
+        _notifications.Verify(n => n.Show(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+
+        // Both target instructors receive the request notification
+        _auth.RestoreSession(instTarget1);
+        _settings.Setup(s => s.IsInstructorEnabled("inst-t1")).Returns(true);
+        await sut.CheckAndNotifyAsync();
+        _notifications.Verify(n => n.Show(
+            It.IsAny<int>(),
+            "New 1 on 1 lesson request",
+            It.Is<string>(msg => msg.Contains("Coach Requester") && msg.Contains("Ringen"))), Times.Once);
+
+        _notifications.Invocations.Clear();
+        _auth.RestoreSession(instTarget2);
+        _settings.Setup(s => s.IsInstructorEnabled("inst-t2")).Returns(true);
+        await sut.CheckAndNotifyAsync();
+        _notifications.Verify(n => n.Show(
+            It.IsAny<int>(),
+            "New 1 on 1 lesson request",
+            It.Is<string>(msg => msg.Contains("Coach Requester") && msg.Contains("Ringen"))), Times.Once);
+
+        // Now Coach Target 2 accepts the lesson -> Coach Requester (as student) gets notified
+        _notifications.Invocations.Clear();
+        lesson.Status = IndividualLessonStatus.Accepted;
+        lesson.InstructorId = "inst-t2";
+        lesson.RequestedInstructorIds.Clear();
+
+        _auth.RestoreSession(instRequester);
+        await sut.CheckAndNotifyAsync();
+        _notifications.Verify(n => n.Show(
+            It.IsAny<int>(),
+            "1 on 1 lesson scheduled",
+            It.Is<string>(msg => msg.Contains("Coach Target 2") && msg.Contains("Ringen"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task CheckAndNotifyAsync_WhenAppInBackgroundWithColdAuth_UsesPersistedFencerAndInvalidatesCache()
+    {
+        var cache = new Mock<ICacheControl>();
+        var sut = new NotificationSyncService(_sheets.Object, _auth, _settings.Object, _notifications.Object, cache.Object);
+
+        // First run while logged in persists the fencer identity for background jobs
+        var student = new Fencer { Id = "stu-bg", Name = "Background Alice" };
+        _auth.RestoreSession(student);
+        _settings.Setup(s => s.IsEnabled("stu-bg")).Returns(true);
+        await sut.CheckAndNotifyAsync();
+
+        // Simulate cold start in Android JobService where AuthService.CurrentFencer is null
+        var sp = new Mock<IServiceProvider>();
+        var store = new Mock<ICredentialStore>();
+        var coldAuth = new AuthService(sp.Object, store.Object);
+        var backgroundSut = new NotificationSyncService(_sheets.Object, coldAuth, _settings.Object, _notifications.Object, cache.Object);
+
+        var acceptedLesson = new IndividualLesson
+        {
+            Id = "lesson-bg-1",
+            StudentId = "stu-bg",
+            InstructorId = "inst-1",
+            Date = new DateTime(2026, 6, 10, 18, 0, 0),
+            Topic = "Sabre",
+            Status = IndividualLessonStatus.Accepted
+        };
+        _sheets.Setup(s => s.GetFencersAsync()).ReturnsAsync(new List<Fencer>
+        {
+            student,
+            new() { Id = "inst-1", Name = "Coach A", IsInstructor = true }
+        });
+        _sheets.Setup(s => s.GetIndividualLessonsAsync()).ReturnsAsync(new List<IndividualLesson> { acceptedLesson });
+
+        await backgroundSut.CheckAndNotifyAsync();
+
+        cache.Verify(c => c.InvalidateFencers(), Times.AtLeastOnce);
+        cache.Verify(c => c.InvalidateIndividualLessons(), Times.AtLeastOnce);
+        cache.Verify(c => c.InvalidatePaymentRequests(), Times.AtLeastOnce);
+        cache.Verify(c => c.InvalidateNews(), Times.AtLeastOnce);
+
+        _notifications.Verify(n => n.Show(
+            It.IsAny<int>(),
+            "1 on 1 lesson scheduled",
+            It.Is<string>(msg => msg.Contains("Coach A") && msg.Contains("Sabre"))), Times.Once);
     }
 }

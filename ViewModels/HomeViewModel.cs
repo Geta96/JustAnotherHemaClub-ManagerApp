@@ -59,6 +59,14 @@ public partial class HomeViewModel : ObservableObject
     public const string DiscordUrl =
         "https://discord.gg/tEcynS94d";
 
+    /// <summary>Fixed club HEMA Ratings page — same for everyone, hardcoded.</summary>
+    public const string ClubHemaRatingsUrl =
+        "hemaratings.com/clubs/details/1861/";
+
+    /// <summary>MHS Tournament Calendar — shared Google Calendar embed link.</summary>
+    public const string MhsCalendarUrl =
+        "https://calendar.google.com/calendar/u/0/embed?src=5124e77732712dc6494f42205b74bbcf5bc45da633e6f127df7e444d9bada94a@group.calendar.google.com&ctz=Europe/Budapest";
+
     private static readonly string[] CandidateHeroImages = BuildCandidateHeroImages();
 
     private static string[] BuildCandidateHeroImages()
@@ -746,6 +754,14 @@ public partial class HomeViewModel : ObservableObject
     [RelayCommand]
     private static Task OpenDiscord() =>
         Launcher.Default.OpenAsync(DiscordUrl);
+
+    [RelayCommand]
+    private static Task OpenClubHemaRatings() =>
+        Launcher.Default.OpenAsync($"https://{ClubHemaRatingsUrl}");
+
+    [RelayCommand]
+    private static Task OpenMhsCalendar() =>
+        Launcher.Default.OpenAsync(MhsCalendarUrl);
 
     private IAsyncRelayCommand? _openAllNewsCommand;
     public IAsyncRelayCommand OpenAllNewsCommand => _openAllNewsCommand ??= new AsyncRelayCommand(OpenAllNews);

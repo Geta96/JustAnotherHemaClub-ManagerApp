@@ -617,6 +617,54 @@ app.MapPost("/profile/save", async (
     }
 }).RequireAuthorization().DisableAntiforgery();
 
+// --- Profile (static SSR forms): name / single flag / HEMA Ratings id ---
+app.MapPost("/profile/field", async (
+    HttpContext http, IGoogleSheetsService sheets, ICacheControl cache,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? field,
+    [Microsoft.AspNetCore.Mvc.FromForm] string? value) =>
+{
+    var meId = http.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    if (string.IsNullOrWhiteSpace(meId)) return Results.Redirect("/login");
+
+    try
+    {
+        cache.InvalidateFencers();
+        var me = (await sheets.GetFencersAsync()).FirstOrDefault(f => f.Id == meId);
+        if (me is null) return Results.Redirect("/profile");
+
+        var on = value == "on" || value == "true";
+        string section = "main";
+        switch (field)
+        {
+            case "name":
+                var n = (value ?? "").Trim();
+                if (n.Length == 0)
+                    return Results.Redirect($"/profile?error={Uri.EscapeDataString("Name is required.")}");
+                me.Name = n;
+                break;
+            case "gdpr": me.GdprAccepted = on; break;
+            case "liability": me.LiabilityAccepted = on; break;
+            case "student": me.IsStudent = on; break;
+            case "hema":
+                section = "hema";
+                var digits = new string((value ?? "").Where(char.IsDigit).ToArray());
+                me.HemaRatingsId = digits.Length == 0 ? null : digits;
+                break;
+            default:
+                return Results.Redirect("/profile");
+        }
+
+        await sheets.UpsertFencerAsync(me);
+        cache.InvalidateFencers();
+        return Results.Redirect($"/profile?saved={section}");
+    }
+    catch (Exception ex)
+    {
+        var key = field == "hema" ? "hemaError" : "error";
+        return Results.Redirect($"/profile?{key}={Uri.EscapeDataString($"Could not save: {ex.Message}")}");
+    }
+}).RequireAuthorization().DisableAntiforgery();
+
 // --- Finance: promote a member to instructor (instructor-only) ---
 app.MapPost("/fencers/promote", async (
     HttpContext http, IGoogleSheetsService sheets, AuthService auth,

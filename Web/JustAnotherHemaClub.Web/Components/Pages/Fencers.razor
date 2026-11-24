@@ -150,6 +150,21 @@ else
             @* ---- Activity (everyone) ---- *@
             <div class="detail-block">
                 <h3 class="block-title">Activity</h3>
+
+                <div class="kv">
+                    <span class="k">HEMA Ratings</span>
+                    <span class="v">
+                        @if (!string.IsNullOrWhiteSpace(sel.HemaRatingsUrl))
+                        {
+                            <a class="hema-btn" href="@sel.HemaRatingsUrl" target="_blank" rel="noopener">Open profile</a>
+                        }
+                        else
+                        {
+                            <span class="hema-ratings-not-linked">Not yet added by Fencer</span>
+                        }
+                    </span>
+                </div>
+
                 <div class="kv"><span class="k">Average attendance</span><span class="v">@_averageAttendanceText</span></div>
                 <div class="kv"><span class="k">Most in one month</span><span class="v">@_mostAttendanceText</span></div>
                 <div class="kv"><span class="k">1 on 1 received</span><span class="v">@_oneOnOneReceived</span></div>

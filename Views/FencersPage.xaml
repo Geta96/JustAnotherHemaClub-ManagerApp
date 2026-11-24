@@ -282,6 +282,24 @@
                                 <VerticalStackLayout Spacing="12">
                                     <Label Text="Activity" Style="{StaticResource H2}" />
 
+                                    <Grid ColumnDefinitions="120,*" ColumnSpacing="10">
+                                        <Label Grid.Column="0" Text="HEMA Ratings"
+                                               Style="{StaticResource Caption}" VerticalOptions="Center" />
+                                        <Button Grid.Column="1"
+                                                Text="Open profile"
+                                                HeightRequest="36" Padding="14,0"
+                                                FontSize="13"
+                                                HorizontalOptions="End"
+                                                BackgroundColor="{StaticResource HemaRatingsBg}"
+                                                TextColor="{StaticResource HemaRatingsText}"
+                                                IsVisible="{Binding HasHemaRatingsProfile}"
+                                                Clicked="OnOpenSelectedHemaRatingsTapped" />
+                                        <Label Grid.Column="1" Text="Not yet added by Fencer"
+                                               Style="{StaticResource Caption}"
+                                               HorizontalOptions="End"
+                                               IsVisible="{Binding HasHemaRatingsProfile, Converter={StaticResource InverseBoolConverter}}" />
+                                    </Grid>
+
                                     <Grid ColumnDefinitions="120,*" RowSpacing="8" ColumnSpacing="10">
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto" />

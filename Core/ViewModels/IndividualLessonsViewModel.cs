@@ -205,6 +205,9 @@ public partial class IndividualLessonsViewModel : ObservableObject
         }
         else if (IsInstructor)
         {
+            // Instructors see all non-deleted lessons.
+            q = q.Where(l => l.Status != IndividualLessonStatus.Rejected);
+
             // Apply optional filters.
             if (FilterStudent is not null)
                 q = q.Where(l => l.StudentId == FilterStudent.Id);
@@ -373,6 +376,8 @@ public partial class IndividualLessonsViewModel : ObservableObject
         l.InstructorId = CurrentUserId;
         l.Status = IndividualLessonStatus.Accepted;
         l.RequestedInstructorIds = new();
+
+        // Perform the actual acceptance on the sheet.
         await _sheets.UpsertIndividualLessonAsync(l);
         await ReloadLessonsAsync();
     }

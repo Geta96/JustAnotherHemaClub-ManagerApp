@@ -1,4 +1,4 @@
-using JustAnotherHemaClub.Services;
+﻿using JustAnotherHemaClub.Services;
 using JustAnotherHemaClub.Views;
 #if ANDROID
 using Google.Android.Material.AppBar;
@@ -51,10 +51,23 @@ public partial class AppShell : Shell
         if (FlyoutIsPresented)
         {
             FlyoutIsPresented = false;
-            return true; // handled � swallow the Back event
+            return true; // handled — swallow the Back event
         }
 
-        return base.OnBackButtonPressed();
+        // If there's a pushed-page stack (e.g., tournament flows), let Shell pop it normally.
+        if (Shell.Current?.Navigation.NavigationStack.Count > 1)
+            return base.OnBackButtonPressed();
+
+        var currentRoute = CurrentState?.Location?.OriginalString ?? "";
+        var isOnHome = currentRoute.Contains("home", StringComparison.OrdinalIgnoreCase);
+
+        if (!isOnHome)
+        {
+            _ = Shell.Current.GoToAsync("//home");
+            return true; // handled — don't exit, don't pop
+        }
+
+        return base.OnBackButtonPressed(); // on Home with nothing to pop → exit app
     }
 
 #if ANDROID

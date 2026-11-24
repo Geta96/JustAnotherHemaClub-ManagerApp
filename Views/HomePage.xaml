@@ -84,7 +84,7 @@
                                       IndicatorView="newsIndicator"
                                       Loop="False"
                                       IsSwipeEnabled="True"
-                                      HeightRequest="155"
+                                      HeightRequest="120"
                                       IsVisible="{Binding HasNews}">
                             <CarouselView.ItemTemplate>
                                 <DataTemplate x:DataType="corevm:NewsRow">
@@ -431,6 +431,16 @@
                         <Button Text="Discord"
                                 BackgroundColor="#5865F2" TextColor="{StaticResource Cream}"
                                 Command="{Binding OpenDiscordCommand}" />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <Button Grid.Column="0" Text="Club HEMA Ratings"
+                                    BackgroundColor="{StaticResource HemaRatingsBg}"
+                                    TextColor="{StaticResource HemaRatingsText}"
+                                    Command="{Binding OpenClubHemaRatingsCommand}" />
+                            <Button Grid.Column="1" Text="MHS Tournament Calendar"
+                                    BackgroundColor="#1F7A6C"
+                                    TextColor="#EAF6F3"
+                                    Command="{Binding OpenMhsCalendarCommand}" />
+                        </Grid>
                     </VerticalStackLayout>
                 </Border>
 

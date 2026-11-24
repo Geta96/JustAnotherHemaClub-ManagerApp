@@ -232,16 +232,8 @@ public sealed partial class CachedGoogleSheetsService : IGoogleSheetsService, IC
         if (_individualLessons is not null)
         {
             var idx = _individualLessons.FindIndex(l => l.Id == lesson.Id);
-            // Rejected = deleted from cached view.
-            if (lesson.Status == IndividualLessonStatus.Rejected)
-            {
-                if (idx >= 0) _individualLessons.RemoveAt(idx);
-            }
-            else
-            {
-                if (idx >= 0) _individualLessons[idx] = lesson;
-                else _individualLessons.Add(lesson);
-            }
+            if (idx >= 0) _individualLessons[idx] = lesson;
+            else _individualLessons.Add(lesson);
         }
     }
 

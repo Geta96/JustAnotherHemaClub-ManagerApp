@@ -218,6 +218,9 @@ public class AuthService
         _store.Remove(KeyPasswordHash);
         _store.Remove(KeyBiometricEnabled);
         _store.RemoveFlag(KeyUsername + ".set");
+        _store.RemoveFlag("notif_last_fencer_id");
+        _store.RemoveFlag("notif_last_is_instructor");
+        _store.RemoveFlag("notif_last_is_student");
     }
 
     public void MarkPersisted(bool persisted)

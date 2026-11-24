@@ -67,4 +67,12 @@ public partial class FencersPage : ContentPage
         _cache.InvalidatePayments();
         await _vm.LoadAsync(showSpinner: true);
     }
+
+    private async void OnOpenSelectedHemaRatingsTapped(object? sender, EventArgs e)
+    {
+        var url = _vm.SelectedDetails?.HemaRatingsUrl;
+        if (string.IsNullOrWhiteSpace(url)) return;
+        try { await Launcher.Default.OpenAsync(url); }
+        catch { /* best-effort */ }
+    }
 }

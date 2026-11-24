@@ -27,4 +27,11 @@ public partial class ProfilePage : ContentPage
 
     private async void OnOpenLiabilityTapped(object? sender, TappedEventArgs e)
         => await Navigation.PushAsync(_services.GetRequiredService<LiabilityPage>());
+
+    private async void OnOpenHemaRatingsTapped(object? sender, EventArgs e)
+    {
+        var url = $"{_vm.HemaRatingsBaseUrl}{_vm.HemaRatingsId}/";
+        try { await Launcher.Default.OpenAsync(url); }
+        catch { /* best-effort */ }
+    }
 }

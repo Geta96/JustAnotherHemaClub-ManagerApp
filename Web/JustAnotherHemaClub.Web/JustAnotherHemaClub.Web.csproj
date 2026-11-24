@@ -9,8 +9,8 @@
   </PropertyGroup>
 
     <PropertyGroup>
-    <Version>1.0.17</Version>
-    <InformationalVersion>1.0.17 (14)</InformationalVersion>
+    <Version>1.0.19</Version>
+    <InformationalVersion>1.0.19 (16)</InformationalVersion>
   </PropertyGroup>
 
   <PropertyGroup>

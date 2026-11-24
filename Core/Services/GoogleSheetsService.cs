@@ -95,12 +95,13 @@ public partial class GoogleSheetsService : IGoogleSheetsService
     // Columns: A=Id, B=Username, C=PasswordHash, D=Name, E=Email,
     //          F=Active, G=IsStudent, H=GdprAccepted, I=LiabilityAccepted, J=IsInstructor,
     //          K=PendingPasswordHash, L=PasswordResetRequestedAtUtc (ISO-8601 UTC),
-    //          M=LastPasswordResetStatus, N=LastPasswordResetReviewedAtUtc (ISO-8601 UTC)
+    //          M=LastPasswordResetStatus, N=LastPasswordResetReviewedAtUtc (ISO-8601 UTC),
+    //          O=HemaRatingsId
     public async Task<List<Fencer>> GetFencersAsync()
     {
         // UNFORMATTED so the ISO/serial reset timestamp can't be re-read as
         // locale-formatted text and flipped (see GetTrainingsAsync).
-        var rows = await ReadUnformattedAsync("Fencers!A2:N");
+        var rows = await ReadUnformattedAsync("Fencers!A2:O");
         return rows.Select(r => new Fencer
         {
             Id = S(r, 0),
@@ -124,7 +125,8 @@ public partial class GoogleSheetsService : IGoogleSheetsService
             LastPasswordResetReviewedAtUtc =
                 SheetRowMapper.TryParseDate(S(r, 13), out var revAt)
                     ? DateTime.SpecifyKind(revAt, DateTimeKind.Utc)
-                    : null
+                    : null,
+            HemaRatingsId = string.IsNullOrWhiteSpace(S(r, 14)) ? null : S(r, 14)
         }).ToList();
     }
 
@@ -137,12 +139,13 @@ public partial class GoogleSheetsService : IGoogleSheetsService
             f.PendingPasswordHash ?? "",
             f.PasswordResetRequestedAtUtc?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) ?? "",
             f.LastPasswordResetStatus ?? "",
-            f.LastPasswordResetReviewedAtUtc?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) ?? ""
+            f.LastPasswordResetReviewedAtUtc?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) ?? "",
+            f.HemaRatingsId ?? ""
         });
 
     public async Task UpsertFencerAsync(Fencer f)
     {
-        var rows = await ReadAsync("Fencers!A2:N");
+        var rows = await ReadAsync("Fencers!A2:O");
         int rowIndex = -1;
         for (int i = 0; i < rows.Count; i++)
             if (S(rows[i], 0) == f.Id) { rowIndex = i; break; }
@@ -155,11 +158,12 @@ public partial class GoogleSheetsService : IGoogleSheetsService
             f.PendingPasswordHash ?? "",
             f.PasswordResetRequestedAtUtc?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) ?? "",
             f.LastPasswordResetStatus ?? "",
-            f.LastPasswordResetReviewedAtUtc?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) ?? ""
+            f.LastPasswordResetReviewedAtUtc?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) ?? "",
+            f.HemaRatingsId ?? ""
         };
 
         if (rowIndex >= 0)
-            await UpdateAsync($"Fencers!A{rowIndex + 2}:N{rowIndex + 2}", values);
+            await UpdateAsync($"Fencers!A{rowIndex + 2}:O{rowIndex + 2}", values);
         else
             await AppendAsync("Fencers!A1", values);
     }
@@ -355,9 +359,6 @@ public partial class GoogleSheetsService : IGoogleSheetsService
             var statusStr = S(r, 7);
             if (!Enum.TryParse<IndividualLessonStatus>(statusStr, true, out var status))
                 status = IndividualLessonStatus.Accepted;
-
-            // Rejected rows are treated as deleted.
-            if (status == IndividualLessonStatus.Rejected) continue;
 
             list.Add(new IndividualLesson
             {

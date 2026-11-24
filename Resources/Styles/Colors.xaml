@@ -13,6 +13,10 @@
     <Color x:Key="DangerRed">#B23A3A</Color>
     <Color x:Key="Green">#3B8C4A</Color>
 
+    <!-- HEMA Ratings brand colors (dark grey background, light grey text) -->
+    <Color x:Key="HemaRatingsBg">#2E2E2E</Color>
+    <Color x:Key="HemaRatingsText">#D9D9D9</Color>
+
     <!-- Semantic aliases -->
     <Color x:Key="Primary">#5D1312</Color>
     <Color x:Key="OnPrimary">#EEE7D5</Color>

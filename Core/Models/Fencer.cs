@@ -49,6 +49,22 @@ public class Fencer
     /// <summary>UTC time the most recent password reset was reviewed.</summary>
     public DateTime? LastPasswordResetReviewedAtUtc { get; set; }
 
+    /// <summary>
+    /// The fencer's numeric HEMA Ratings fighter id (e.g. "9343" from
+    /// https://hemaratings.com/fighters/details/9343/). Null/empty when the
+    /// fencer hasn't linked a profile yet.
+    /// </summary>
+    [StringLength(50)]
+    public string? HemaRatingsId { get; set; }
+
+    public const string HemaRatingsBaseUrl = "https://hemaratings.com/fighters/details/";
+
+    /// <summary>Full HEMA Ratings profile URL, or null when not linked.</summary>
+    public string? HemaRatingsUrl =>
+        string.IsNullOrWhiteSpace(HemaRatingsId) ? null : $"{HemaRatingsBaseUrl}{HemaRatingsId!.Trim()}/";
+
+    public bool HasHemaRatingsProfile => !string.IsNullOrWhiteSpace(HemaRatingsId);
+
     /// <summary>True when this fencer has a reset awaiting instructor review.</summary>
     public bool HasPendingPasswordReset => !string.IsNullOrEmpty(PendingPasswordHash);
 

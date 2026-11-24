@@ -22,6 +22,7 @@ public class MainActivity : MauiAppCompatActivity
         CrossFingerprint.SetCurrentActivityResolver(() => Platform.CurrentActivity!);
 
         ApplyGradientStatusBar();
+        Platforms.Android.NotificationJobService.Schedule(this);
         HandleNotificationIntent(Intent);
     }
 

@@ -9,6 +9,10 @@
     --muted: #8C5A59;
     --danger: #B23A3A;
 
+    /* HEMA Ratings brand colors (dark grey bg, light grey text) */
+    --hema-bg: #2E2E2E;
+    --hema-text: #D9D9D9;
+
     --flyout-width: 280px;
 }
 
@@ -191,6 +195,66 @@ html, body {
 .social-btn.facebook  { background: #1877F2; }
 .social-btn.discord   { background: #5865F2; }
 
+/* --- HEMA Ratings (dark grey bg, light grey text) --- */
+.hema-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--hema-bg);
+    color: var(--hema-text);
+    border: none;
+    border-radius: 8px;
+    height: 46px;
+    padding: 0 18px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    transition: filter .15s ease;
+}
+.hema-btn:hover { filter: brightness(1.2); }
+.hema-btn:disabled,
+.hema-btn.disabled {
+    opacity: .5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+.hema-ratings-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.hema-ratings-prefix {
+    color: var(--muted);
+    font-size: 13px;
+    white-space: nowrap;
+}
+.hema-ratings-not-linked {
+    color: var(--muted);
+    font-style: italic;
+}
+
+/* --- MHS Tournament Calendar link (teal complements wine/slate palette) --- */
+.calendar-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: #1F7A6C;
+    color: #EAF6F3;
+    border: none;
+    border-radius: 8px;
+    height: 46px;
+    padding: 0 18px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    transition: filter .15s ease;
+}
+.calendar-btn:hover { filter: brightness(1.1); }
+
 /* --- Login page --- */
 .login-page { min-height: 100vh; }
 .login-shell {
@@ -288,7 +352,9 @@ html, body {
 .next-lesson.attending {
     border-color: #7FBF3F;
     border-width: 2px;
-    box-shadow: 0 0 14px rgba(127,191,63,.55);
+    box-shadow: 0 0 14px rgba(127,191,63,.
+
+55);
 }
 .next-lesson-row {
     display: flex;
