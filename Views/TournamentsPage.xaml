@@ -6,23 +6,24 @@
              x:DataType="vm:TournamentsViewModel"
              Title="Tournaments">
 
-    <Grid RowDefinitions="Auto,Auto,Auto,*">
-
-        <!-- Title + refresh -->
-        <Grid Grid.Row="0" Padding="16,16,16,0"
-              ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalOptions="Center">
-            <Label Grid.Column="0" Text="Tournaments" Style="{StaticResource H1}"
-                   VerticalOptions="Center" />
-            <Label Grid.Column="1"
-                   Style="{StaticResource RefreshIcon}">
+    <Shell.TitleView>
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalOptions="Fill">
+            <Label Grid.Column="0" Text="Tournaments" Style="{StaticResource HeaderTitle}" />
+            <Label Grid.Column="1" Style="{StaticResource HeaderRefreshIcon}">
                 <Label.GestureRecognizers>
                     <TapGestureRecognizer Tapped="OnRefreshTapped" />
                 </Label.GestureRecognizers>
             </Label>
         </Grid>
+    </Shell.TitleView>
+
+    <Grid RowDefinitions="Auto,Auto,Auto,*">
+
+        <!-- Title + refresh live in Shell.TitleView (nav bar) -->
 
         <!-- Filter + New button -->
         <VerticalStackLayout Grid.Row="1" Padding="16,12,16,0" Spacing="8">
+
             <Border BackgroundColor="{StaticResource CreamSoft}"
                     Stroke="{StaticResource Wine}" StrokeThickness="1"
                     StrokeShape="RoundRectangle 8"

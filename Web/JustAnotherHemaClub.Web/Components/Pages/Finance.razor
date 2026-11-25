@@ -11,6 +11,17 @@
 
 <h1 class="page-title">Finance</h1>
 
+@* Tab buttons: instructor-only. Members only ever see the Monthly view. *@
+@if (Auth.IsLoggedInInstructor)
+{
+    <div class="tab-bar">
+        <a class="tab @(Tab == "monthly" ? "active" : "")" href="/finance?tab=monthly">Monthly</a>
+        <a class="tab @(Tab == "yearly" ? "active" : "")" href="/finance?tab=yearly">Yearly</a>
+        <a class="tab @(Tab == "alltime" ? "active" : "")" href="/finance?tab=alltime">All Time</a>
+        <a class="tab @(Tab == "prices" ? "active" : "")" href="/finance?tab=prices">Prices</a>
+    </div>
+}
+
 @if (_loading)
 {
     <section class="card"><p class="muted">Loading…</p></section>
@@ -24,17 +35,6 @@ else
             <span class="pricing-warning">@_pricingWarning</span>
         }
     </div>
-
-    @* Tab buttons: instructor-only. Members only ever see the Monthly view. *@
-    @if (Auth.IsLoggedInInstructor)
-    {
-        <div class="tab-bar">
-            <a class="tab @(Tab == "monthly" ? "active" : "")" href="/finance?tab=monthly">Monthly</a>
-            <a class="tab @(Tab == "yearly" ? "active" : "")" href="/finance?tab=yearly">Yearly</a>
-            <a class="tab @(Tab == "alltime" ? "active" : "")" href="/finance?tab=alltime">All Time</a>
-            <a class="tab @(Tab == "prices" ? "active" : "")" href="/finance?tab=prices">Prices</a>
-        </div>
-    }
 
     @if (Tab == "yearly" && Auth.IsLoggedInInstructor)
     {
@@ -206,7 +206,7 @@ else
                     }
                     @if (visibleDues.Count > 0)
                     {
-                        <div class="sub-title wine">Dues</div>
+                        <div class="sub-title wine finance-group-title">Dues</div>
                         <ul class="weekly-list">
                             @foreach (var d in visibleDues)
                             {
@@ -312,22 +312,11 @@ else
                     @* --- Expenses / Income (instructor only) --- *@
                     @if (Auth.IsLoggedInInstructor && string.IsNullOrWhiteSpace(FencerFilter))
                     {
-                        <div class="sub-title wine">Expenses</div>
-                        @if (m.Expenses.Count > 0)
-                        {
-                            <ul class="weekly-list">
-                                @foreach (var e in m.Expenses)
-                                {
-                                    <li class="weekly-row">
-                                        <span class="day wine">@e.Date.ToString("yyyy-MM-dd")</span>
-                                        <span class="topic">@e.Category — @e.Description</span>
-                                        <span class="time">@e.Amount.ToString("N0") Ft</span>
-                                    </li>
-                                }
-                            </ul>
-                        }
-                        <details class="attendee-editor add-block">
-                            <summary>Add expense</summary>
+                        <details class="finance-section">
+                            <summary class="finance-section-summary">
+                                <span class="sub-title wine finance-group-title" style="margin:0;">Expenses</span>
+                                <span class="finance-add-btn expense">Add</span>
+                            </summary>
                             <form method="post" action="/finance/expense/add" class="stack-form">
                                 <input type="hidden" name="year" value="@m.Year" />
                                 <input type="hidden" name="month" value="@m.Month" />
@@ -337,23 +326,27 @@ else
                                 <button class="attend-btn" type="submit">Save expense</button>
                             </form>
                         </details>
-
-                        <div class="sub-title wine">Income</div>
-                        @if (m.Incomes.Count > 0)
+                        @if (m.Expenses.Count > 0)
                         {
                             <ul class="weekly-list">
-                                @foreach (var inc in m.Incomes)
+                                @foreach (var e in m.Expenses)
                                 {
-                                    <li class="weekly-row">
-                                        <span class="day wine">@inc.Date.ToString("yyyy-MM-dd")</span>
-                                        <span class="topic">@inc.Category — @inc.Description</span>
-                                        <span class="time">@inc.Amount.ToString("N0") Ft</span>
+                                    <li class="weekly-row finance-compact-row">
+                                        <div class="finance-compact-main">
+                                            <span class="finance-compact-date">@e.Date.ToString("yyyy-MM-dd")</span>
+                                            <span class="finance-compact-desc">@e.Category — @e.Description</span>
+                                        </div>
+                                        <span class="finance-compact-amount">@e.Amount.ToString("N0")</span>
                                     </li>
                                 }
                             </ul>
                         }
-                        <details class="attendee-editor add-block">
-                            <summary>Add income</summary>
+
+                        <details class="finance-section">
+                            <summary class="finance-section-summary">
+                                <span class="sub-title wine finance-group-title" style="margin:0;">Income</span>
+                                <span class="finance-add-btn income">Add</span>
+                            </summary>
                             <form method="post" action="/finance/income/add" class="stack-form">
                                 <input type="hidden" name="year" value="@m.Year" />
                                 <input type="hidden" name="month" value="@m.Month" />
@@ -363,6 +356,21 @@ else
                                 <button class="attend-btn" type="submit">Save income</button>
                             </form>
                         </details>
+                        @if (m.Incomes.Count > 0)
+                        {
+                            <ul class="weekly-list">
+                                @foreach (var inc in m.Incomes)
+                                {
+                                    <li class="weekly-row finance-compact-row">
+                                        <div class="finance-compact-main">
+                                            <span class="finance-compact-date">@inc.Date.ToString("yyyy-MM-dd")</span>
+                                            <span class="finance-compact-desc">@inc.Category — @inc.Description</span>
+                                        </div>
+                                        <span class="finance-compact-amount">@inc.Amount.ToString("N0")</span>
+                                    </li>
+                                }
+                            </ul>
+                        }
                     }
                 </details>
             }
@@ -401,8 +409,8 @@ else
     private bool _loading = true;
     private bool ShowPersonalSummary => !Auth.IsLoggedInInstructor && Auth.CurrentFencer is not null;
 
-    private string _pricingSummary = "";
-    private string _pricingWarning = "";
+    private string _pricingSummary = "",
+           _pricingWarning = "";
 
     private readonly List<MonthView> _months = new();
     private readonly List<PriceRule> _rules = new();

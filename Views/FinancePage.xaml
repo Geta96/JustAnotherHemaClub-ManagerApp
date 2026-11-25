@@ -9,6 +9,17 @@
              x:DataType="vm:FinanceViewModel"
              Title="Finance">
 
+    <Shell.TitleView>
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalOptions="Fill">
+            <Label Grid.Column="0" Text="Finance" Style="{StaticResource HeaderTitle}" />
+            <Label Grid.Column="1" Style="{StaticResource HeaderRefreshIcon}">
+                <Label.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnRefreshTapped" />
+                </Label.GestureRecognizers>
+            </Label>
+        </Grid>
+    </Shell.TitleView>
+
     <ContentPage.Resources>
 
         <!-- =================== MONTHLY TAB =================== -->
@@ -205,112 +216,113 @@
                                             </BindableLayout.ItemTemplate>
                                         </VerticalStackLayout>
 
-                                        <Label Text="Expenses" FontAttributes="Bold" TextColor="{StaticResource Wine}"
-                                               IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}" />
+                                        <!-- ===== Expenses (compact rows: date+description left, amount right) ===== -->
+                                        <Grid ColumnDefinitions="*,Auto"
+                                              IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}">
+                                            <Label Grid.Column="0" Text="Expenses" FontAttributes="Bold"
+                                                   TextColor="{StaticResource Wine}" VerticalOptions="Center" />
+                                            <Button Grid.Column="1" Text="Add"
+                                                    HeightRequest="34" Padding="14,0" FontSize="13"
+                                                    BackgroundColor="{StaticResource Muted}"
+                                                    TextColor="{StaticResource Cream}"
+                                                    IsVisible="{Binding IsAddingExpense, Converter={StaticResource InverseBoolConverter}}"
+                                                    Command="{Binding BeginAddExpenseCommand}" />
+                                        </Grid>
 
-                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Expenses}" Spacing="6"
+                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Expenses}" Spacing="2"
                                                              IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}">
                                             <BindableLayout.ItemTemplate>
                                                 <DataTemplate x:DataType="m:Expense">
-                                                    <Border Style="{StaticResource Card}">
-                                                        <VerticalStackLayout>
+                                                    <Grid ColumnDefinitions="*,Auto" Padding="0,4">
+                                                        <VerticalStackLayout Grid.Column="0" Spacing="0">
                                                             <Label Text="{Binding Date, StringFormat='{0:yyyy-MM-dd}'}"
-                                                                   FontAttributes="Bold" TextColor="{StaticResource Wine}" />
-                                                            <Label Text="{Binding Category}" />
-                                                            <Label Text="{Binding Description}" />
-                                                            <Label Text="{Binding Amount, StringFormat='{0:N0}'}"
-                                                                   TextColor="{StaticResource Slate}" />
+                                                                   FontAttributes="Bold" TextColor="{StaticResource Wine}"
+                                                                   FontSize="13" />
+                                                            <Label Text="{Binding Description}" Style="{StaticResource Caption}"
+                                                                   LineBreakMode="TailTruncation" />
                                                         </VerticalStackLayout>
-                                                    </Border>
+                                                        <Label Grid.Column="1" Text="{Binding Amount, StringFormat='{0:N0}'}"
+                                                               TextColor="{StaticResource Slate}"
+                                                               FontAttributes="Bold" FontSize="16"
+                                                               VerticalOptions="Center" />
+                                                    </Grid>
                                                 </DataTemplate>
                                             </BindableLayout.ItemTemplate>
                                         </VerticalStackLayout>
 
-                                        <Border Style="{StaticResource Card}"
-                                                IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}">
-                                            <VerticalStackLayout Spacing="8">
-                                                <!-- Money OUT trigger: desaturated wine to read as a "cost" affordance. -->
-                                                <Button Text="Add Expense"
+                                        <VerticalStackLayout Spacing="8" IsVisible="{Binding IsAddingExpense}">
+                                            <Label Text="Add expense" FontAttributes="Bold"
+                                                   TextColor="{StaticResource Wine}" />
+                                            <Entry Placeholder="Category" Text="{Binding NewExpenseCategory}" />
+                                            <Entry Placeholder="Description" Text="{Binding NewExpenseDescription}" />
+                                            <Entry Placeholder="Amount" Keyboard="Numeric" Text="{Binding NewExpenseAmount}" />
+
+                                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                                <Button Grid.Column="0" Text="Cancel"
+                                                        BackgroundColor="{StaticResource Wine}"
+                                                        TextColor="{StaticResource Cream}"
+                                                        Command="{Binding CancelAddExpenseCommand}" />
+                                                <Button Grid.Column="1" Text="Save"
                                                         BackgroundColor="{StaticResource Muted}"
                                                         TextColor="{StaticResource Cream}"
-                                                        IsVisible="{Binding IsAddingExpense, Converter={StaticResource InverseBoolConverter}}"
-                                                        Command="{Binding BeginAddExpenseCommand}" />
-
-                                                <VerticalStackLayout Spacing="8" IsVisible="{Binding IsAddingExpense}">
-                                                    <Label Text="Add expense" FontAttributes="Bold"
-                                                           TextColor="{StaticResource Wine}" />
-                                                    <Entry Placeholder="Category" Text="{Binding NewExpenseCategory}" />
-                                                    <Entry Placeholder="Description" Text="{Binding NewExpenseDescription}" />
-                                                    <Entry Placeholder="Amount" Keyboard="Numeric" Text="{Binding NewExpenseAmount}" />
-
-                                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-                                                        <Button Grid.Column="0" Text="Cancel"
-                                                                BackgroundColor="{StaticResource Wine}"
-                                                                TextColor="{StaticResource Cream}"
-                                                                Command="{Binding CancelAddExpenseCommand}" />
-                                                        <Button Grid.Column="1" Text="Save"
-                                                                BackgroundColor="{StaticResource Muted}"
-                                                                TextColor="{StaticResource Cream}"
-                                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.AddExpenseCommand}"
-                                                                CommandParameter="{Binding .}" />
-                                                    </Grid>
-                                                </VerticalStackLayout>
-                                            </VerticalStackLayout>
-                                        </Border>
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.AddExpenseCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                            </Grid>
+                                        </VerticalStackLayout>
 
                                         <!-- ===== Income (one-off, non-dues): donations, gear sales, fencers paying for extras. ===== -->
-                                        <Label Text="Income" FontAttributes="Bold" TextColor="{StaticResource Wine}"
-                                               IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}" />
+                                        <Grid ColumnDefinitions="*,Auto"
+                                              IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}">
+                                            <Label Grid.Column="0" Text="Income" FontAttributes="Bold"
+                                                   TextColor="{StaticResource Wine}" VerticalOptions="Center" />
+                                            <Button Grid.Column="1" Text="Add"
+                                                    HeightRequest="34" Padding="14,0" FontSize="13"
+                                                    BackgroundColor="#476FB5"
+                                                    TextColor="{StaticResource Cream}"
+                                                    IsVisible="{Binding IsAddingIncome, Converter={StaticResource InverseBoolConverter}}"
+                                                    Command="{Binding BeginAddIncomeCommand}" />
+                                        </Grid>
 
-                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Incomes}" Spacing="6"
+                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Incomes}" Spacing="2"
                                                              IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}">
                                             <BindableLayout.ItemTemplate>
                                                 <DataTemplate x:DataType="m:Income">
-                                                    <Border Style="{StaticResource Card}">
-                                                        <VerticalStackLayout>
+                                                    <Grid ColumnDefinitions="*,Auto" Padding="0,4">
+                                                        <VerticalStackLayout Grid.Column="0" Spacing="0">
                                                             <Label Text="{Binding Date, StringFormat='{0:yyyy-MM-dd}'}"
-                                                                   FontAttributes="Bold" TextColor="{StaticResource Wine}" />
-                                                            <Label Text="{Binding Category}" />
-                                                            <Label Text="{Binding Description}" />
-                                                            <Label Text="{Binding Amount, StringFormat='{0:N0}'}"
-                                                                   TextColor="{StaticResource Slate}" />
+                                                                   FontAttributes="Bold" TextColor="{StaticResource Wine}"
+                                                                   FontSize="13" />
+                                                            <Label Text="{Binding Description}" Style="{StaticResource Caption}"
+                                                                   LineBreakMode="TailTruncation" />
                                                         </VerticalStackLayout>
-                                                    </Border>
+                                                        <Label Grid.Column="1" Text="{Binding Amount, StringFormat='{0:N0}'}"
+                                                               TextColor="{StaticResource Slate}"
+                                                               FontAttributes="Bold" FontSize="16"
+                                                               VerticalOptions="Center" />
+                                                    </Grid>
                                                 </DataTemplate>
                                             </BindableLayout.ItemTemplate>
                                         </VerticalStackLayout>
 
-                                        <Border Style="{StaticResource Card}"
-                                                IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}">
-                                            <VerticalStackLayout Spacing="8">
-                                                <!-- Money IN trigger: blue, to read as a "deposit" affordance. -->
-                                                <Button Text="Add Income"
+                                        <VerticalStackLayout Spacing="8" IsVisible="{Binding IsAddingIncome}">
+                                            <Label Text="Add income" FontAttributes="Bold"
+                                                   TextColor="{StaticResource Wine}" />
+                                            <Entry Placeholder="Category" Text="{Binding NewIncomeCategory}" />
+                                            <Entry Placeholder="Description" Text="{Binding NewIncomeDescription}" />
+                                            <Entry Placeholder="Amount" Keyboard="Numeric" Text="{Binding NewIncomeAmount}" />
+
+                                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                                <Button Grid.Column="0" Text="Cancel"
+                                                        BackgroundColor="{StaticResource Wine}"
+                                                        TextColor="{StaticResource Cream}"
+                                                        Command="{Binding CancelAddIncomeCommand}" />
+                                                <Button Grid.Column="1" Text="Save"
                                                         BackgroundColor="#476FB5"
                                                         TextColor="{StaticResource Cream}"
-                                                        IsVisible="{Binding IsAddingIncome, Converter={StaticResource InverseBoolConverter}}"
-                                                        Command="{Binding BeginAddIncomeCommand}" />
-
-                                                <VerticalStackLayout Spacing="8" IsVisible="{Binding IsAddingIncome}">
-                                                    <Label Text="Add income" FontAttributes="Bold"
-                                                           TextColor="{StaticResource Wine}" />
-                                                    <Entry Placeholder="Category" Text="{Binding NewIncomeCategory}" />
-                                                    <Entry Placeholder="Description" Text="{Binding NewIncomeDescription}" />
-                                                    <Entry Placeholder="Amount" Keyboard="Numeric" Text="{Binding NewIncomeAmount}" />
-
-                                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-                                                        <Button Grid.Column="0" Text="Cancel"
-                                                                BackgroundColor="{StaticResource Wine}"
-                                                                TextColor="{StaticResource Cream}"
-                                                                Command="{Binding CancelAddIncomeCommand}" />
-                                                        <Button Grid.Column="1" Text="Save"
-                                                                BackgroundColor="#476FB5"
-                                                                TextColor="{StaticResource Cream}"
-                                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.AddIncomeCommand}"
-                                                                CommandParameter="{Binding .}" />
-                                                    </Grid>
-                                                </VerticalStackLayout>
-                                            </VerticalStackLayout>
-                                        </Border>
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.AddIncomeCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                            </Grid>
+                                        </VerticalStackLayout>
                                     </VerticalStackLayout>
                                 </VerticalStackLayout>
                             </Border>
@@ -564,31 +576,10 @@
 
     <Grid RowDefinitions="Auto,Auto,Auto,*">
 
-        <!-- Title + refresh -->
-        <Grid Grid.Row="0" Padding="16,16,16,0"
-              ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalOptions="Center">
-            <Label Grid.Column="0" Text="Finance" Style="{StaticResource H1}"
-                   VerticalOptions="Center" />
-            <Label Grid.Column="1"
-                   Style="{StaticResource RefreshIcon}">
-                <Label.GestureRecognizers>
-                    <TapGestureRecognizer Tapped="OnRefreshTapped" />
-                </Label.GestureRecognizers>
-            </Label>
-        </Grid>
-
-        <!-- Pricing (today's active price rules) + coverage-gap warning -->
-        <VerticalStackLayout Grid.Row="1" Padding="16,8,16,0" Spacing="2">
-            <Label Text="{Binding PricingSummary}"
-                   Style="{StaticResource Caption}" />
-            <Label Text="{Binding PricingWarning}"
-                   IsVisible="{Binding HasPricingWarning}"
-                   TextColor="{StaticResource DangerRed}"
-                   FontAttributes="Bold" />
-        </VerticalStackLayout>
+        <!-- Title + refresh live in Shell.TitleView (nav bar) -->
 
         <!-- Tab buttons (instructor-only; member sees only the Monthly carousel page) -->
-        <Grid Grid.Row="2" Padding="16,8" ColumnDefinitions="*,*,*,*" ColumnSpacing="6"
+        <Grid Grid.Row="1" Padding="16,12,16,8" ColumnDefinitions="*,*,*,*" ColumnSpacing="6"
               IsVisible="{Binding IsLoggedInInstructor}">
             <Button Grid.Column="0" Text="Monthly"
                     Command="{Binding ShowMonthlyTabCommand}"
@@ -635,6 +626,16 @@
                 </Button.Triggers>
             </Button>
         </Grid>
+
+        <!-- Pricing (today's active price rules) + coverage-gap warning -->
+        <VerticalStackLayout Grid.Row="2" Padding="16,0,16,0" Spacing="2">
+            <Label Text="{Binding PricingSummary}"
+                   Style="{StaticResource Caption}" />
+            <Label Text="{Binding PricingWarning}"
+                   IsVisible="{Binding HasPricingWarning}"
+                   TextColor="{StaticResource DangerRed}"
+                   FontAttributes="Bold" />
+        </VerticalStackLayout>
 
         <!-- Swipeable tab content -->
         <CarouselView Grid.Row="3"

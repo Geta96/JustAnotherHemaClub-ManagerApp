@@ -29,28 +29,32 @@ public class NewsPage : ContentPage
         var h2Style = GetStyle("H2");
         var captionStyle = GetStyle("Caption");
         var refreshStyle = GetStyle("RefreshIcon");
+        var headerTitleStyle = GetStyle("HeaderTitle");
+        var headerRefreshStyle = GetStyle("HeaderRefreshIcon");
 
-        // Title + Refresh header
+        // Title + Refresh live in the Shell nav bar (TitleView)
         var headerGrid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitionCollection(
                 new ColumnDefinition(GridLength.Star),
                 new ColumnDefinition(GridLength.Auto)),
             ColumnSpacing = 8,
-            VerticalOptions = LayoutOptions.Center
+            VerticalOptions = LayoutOptions.Fill
         };
 
-        var titleLabel = new Label { Text = "News", VerticalOptions = LayoutOptions.Center };
-        if (h1Style is not null) titleLabel.Style = h1Style;
+        var titleLabel = new Label { Text = "News", VerticalOptions = LayoutOptions.Center, TextColor = cream };
+        if (headerTitleStyle is not null) titleLabel.Style = headerTitleStyle;
         headerGrid.Add(titleLabel, 0, 0);
 
-        var refreshLabel = new Label();
-        if (refreshStyle is not null) refreshLabel.Style = refreshStyle;
+        var refreshLabel = new Label { TextColor = cream };
+        if (headerRefreshStyle is not null) refreshLabel.Style = headerRefreshStyle;
+        else if (refreshStyle is not null) refreshLabel.Style = refreshStyle;
         else refreshLabel.Text = "↻";
         var tap = new TapGestureRecognizer();
         tap.Tapped += async (_, _) => await _vm.LoadAsync();
         refreshLabel.GestureRecognizers.Add(tap);
         headerGrid.Add(refreshLabel, 1, 0);
+        Shell.SetTitleView(this, headerGrid);
 
         // Create news card (instructors only, collapsed by default)
         var createCard = new Border();
@@ -311,9 +315,9 @@ public class NewsPage : ContentPage
         {
             Content = new VerticalStackLayout
             {
-                Padding = new Thickness(16),
+                Padding = new Thickness(16, 12, 16, 16),
                 Spacing = 14,
-                Children = { headerGrid, createCard, loadingIndicator, emptyCard, newsStack }
+                Children = { createCard, loadingIndicator, emptyCard, newsStack }
             }
         };
     }

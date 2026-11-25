@@ -179,13 +179,13 @@
 
                         <!-- HEMA Ratings profile link -->
                         <Label Text="HEMA Ratings profile" Style="{StaticResource Caption}" FontAttributes="Bold" />
-                        <Label Text="Paste your HEMA Ratings fighter number (e.g. 9343 from hemaratings.com/fighters/details/9343/)."
+                        <Label Text="Paste your HEMA Ratings fighter id."
                                Style="{StaticResource Caption}" />
                         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
                             <Label Grid.Column="0" Text="hemaratings.com/fighters/details/"
                                    VerticalOptions="Center" FontSize="12"
                                    TextColor="{StaticResource Muted}" />
-                            <Entry Grid.Column="1" Placeholder="9343" Keyboard="Numeric"
+                            <Entry Grid.Column="1" Placeholder="0000" Keyboard="Numeric"
                                    Text="{Binding HemaRatingsId}" />
                             <Button Grid.Column="2" Text="Save"
                                     Command="{Binding SaveHemaRatingsCommand}" />

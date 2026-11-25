@@ -157,7 +157,7 @@ public partial class FencerDetailsVm : ObservableObject
 
     public string ActiveMonthsText { get; }
     public bool HasActiveMonths => !string.IsNullOrWhiteSpace(ActiveMonthsText) &&
-                                   ActiveMonthsText != "?";
+                                   ActiveMonthsText != "—";
 
     public string AverageAttendanceText { get; }
     public string MostAttendanceText { get; }
@@ -179,9 +179,9 @@ public partial class FencerDetailsVm : ObservableObject
     public FencerDetailsVm(Fencer fencer, int sessionsThisMonth, decimal amountDue, bool isPaid)
         : this(fencer, sessionsThisMonth, amountDue, isPaid,
                recentSessions: Array.Empty<FencerSessionRow>(),
-               activeMonthsText: "?",
-               averageAttendanceText: "?",
-               mostAttendanceText: "?",
+               activeMonthsText: "—",
+               averageAttendanceText: "—",
+               mostAttendanceText: "—",
                oneOnOneReceived: 0,
                oneOnOneGiven: 0)
     { }

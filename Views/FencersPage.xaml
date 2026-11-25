@@ -6,20 +6,21 @@
              x:Class="JustAnotherHemaClub.Views.FencersPage"
              x:DataType="vm:FencersViewModel"
              Title="Fencers">
+
+    <Shell.TitleView>
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalOptions="Fill">
+            <Label Grid.Column="0" Text="Fencer profiles" Style="{StaticResource HeaderTitle}" />
+            <Label Grid.Column="1" Style="{StaticResource HeaderRefreshIcon}">
+                <Label.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnRefreshTapped" />
+                </Label.GestureRecognizers>
+            </Label>
+        </Grid>
+    </Shell.TitleView>
+
     <Grid>
         <ScrollView>
-            <VerticalStackLayout Padding="16" Spacing="14">
-
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalOptions="Center">
-                    <Label Grid.Column="0" Text="Fencer profiles" Style="{StaticResource H1}"
-                           VerticalOptions="Center" />
-                    <Label Grid.Column="1"
-                           Style="{StaticResource RefreshIcon}">
-                        <Label.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnRefreshTapped" />
-                        </Label.GestureRecognizers>
-                    </Label>
-                </Grid>
+            <VerticalStackLayout Padding="16,12,16,16" Spacing="14">
 
                 <VerticalStackLayout Spacing="14"
                                      IsVisible="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}">
@@ -369,7 +370,7 @@
                                         <VerticalStackLayout BindableLayout.ItemsSource="{Binding RecentSessions}" Spacing="4">
                                             <BindableLayout.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:FencerSessionRow">
-                                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                                                    <Grid ColumnDefinitions="128,*" ColumnSpacing="12">
                                                         <Label Grid.Column="0"
                                                                Text="{Binding DateText}"
                                                                FontAttributes="Bold"

@@ -101,6 +101,21 @@
         <Setter Property="VerticalTextAlignment" Value="Center" />
     </Style>
 
+    <!-- Nav-bar (Shell.TitleView) header: page title + beige refresh icon on the wine bar. -->
+    <Style x:Key="HeaderTitle" TargetType="Label">
+        <Setter Property="FontSize" Value="20" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="TextColor" Value="{StaticResource OnPrimary}" />
+        <Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="LineBreakMode" Value="TailTruncation" />
+    </Style>
+
+    <Style x:Key="HeaderRefreshIcon" TargetType="Label" BasedOn="{StaticResource RefreshIcon}">
+        <Setter Property="TextColor" Value="{StaticResource Cream}" />
+        <Setter Property="FontSize" Value="26" />
+        <Setter Property="Margin" Value="0,0,8,0" />
+    </Style>
+
     <!-- NavigationPage (used on LoginPage) -->
     <Style TargetType="NavigationPage">
         <Setter Property="BarBackgroundColor" Value="{StaticResource Wine}" />

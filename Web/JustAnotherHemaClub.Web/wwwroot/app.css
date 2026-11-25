@@ -1180,7 +1180,7 @@ html, body {
     pointer-events: none;
 }
 
-.elim-options { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; max-width: 360px; }
+.elim-options { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .elim-option-form { margin: 0; }
 .elim-option-btn {
     display: block;
@@ -1575,4 +1575,64 @@ html, body {
     height: 1px;
     background: var(--wine);
     opacity: .35;
+}
+
+/* --- Finance: compact Expenses / Income section (mirrors the MAUI layout) --- */
+.finance-section {
+    margin-top: 10px;
+}
+.finance-section-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    cursor: pointer;
+    list-style: none;
+}
+.finance-section-summary::-webkit-details-marker { display: none; }
+.finance-section-summary::marker { content: ""; }
+
+.finance-add-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    padding: 0 14px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--cream);
+    transition: filter .15s ease;
+    flex: 0 0 auto;
+}
+.finance-section-summary:hover .finance-add-btn { filter: brightness(1.08); }
+.finance-add-btn.expense { background: var(--muted); }
+.finance-add-btn.income  { background: #476FB5; }
+
+.finance-compact-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+.finance-compact-main { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.finance-compact-date { color: var(--wine); font-weight: 700; font-size: 13px; }
+.finance-compact-desc {
+    color: var(--muted);
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.finance-compact-amount {
+    color: var(--slate);
+    font-weight: 700;
+    font-size: 16px;
+    white-space: nowrap;
+}
+
+/* Larger section headers for Dues / Expenses / Income on the Finance page. */
+.finance-group-title {
+    font-size: 17px;
 }

@@ -381,25 +381,28 @@ public partial class FencersViewModel : ObservableObject
             .ToList();
 
         string activeMonthsText = perMonth.Count == 0
-            ? "�"
-            : string.Join(", ",
+            ? "—"
+            : string.Join("; ",
                 perMonth
                     .OrderByDescending(x => x.Year).ThenByDescending(x => x.Month)
-                    .Select(x => new DateTime(x.Year, x.Month, 1)
-                        .ToString("MMM yyyy", CultureInfo.InvariantCulture)));
+                    .GroupBy(x => x.Year)
+                    .OrderByDescending(g => g.Key)
+                    .Select(g => $"{g.Key} " + string.Join(", ",
+                        g.Select(x => new DateTime(x.Year, x.Month, 1)
+                            .ToString("MMM", CultureInfo.InvariantCulture)))));
 
         string averageAttendanceText;
         string mostAttendanceText;
         if (perMonth.Count == 0)
         {
-            averageAttendanceText = "�";
-            mostAttendanceText = "�";
+            averageAttendanceText = "—";
+            mostAttendanceText = "—";
         }
         else
         {
-            // Compact stat-sheet format: "1.5 avg � 2 mo"
+            // Compact stat-sheet format: "1.5 avg · 2 mo"
             var avg = perMonth.Average(x => x.Count);
-            averageAttendanceText = $"{avg:0.0} avg � {perMonth.Count} mo";
+            averageAttendanceText = $"{avg:0.0} avg · {perMonth.Count} mo";
 
             // Compact "most" format: "2 in Jun 2026"
             var top = perMonth.OrderByDescending(x => x.Count).First();

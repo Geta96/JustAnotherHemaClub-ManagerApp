@@ -425,7 +425,13 @@ else
             _averageAttendanceText = $"{avg:0.0} avg · {perMonth.Count} mo";
             var top = perMonth.OrderByDescending(x => x.Count).First();
             _mostAttendanceText = $"{top.Count} in {MonthLabel(top.Year, top.Month)}";
-            _activeMonthsText = string.Join(", ", perMonth.Select(x => MonthLabel(x.Year, x.Month)));
+            _activeMonthsText = string.Join("; ",
+                perMonth
+                    .GroupBy(x => x.Year)
+                    .OrderByDescending(g => g.Key)
+                    .Select(g => $"{g.Key} " + string.Join(", ",
+                        g.Select(x => new DateTime(x.Year, x.Month, 1)
+                            .ToString("MMM", CultureInfo.InvariantCulture)))));
         }
 
         _oneOnOneReceived = _allLessons.Count(l =>

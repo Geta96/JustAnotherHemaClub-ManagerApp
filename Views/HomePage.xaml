@@ -436,7 +436,7 @@
                                     BackgroundColor="{StaticResource HemaRatingsBg}"
                                     TextColor="{StaticResource HemaRatingsText}"
                                     Command="{Binding OpenClubHemaRatingsCommand}" />
-                            <Button Grid.Column="1" Text="MHS Tournament Calendar"
+                            <Button Grid.Column="1" Text="Tournament Calendar"
                                     BackgroundColor="#1F7A6C"
                                     TextColor="#EAF6F3"
                                     Command="{Binding OpenMhsCalendarCommand}" />
