@@ -216,7 +216,7 @@
                                             </BindableLayout.ItemTemplate>
                                         </VerticalStackLayout>
 
-                                        <!-- ===== Expenses (compact rows: date+description left, amount right) ===== -->
+                                        <!-- ===== Expenses (cards: date+description left, amount right) ===== -->
                                         <Grid ColumnDefinitions="*,Auto"
                                               IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}">
                                             <Label Grid.Column="0" Text="Expenses" FontAttributes="Bold"
@@ -228,27 +228,6 @@
                                                     IsVisible="{Binding IsAddingExpense, Converter={StaticResource InverseBoolConverter}}"
                                                     Command="{Binding BeginAddExpenseCommand}" />
                                         </Grid>
-
-                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Expenses}" Spacing="2"
-                                                             IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}">
-                                            <BindableLayout.ItemTemplate>
-                                                <DataTemplate x:DataType="m:Expense">
-                                                    <Grid ColumnDefinitions="*,Auto" Padding="0,4">
-                                                        <VerticalStackLayout Grid.Column="0" Spacing="0">
-                                                            <Label Text="{Binding Date, StringFormat='{0:yyyy-MM-dd}'}"
-                                                                   FontAttributes="Bold" TextColor="{StaticResource Wine}"
-                                                                   FontSize="13" />
-                                                            <Label Text="{Binding Description}" Style="{StaticResource Caption}"
-                                                                   LineBreakMode="TailTruncation" />
-                                                        </VerticalStackLayout>
-                                                        <Label Grid.Column="1" Text="{Binding Amount, StringFormat='{0:N0}'}"
-                                                               TextColor="{StaticResource Slate}"
-                                                               FontAttributes="Bold" FontSize="16"
-                                                               VerticalOptions="Center" />
-                                                    </Grid>
-                                                </DataTemplate>
-                                            </BindableLayout.ItemTemplate>
-                                        </VerticalStackLayout>
 
                                         <VerticalStackLayout Spacing="8" IsVisible="{Binding IsAddingExpense}">
                                             <Label Text="Add expense" FontAttributes="Bold"
@@ -270,6 +249,29 @@
                                             </Grid>
                                         </VerticalStackLayout>
 
+                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Expenses}" Spacing="6"
+                                                             IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}">
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate x:DataType="m:Expense">
+                                                    <Border Style="{StaticResource Card}">
+                                                        <Grid ColumnDefinitions="*,Auto">
+                                                            <VerticalStackLayout Grid.Column="0" Spacing="0">
+                                                                <Label Text="{Binding Date, StringFormat='{0:yyyy-MM-dd}'}"
+                                                                       FontAttributes="Bold" TextColor="{StaticResource Wine}"
+                                                                       FontSize="13" />
+                                                                <Label Text="{Binding Description}" Style="{StaticResource Caption}"
+                                                                       LineBreakMode="TailTruncation" />
+                                                            </VerticalStackLayout>
+                                                            <Label Grid.Column="1" Text="{Binding Amount, StringFormat='{0:N0}'}"
+                                                                   TextColor="{StaticResource Slate}"
+                                                                   FontAttributes="Bold" FontSize="16"
+                                                                   VerticalOptions="Center" />
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
+                                        </VerticalStackLayout>
+
                                         <!-- ===== Income (one-off, non-dues): donations, gear sales, fencers paying for extras. ===== -->
                                         <Grid ColumnDefinitions="*,Auto"
                                               IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}">
@@ -282,27 +284,6 @@
                                                     IsVisible="{Binding IsAddingIncome, Converter={StaticResource InverseBoolConverter}}"
                                                     Command="{Binding BeginAddIncomeCommand}" />
                                         </Grid>
-
-                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Incomes}" Spacing="2"
-                                                             IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}">
-                                            <BindableLayout.ItemTemplate>
-                                                <DataTemplate x:DataType="m:Income">
-                                                    <Grid ColumnDefinitions="*,Auto" Padding="0,4">
-                                                        <VerticalStackLayout Grid.Column="0" Spacing="0">
-                                                            <Label Text="{Binding Date, StringFormat='{0:yyyy-MM-dd}'}"
-                                                                   FontAttributes="Bold" TextColor="{StaticResource Wine}"
-                                                                   FontSize="13" />
-                                                            <Label Text="{Binding Description}" Style="{StaticResource Caption}"
-                                                                   LineBreakMode="TailTruncation" />
-                                                        </VerticalStackLayout>
-                                                        <Label Grid.Column="1" Text="{Binding Amount, StringFormat='{0:N0}'}"
-                                                               TextColor="{StaticResource Slate}"
-                                                               FontAttributes="Bold" FontSize="16"
-                                                               VerticalOptions="Center" />
-                                                    </Grid>
-                                                </DataTemplate>
-                                            </BindableLayout.ItemTemplate>
-                                        </VerticalStackLayout>
 
                                         <VerticalStackLayout Spacing="8" IsVisible="{Binding IsAddingIncome}">
                                             <Label Text="Add income" FontAttributes="Bold"
@@ -322,6 +303,29 @@
                                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.AddIncomeCommand}"
                                                         CommandParameter="{Binding .}" />
                                             </Grid>
+                                        </VerticalStackLayout>
+
+                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Incomes}" Spacing="6"
+                                                             IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:FinanceTab}}, Path=Vm.ShowExpensesAndIncomes}">
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate x:DataType="m:Income">
+                                                    <Border Style="{StaticResource Card}">
+                                                        <Grid ColumnDefinitions="*,Auto">
+                                                            <VerticalStackLayout Grid.Column="0" Spacing="0">
+                                                                <Label Text="{Binding Date, StringFormat='{0:yyyy-MM-dd}'}"
+                                                                       FontAttributes="Bold" TextColor="{StaticResource Wine}"
+                                                                       FontSize="13" />
+                                                                <Label Text="{Binding Description}" Style="{StaticResource Caption}"
+                                                                       LineBreakMode="TailTruncation" />
+                                                            </VerticalStackLayout>
+                                                            <Label Grid.Column="1" Text="{Binding Amount, StringFormat='{0:N0}'}"
+                                                                   TextColor="{StaticResource Slate}"
+                                                                   FontAttributes="Bold" FontSize="16"
+                                                                   VerticalOptions="Center" />
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
                                         </VerticalStackLayout>
                                     </VerticalStackLayout>
                                 </VerticalStackLayout>
