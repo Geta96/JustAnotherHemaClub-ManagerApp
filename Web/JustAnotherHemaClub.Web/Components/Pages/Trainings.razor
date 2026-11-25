@@ -293,6 +293,8 @@ else
             </form>
         }
 
+        <h2 class="page-title" style="font-size:1.4rem;margin:14px 0 8px;">Trainings by month</h2>
+
         @foreach (var month in _trainingsByMonth)
         {
             var visibleTrainings = string.IsNullOrWhiteSpace(FencerFilter)
@@ -305,12 +307,23 @@ else
                 <details class="card month-card" open="@isCurrentMonth">
                     <summary class="month-summary">
                         <span class="card-title">@month.Title</span>
-                        <span class="month-count">@visibleTrainings.Count</span>
                     </summary>
                     <ul class="weekly-list">
+                        @{ string? lastSection = null; }
                         @foreach (var t in visibleTrainings)
                         {
                             var attending = _meId is not null && t.AttendeeFencerIds.Contains(_meId);
+                            if (isCurrentMonth)
+                            {
+                                var sectionLabel = t.Date.Date > DateTime.Today ? "Future trainings"
+                                    : t.Date.Date == DateTime.Today ? "Today's training"
+                                    : "Past trainings";
+                                if (sectionLabel != lastSection)
+                                {
+                                    lastSection = sectionLabel;
+                                    <li class="training-separator">@sectionLabel</li>
+                                }
+                            }
                             <li class="weekly-row training-row-outer">
                                 <div class="training-row">
                                     <div class="training-main">

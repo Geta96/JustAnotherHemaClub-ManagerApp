@@ -48,8 +48,7 @@
                 <Entry Placeholder="Username" Text="{Binding Username}" />
                 <Entry Placeholder="Password" IsPassword="True" Text="{Binding Password}" />
 
-                <HorizontalStackLayout Spacing="8" VerticalOptions="Center"
-                                       IsVisible="{Binding ShowKeepLoggedIn}">
+                <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
                     <CheckBox IsChecked="{Binding KeepLoggedIn}" />
                     <Label Text="Keep me logged in"
                            VerticalOptions="Center" />
@@ -69,11 +68,6 @@
                         IsVisible="{Binding CanTryBiometricLogin}"
                         Command="{Binding TryBiometricLoginCommand}" />
 
-                <Button Text="Register as new fencer"
-                        BackgroundColor="#476FB5"
-                        TextColor="{StaticResource Cream}"
-                        Command="{Binding GoToRegisterCommand}" />
-
                 <!-- Error banner -->
                 <Border IsVisible="{Binding HasError}"
                         BackgroundColor="#FDECEC"
@@ -85,9 +79,17 @@
                            FontAttributes="Bold" />
                 </Border>
 
-                <Button Text="Forgot my password"
-                        Style="{StaticResource GhostButton}"
-                        Command="{Binding ForgotPasswordCommand}" />
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                    <Button Grid.Column="0"
+                            Text="Register"
+                            BackgroundColor="#476FB5"
+                            TextColor="{StaticResource Cream}"
+                            Command="{Binding GoToRegisterCommand}" />
+                    <Button Grid.Column="1"
+                            Text="Forgot my password"
+                            Style="{StaticResource GhostButton}"
+                            Command="{Binding ForgotPasswordCommand}" />
+                </Grid>
             </VerticalStackLayout>
         </Border>
     </Grid>

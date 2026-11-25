@@ -13,6 +13,8 @@ public class AuthService
     private const string KeyUsername = "auth.username";
     private const string KeyPasswordHash = "auth.passwordHash";
     private const string KeyBiometricEnabled = "auth.biometricEnabled";
+    private const string KeyKeepLoggedIn = "auth.keepLoggedIn";
+    private const string KeyAppBuild = "auth.appBuild";
 
     public Fencer? CurrentFencer { get; private set; }
     public bool IsGuest { get; private set; }
@@ -189,10 +191,21 @@ public class AuthService
     // ------- Persistence (ICredentialStore) -------
 
     public async Task PersistCredentialsAsync(string username, string passwordHash, bool useBiometric)
+        => await PersistCredentialsAsync(username, passwordHash, useBiometric, keepLoggedIn: !useBiometric, appBuild: null);
+
+    /// <summary>
+    /// Persists credentials. <paramref name="keepLoggedIn"/> enables silent
+    /// auto-login (takes precedence over biometrics); <paramref name="appBuild"/>
+    /// records the build that saved them so an app update forces a fresh login.
+    /// </summary>
+    public async Task PersistCredentialsAsync(string username, string passwordHash, bool useBiometric,
+                                              bool keepLoggedIn, string? appBuild)
     {
         await _store.SetAsync(KeyUsername, username ?? "");
         await _store.SetAsync(KeyPasswordHash, passwordHash ?? "");
         await _store.SetAsync(KeyBiometricEnabled, useBiometric ? "1" : "0");
+        await _store.SetAsync(KeyKeepLoggedIn, keepLoggedIn ? "1" : "0");
+        await _store.SetAsync(KeyAppBuild, appBuild ?? "");
     }
 
     public async Task<(string? Username, string? PasswordHash, bool BiometricEnabled)> TryGetPersistedAsync()
@@ -201,6 +214,14 @@ public class AuthService
         var h = await _store.GetAsync(KeyPasswordHash);
         var b = await _store.GetAsync(KeyBiometricEnabled);
         return (u, h, b == "1");
+    }
+
+    /// <summary>Returns the keep-logged-in flag and the app build the credentials were saved with.</summary>
+    public async Task<(bool KeepLoggedIn, string? AppBuild)> TryGetPersistedOptionsAsync()
+    {
+        var k = await _store.GetAsync(KeyKeepLoggedIn);
+        var v = await _store.GetAsync(KeyAppBuild);
+        return (k == "1", v);
     }
 
     public bool HasPersistedCredentials
@@ -217,6 +238,8 @@ public class AuthService
         _store.Remove(KeyUsername);
         _store.Remove(KeyPasswordHash);
         _store.Remove(KeyBiometricEnabled);
+        _store.Remove(KeyKeepLoggedIn);
+        _store.Remove(KeyAppBuild);
         _store.RemoveFlag(KeyUsername + ".set");
         _store.RemoveFlag("notif_last_fencer_id");
         _store.RemoveFlag("notif_last_is_instructor");

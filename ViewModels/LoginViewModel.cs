@@ -17,18 +17,14 @@ public partial class LoginViewModel : ObservableObject
     [ObservableProperty] private string password = "";
     [ObservableProperty] private string? error;
 
-    [ObservableProperty] private bool keepLoggedIn;
+    [ObservableProperty] private bool keepLoggedIn = true;
     [ObservableProperty] private bool useBiometric;
 
     [ObservableProperty] private bool canUseBiometric;
     [ObservableProperty] private bool canTryBiometricLogin;
 
-    // "Keep me logged in" is a substitute for biometric unlock: it is only
-    // offered when biometrics are unavailable on the device.
-    public bool ShowKeepLoggedIn => !CanUseBiometric;
-
-    partial void OnCanUseBiometricChanged(bool value)
-        => OnPropertyChanged(nameof(ShowKeepLoggedIn));
+    // "Keep me logged in" is always offered; it is independent of biometrics.
+    public bool ShowKeepLoggedIn => true;
 
     [ObservableProperty] private bool isSilentLoggingIn;
 
@@ -52,11 +48,6 @@ public partial class LoginViewModel : ObservableObject
 
     partial void OnIsSilentLoggingInChanged(bool value) => OnPropertyChanged(nameof(ShowSignInForm));
 
-    partial void OnKeepLoggedInChanged(bool value)
-    {
-        if (!value) UseBiometric = false;
-    }
-
     /// <summary>Call from the page's OnAppearing.</summary>
     public async Task InitializeAsync()
     {
@@ -67,12 +58,36 @@ public partial class LoginViewModel : ObservableObject
             return;
 
         CanUseBiometric = await _biometrics.IsAvailableAsync();
-        CanTryBiometricLogin = CanUseBiometric && _auth.HasPersistedCredentials;
 
-        // If we already have stored credentials, try to log in silently.
-        // Biometric prompt is only shown if the user opted into it earlier.
         if (_auth.HasPersistedCredentials)
-            await TryBiometricLoginAsync();
+        {
+            // Credentials saved by an older app build are discarded: after an
+            // update the user must sign in again once.
+            var (keep, savedBuild) = await _auth.TryGetPersistedOptionsAsync();
+            if (!string.Equals(savedBuild, AppInfo.Current.BuildString, StringComparison.Ordinal))
+            {
+                _auth.ClearPersistedCredentials();
+                CanTryBiometricLogin = false;
+                return;
+            }
+
+            CanTryBiometricLogin = CanUseBiometric;
+
+            if (keep)
+            {
+                // Keep me logged in: silent sign-in, no biometric prompt.
+                await AutoLoginAsync(requireBiometric: false);
+            }
+            else
+            {
+                // Biometric-only: prompt (if it was enabled) before signing in.
+                await AutoLoginAsync(requireBiometric: true);
+            }
+        }
+        else
+        {
+            CanTryBiometricLogin = false;
+        }
     }
 
     /// <summary>
@@ -104,7 +119,9 @@ public partial class LoginViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task TryBiometricLoginAsync()
+    private Task TryBiometricLoginAsync() => AutoLoginAsync(requireBiometric: true);
+
+    private async Task AutoLoginAsync(bool requireBiometric)
     {
         Error = null;
         try
@@ -112,16 +129,14 @@ public partial class LoginViewModel : ObservableObject
             var (u, h, bioEnabled) = await _auth.TryGetPersistedAsync();
             if (string.IsNullOrWhiteSpace(u) || string.IsNullOrWhiteSpace(h)) return;
 
-            if (bioEnabled)
+            if (requireBiometric)
             {
+                if (!bioEnabled || !CanUseBiometric) return;
                 var ok = await _biometrics.AuthenticateAsync("Sign in to JAHC Manager");
                 if (!ok) return;
             }
-            else
-            {
-                // Pure silent login - show the "Logging in, please wait" message.
-                IsSilentLoggingIn = true;
-            }
+
+            IsSilentLoggingIn = true;
 
             if (await _auth.LoginWithStoredHashAsync(u, h))
             {
@@ -173,8 +188,16 @@ public partial class LoginViewModel : ObservableObject
                         enableBio = await _biometrics.AuthenticateAsync("Confirm biometrics to enable quick sign-in");
                         IsSilentLoggingIn = true;
                     }
-                    await _auth.PersistCredentialsAsync(Username.Trim(), hash, enableBio);
-                    _auth.MarkPersisted(true);
+                    if (KeepLoggedIn || enableBio)
+                    {
+                        await _auth.PersistCredentialsAsync(Username.Trim(), hash, enableBio,
+                            keepLoggedIn: KeepLoggedIn, appBuild: AppInfo.Current.BuildString);
+                        _auth.MarkPersisted(true);
+                    }
+                    else
+                    {
+                        _auth.ClearPersistedCredentials();
+                    }
                 }
                 else
                 {

@@ -50,8 +50,7 @@ public class Fencer
     public DateTime? LastPasswordResetReviewedAtUtc { get; set; }
 
     /// <summary>
-    /// The fencer's numeric HEMA Ratings fighter id (e.g. "9343" from
-    /// https://hemaratings.com/fighters/details/9343/). Null/empty when the
+    /// The fencer's numeric HEMA Ratings fighter id. Null/empty when the
     /// fencer hasn't linked a profile yet.
     /// </summary>
     [StringLength(50)]

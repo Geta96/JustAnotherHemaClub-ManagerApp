@@ -1558,3 +1558,21 @@ html, body {
     max-width: 860px;
     margin: 0 auto 16px;
 }
+
+/* --- Trainings: current-month section separators --- */
+.training-separator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--wine);
+    font-size: 14px;
+    font-weight: 700;
+    margin-top: 4px;
+}
+.training-separator::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--wine);
+    opacity: .35;
+}

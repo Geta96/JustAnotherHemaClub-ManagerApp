@@ -21,6 +21,23 @@ public partial class EditableTrainingRow : ObservableObject
     /// <summary>Collapsed view by default; instructors expand to edit.</summary>
     [ObservableProperty] private bool isExpanded;
 
+    /// <summary>
+    /// Optional separator label shown above this row (current month only):
+    /// "Future trainings", "Today's training" or "Past trainings".
+    /// </summary>
+    private string? sectionHeader;
+    public string? SectionHeader
+    {
+        get => sectionHeader;
+        set
+        {
+            if (SetProperty(ref sectionHeader, value))
+                OnPropertyChanged(nameof(HasSectionHeader));
+        }
+    }
+
+    public bool HasSectionHeader => !string.IsNullOrEmpty(SectionHeader);
+
     public string ExpandGlyph => IsExpanded ? "\u25BE" : "\u25B8";
 
     /// <summary>True when there is a logged-in non-instructor who could still attend this session.</summary>

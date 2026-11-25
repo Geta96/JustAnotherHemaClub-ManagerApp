@@ -48,6 +48,7 @@ public partial class PastMonthVm : ObservableObject
     {
         _allTrainings.Add(row);
         Trainings.Add(row);
+        UpdateSectionHeaders();
     }
 
     /// <summary>Removes a training row from both the master and visible lists.</summary>
@@ -56,7 +57,32 @@ public partial class PastMonthVm : ObservableObject
         _allTrainings.Remove(row);
         var removed = Trainings.Remove(row);
         if (removed) OnPropertyChanged(nameof(HasNoVisibleTrainings));
+        UpdateSectionHeaders();
         return removed;
+    }
+
+    /// <summary>Returns the separator label for a training date (current-month grouping).</summary>
+    public static string SectionFor(DateTime date, DateTime today) =>
+        date.Date > today ? "Future trainings"
+        : date.Date == today ? "Today's training"
+        : "Past trainings";
+
+    /// <summary>
+    /// For the current month only, marks the first visible row of each
+    /// Future / Today / Past group with a separator label.
+    /// </summary>
+    public void UpdateSectionHeaders()
+    {
+        var today = DateTime.Today;
+        var isCurrent = Year == today.Year && Month == today.Month;
+        string? last = null;
+        foreach (var row in _allTrainings) row.SectionHeader = null;
+        if (!isCurrent) return;
+        foreach (var row in Trainings)
+        {
+            var s = SectionFor(row.Training.Date, today);
+            if (s != last) { row.SectionHeader = s; last = s; }
+        }
     }
 
     /// <summary>
@@ -72,5 +98,6 @@ public partial class PastMonthVm : ObservableObject
             : _allTrainings.Where(r => r.Training.AttendeeFencerIds.Contains(fencerId));
         foreach (var row in rows) Trainings.Add(row);
         OnPropertyChanged(nameof(HasNoVisibleTrainings));
+        UpdateSectionHeaders();
     }
 }
